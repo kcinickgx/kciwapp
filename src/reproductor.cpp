@@ -184,6 +184,18 @@ void Reproductor::salida(const std::wstring& id_dispositivo_wasapi_o_vacio) {
     reinterpret_cast<PFN_set_property_string>(fn_set_property_string)(mpv, "audio-device", valor.c_str());
 }
 
+void Reproductor::volumen(int v) {
+    if (!mpv) return;
+    char buf[32];
+    snprintf(buf, sizeof buf, "%d", std::clamp(v, 0, 100));
+    reinterpret_cast<PFN_set_property_string>(fn_set_property_string)(mpv, "volume", buf);
+}
+
+void Reproductor::silencio(bool si) {
+    if (!mpv) return;
+    reinterpret_cast<PFN_set_property_string>(fn_set_property_string)(mpv, "mute", si ? "yes" : "no");
+}
+
 void Reproductor::velocidad(double v) {
     if (!mpv) return;
     char buf[32];

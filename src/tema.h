@@ -35,6 +35,7 @@ struct Ajustes {
     int monitor_avisos = -1;          // indice del monitor para los avisos (-1 = el principal)
     int esquina_avisos = 0;           // 0 abajo-der, 1 arriba-der, 2 abajo-izq, 3 arriba-izq
     int segundos_aviso = 6;
+    int volumen_video = 100;          // volumen del reproductor de video (0..100)
     // Donde quedo la ventana (rcNormalPosition, en pixeles fisicos); w = 0 = nunca guardada.
     int ventana_x = 0, ventana_y = 0, ventana_w = 0, ventana_h = 0;
     bool ventana_max = false;

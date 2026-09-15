@@ -796,6 +796,8 @@ void App::abrir_video(int i) {
             SetWindowPos(ventana_video, HWND_TOP, (int)(x * e), (int)(y * e), (int)(w * e), (int)(h * e), SWP_SHOWWINDOW);
             reproductor.abrir(ruta, ventana_video);
             reproductor.velocidad(velocidad_audio);
+            reproductor.volumen(ajustes::actual().volumen_video);
+            reproductor.silencio(video_mudo);
             reproductor.reproducir();
             pedir_dibujo();
         });
@@ -819,18 +821,37 @@ bool App::click_visor(float x, float y) {
         float vx, vy, vw, vh;
         rect_video(*this, vx, vy, vw, vh);
         float by = vy + vh + 30;  // la barra de progreso
-        // Velocidad, a la derecha de todo.
-        if (x > vx + vw - 50 && y > by - 14 && y < by + 14) {
+        // Volumen: parlante (mute) y slider.
+        if (y > by - 14 && y < by + 14 && x > vx + vw - 126 && x < vx + vw - 98) {
+            video_mudo = !video_mudo;
+            reproductor.silencio(video_mudo);
+            return true;
+        }
+        if (y > by - 14 && y < by + 14 && x > vx + vw - 96 && x < vx + vw - 12) {
+            visor_vol = true;
+            seek_x = vx + vw - 92;
+            seek_w = 76;
+            int v = (int)std::round(std::clamp((x - seek_x) / seek_w, 0.0f, 1.0f) * 100);
+            ajustes::cambiar([v](Ajustes& a) { a.volumen_video = v; });
+            reproductor.volumen(v);
+            if (video_mudo) {
+                video_mudo = false;
+                reproductor.silencio(false);
+            }
+            return true;
+        }
+        // Velocidad.
+        if (x > vx + vw - 180 && x < vx + vw - 132 && y > by - 14 && y < by + 14) {
             velocidad_audio = velocidad_audio == 1.0 ? 1.5 : (velocidad_audio == 1.5 ? 2.0 : 1.0);
             reproductor.velocidad(velocidad_audio);
             return true;
         }
-        if (y > by - 12 && y < by + 12 && x > vx + 60 && x < vx + vw - 140) {
+        if (y > by - 12 && y < by + 12 && x > vx + 60 && x < vx + vw - 270) {
             double d = reproductor.duracion();
-            if (d > 0) reproductor.ir_a(d * (x - vx - 60) / (vw - 200));
+            if (d > 0) reproductor.ir_a(d * (x - vx - 60) / (vw - 330));
             visor_seek = true;
             seek_x = vx + 60;
-            seek_w = vw - 200;
+            seek_w = vw - 330;
             return true;
         }
         if (x > vx && x < vx + 50 && y > by - 20 && y < by + 20) {
@@ -879,19 +900,27 @@ void App::dibujar_visor() {
         }
         double d = reproductor.duracion(), pos = reproductor.posicion();
         float f = d > 0 ? (float)std::clamp(pos / d, 0.0, 1.0) : 0;
-        g.rect_redondo(vx + 60, by - 2, vw - 200, 4, 2, Color(0xffffff, 0.25f));
-        g.rect_redondo(vx + 60, by - 2, (vw - 200) * f, 4, 2, Color(0x00a884));
-        g.circulo(vx + 60 + (vw - 200) * f, by, 6, Color(0x00a884));
+        g.rect_redondo(vx + 60, by - 2, vw - 330, 4, 2, Color(0xffffff, 0.25f));
+        g.rect_redondo(vx + 60, by - 2, (vw - 330) * f, 4, 2, Color(0x00a884));
+        g.circulo(vx + 60 + (vw - 330) * f, by, 6, Color(0x00a884));
         auto mmss = [](double s) {
             int t = (int)s;
             return std::to_wstring(t / 60) + L":" + (t % 60 < 10 ? L"0" : L"") + std::to_wstring(t % 60);
         };
-        g.renglon(mmss(pos) + L" / " + mmss(d), vx + vw - 130, by - 9, 12, Color(0xffffff));
+        g.renglon(mmss(pos) + L" / " + mmss(d), vx + vw - 262, by - 9, 12, Color(0xffffff));
         // Velocidad (la misma que los audios).
-        g.rect_redondo(vx + vw - 46, by - 12, 44, 24, 12, Color(0xffffff, 0.2f));
+        g.rect_redondo(vx + vw - 178, by - 12, 44, 24, 12, Color(0xffffff, 0.2f));
         const wchar_t* vt = velocidad_audio == 1.5 ? L"1.5x" : (velocidad_audio == 2.0 ? L"2x" : L"1x");
         float vtw = g.medir(vt, 12, DWRITE_FONT_WEIGHT_SEMI_BOLD);
-        g.renglon(vt, vx + vw - 46 + (44 - vtw) / 2, by - 8, 12, Color(0xffffff), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        g.renglon(vt, vx + vw - 178 + (44 - vtw) / 2, by - 8, 12, Color(0xffffff), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        // Volumen: parlante (mute) y slider.
+        int vol = ajustes::actual().volumen_video;
+        const wchar_t* parlante = (video_mudo || vol == 0) ? L"\uE74F" : (vol < 50 ? L"\uE993" : L"\uE995");
+        g.renglon_fuente(L"Segoe MDL2 Assets", parlante, vx + vw - 122, by - 9, 16, Color(0xffffff, video_mudo ? 0.5f : 1.0f));
+        float sx = vx + vw - 92, sw = 76, fv = video_mudo ? 0.0f : vol / 100.0f;
+        g.rect_redondo(sx, by - 2, sw, 4, 2, Color(0xffffff, 0.25f));
+        g.rect_redondo(sx, by - 2, sw * fv, 4, 2, Color(0xffffff, 0.9f));
+        g.circulo(sx + sw * fv, by, 5, Color(0xffffff));
         g.renglon(L"✕", g.ancho - 40, 12, 22, Color(0xe9edef));
         necesita_dibujar = !pausado;
         return;

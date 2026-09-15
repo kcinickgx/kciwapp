@@ -255,6 +255,8 @@ struct App {
     float visor_zoom = 1.0f, visor_px = 0, visor_py = 0;
     bool visor_arrastrando = false;
     bool visor_seek = false;      // arrastrando la barra del video
+    bool visor_vol = false;       // arrastrando el volumen del video
+    bool video_mudo = false;
     float visor_ax = 0, visor_ay = 0, visor_mov = 0;
     // Busqueda
     std::vector<Mensaje> resultados;

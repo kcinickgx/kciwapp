@@ -1964,6 +1964,12 @@ void App::raton_mueve(float x, float y) {
         arrastrar_barra(lista, y, top, H, lista.max + H);
         pedir_dibujo();
     }
+    if (visor_vol && seek_w > 0) {
+        int v = (int)std::round(std::clamp((x - seek_x) / seek_w, 0.0f, 1.0f) * 100);
+        ajustes::cambiar([v](Ajustes& a) { a.volumen_video = v; });
+        reproductor.volumen(v);
+        pedir_dibujo();
+    }
     if (visor_seek && seek_w > 0) {
         double d = reproductor.duracion();
         if (d > 0) reproductor.ir_a(d * std::clamp((x - seek_x) / seek_w, 0.0f, 1.0f));
@@ -2178,6 +2184,7 @@ void App::raton_arriba(float, float) {
     arrastrando_lista = false;
     seek_msg = -1;
     visor_seek = false;
+    visor_vol = false;
     visor_arrastrando = false;
     campo.arrastrando = false;
     buscador.arrastrando = false;

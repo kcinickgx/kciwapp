@@ -143,6 +143,7 @@ void cargar(const std::wstring& carpeta_exe) {
     a.monitor_avisos = (int)j["monitor_avisos"].num(-1);
     a.esquina_avisos = (int)j["esquina_avisos"].num(0);
     a.segundos_aviso = (int)j["segundos_aviso"].num(6);
+    a.volumen_video = (int)j["volumen_video"].num(100);
     a.ventana_x = (int)j["ventana_x"].num(0);
     a.ventana_y = (int)j["ventana_y"].num(0);
     a.ventana_w = (int)j["ventana_w"].num(0);
@@ -185,6 +186,7 @@ void guardar() {
     numero("monitor_avisos", g_ajustes.monitor_avisos);
     numero("esquina_avisos", g_ajustes.esquina_avisos);
     numero("segundos_aviso", g_ajustes.segundos_aviso);
+    numero("volumen_video", g_ajustes.volumen_video);
     numero("ventana_x", g_ajustes.ventana_x);
     numero("ventana_y", g_ajustes.ventana_y);
     numero("ventana_w", g_ajustes.ventana_w);
