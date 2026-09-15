@@ -156,6 +156,7 @@ struct App {
     // [layout_pendiente, n) ya estan armados; lo de arriba, todavia no.
     size_t layout_pendiente = 0;
     int traza_frames = 0;  // F11: cuantos frames quedan por trazar
+    unsigned long long abierto_en = 0;  // para medir cuanto tarda en armar todo
     // inicio[i] = alto acumulado hasta el mensaje i (desde el tope del
     // contenido), en double; inicio[n] es el total. Se rearma por frame.
     std::vector<double> inicio;

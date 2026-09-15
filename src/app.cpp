@@ -484,7 +484,9 @@ void App::abrir_chat(const std::string& jid) {
         return;
     }
 
+    abierto_en = GetTickCount64();
     red::en_fondo([this, mio, cuantos, ultimo_lista] {
+        unsigned long long t0 = GetTickCount64();
         // La cache manda. Primero los ultimos 200 (se ven al toque), despues
         // el resto se lee y se agrega arriba sin mover la vista. Al server
         // solo se le pide lo que falta: mas viejos que no estan cacheados,
@@ -531,6 +533,7 @@ void App::abrir_chat(const std::string& jid) {
         // Segunda tanda: el resto de la cache, y despues el server si falta.
         std::vector<Mensaje> resto;
         if (cuantos > total && mas_viejo > 0) resto = cache::leer_mensajes(mio, mas_viejo, cuantos - total);
+        red::registrar("cache leida: " + std::to_string(resto.size() + de_cache.size()) + " mensajes en " + std::to_string(GetTickCount64() - t0) + " ms");
         if (!resto.empty()) {
             total += (int)resto.size();
             mas_viejo = resto.front().ts;
@@ -1117,10 +1120,12 @@ void App::dibujar() {
 
     if (layout_pendiente > 0 && !chat_actual.empty()) {
         // Unos milisegundos por frame armando lo de arriba; la vista no se mueve.
-        double agregado = avanzar_layouts(2000, 5.0f);
+        double agregado = avanzar_layouts(6000, 15.0f);
         conv.max += agregado;
         conv.pos += agregado;
         conv.objetivo += agregado;
+        if (layout_pendiente == 0 && abierto_en)
+            red::registrar("layouts listos: " + std::to_string(vistas.size()) + " en " + std::to_string(GetTickCount64() - abierto_en) + " ms desde abrir");
     }
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
