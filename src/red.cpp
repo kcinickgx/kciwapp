@@ -155,7 +155,10 @@ void registrar(const std::string& linea) {
     std::lock_guard<std::mutex> l(mu);
     FILE* f = fopen("C:/Projects/kciwapp2/portable/debug.log", "a");
     if (f) {
-        fprintf(f, "%s\n", linea.c_str());
+        SYSTEMTIME t;
+        GetLocalTime(&t);
+        fprintf(f, "%02d:%02d:%02d.%03d %s
+", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, linea.c_str());
         fclose(f);
     }
 }
