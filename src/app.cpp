@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 #include "aviso.h"
 #include "cache.h"
@@ -436,7 +437,10 @@ void App::abrir_chat(const std::string& jid) {
         Json j = Json::parsear(r.cuerpo);
         std::vector<Mensaje> nuevos;
         for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
-        if (r.ok()) cache::guardar_mensajes(nuevos);
+        // A la cache de a tandas, para no tener el candado tomado segundos.
+        if (r.ok())
+            for (size_t i = 0; i < nuevos.size(); i += 500)
+                cache::guardar_mensajes(std::vector<Mensaje>(nuevos.begin() + i, nuevos.begin() + std::min(nuevos.size(), i + 500)));
         bool ok = r.ok();
         red::en_ui([this, mio, nuevos, ok, cuantos] {
             if (mio != chat_actual) return;
@@ -449,12 +453,11 @@ void App::abrir_chat(const std::string& jid) {
             // Se fusiona con lo que vino de la cache: lo del server manda.
             bool abajo = al_final();
             std::vector<Mensaje> mezcla;
-            for (auto& m : mensajes) {
-                bool en_server = false;
-                for (auto& s : nuevos)
-                    if (s.id == m.id) en_server = true;
-                if (!en_server && (nuevos.empty() || m.ts < nuevos.front().ts)) mezcla.push_back(m);
-            }
+            std::unordered_set<std::string> ids_server;
+            for (auto& s : nuevos) ids_server.insert(s.id);
+            long long primero_server = nuevos.empty() ? 0 : nuevos.front().ts;
+            for (auto& m : mensajes)
+                if (!ids_server.count(m.id) && (nuevos.empty() || m.ts < primero_server)) mezcla.push_back(m);
             mezcla.insert(mezcla.end(), nuevos.begin(), nuevos.end());
             mensajes = std::move(mezcla);
             hay_mas_viejos = (int)nuevos.size() >= cuantos || mensajes.size() > nuevos.size();
