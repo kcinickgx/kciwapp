@@ -223,7 +223,6 @@ void App::menu_contextual(int i) {
         items.push_back({L"", 0, nullptr, true});
         items.push_back({L"Open", M_ABRIR, L"\uE8E5"});
         items.push_back({L"Save as...", M_GUARDAR, L"\uE74E"});
-        items.push_back({L"Show in folder", M_MOSTRAR, L"\uE838"});
     }
     if (!m.borrado) {
         items.push_back({L"", 0, nullptr, true});
