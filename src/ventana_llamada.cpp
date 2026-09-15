@@ -255,8 +255,11 @@ void cerrar() {
 bool abierta() { return g_hwnd != nullptr; }
 
 void estado(const std::wstring& texto, unsigned long long desde) {
-    g_estado = texto;
-    g_desde = desde;
+    // Sin contador: hasta que llegue el video se queda en "Calling..." /
+    // "Connecting..." (el reloj de WhatsApp arranca antes de que atiendan).
+    if (!texto.empty()) g_estado = texto;
+    g_desde = 0;
+    (void)desde;
     if (g_hwnd) InvalidateRect(g_hwnd, nullptr, FALSE);
 }
 
