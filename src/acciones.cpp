@@ -581,7 +581,7 @@ std::wstring App::bajar_media(const Mensaje& m) {
     CreateDirectoryW(carpeta.c_str(), nullptr);
     std::wstring ruta = carpeta + L"\\" + std::to_wstring(m.media->id) + extension_de(m.media->mime, m.media->nombre);
     if (GetFileAttributesW(ruta.c_str()) != INVALID_FILE_ATTRIBUTES) return ruta;
-    Respuesta r = red::obtener(L"/media/" + std::to_wstring(m.media->id), 300000);
+    Respuesta r = red::obtener(L"/media/" + std::to_wstring(m.media->id) + L"?pedir=1", 300000);
     if (!r.ok() || r.cuerpo.empty()) {
         aviso_estado = r.estado == 410 ? L"That file is no longer available on WhatsApp" : L"Could not download the file";
         pedir_dibujo();
@@ -622,8 +622,11 @@ void App::abrir_visor(int i) {
     visor_px = visor_py = 0;
     visor_arrastrando = false;
     visor_clave = "media:" + std::to_string(m.media->id);
-    visor_url = L"/media/" + std::to_wstring(m.media->id);
+    visor_url = L"/media/" + std::to_wstring(m.media->id) + L"?pedir=1";
     visor_animado = m.tipo == "figurita";
+    // Si la burbuja ya fallo (vencido), ahora si se le pide al telefono.
+    auto it = imagenes.find(visor_clave);
+    if (it != imagenes.end() && it->second.fallo) imagenes.erase(it);
     imagen(visor_clave, visor_url, visor_animado);
     pedir_dibujo();
 }

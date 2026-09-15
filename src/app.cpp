@@ -1439,7 +1439,7 @@ void App::dibujar_mensaje(size_t i, float y) {
                     g.rect(cx, cy, v.mw, v.mh, Color(0x000000, 0.2f));
                     // Vencido en WhatsApp: se le pidio al telefono, se espera.
                     if (m.media->estado == 2 || imagenes["media:" + std::to_string(m.media->id)].fallo) {
-                        std::wstring t = L"Requesting from phone...";
+                        std::wstring t = L"Expired – click to request from phone";
                         float tw = g.medir(t, 12);
                         g.renglon(t, cx + (v.mw - tw) / 2, cy + v.mh / 2 - 8, 12, Color(TXT_DIM()));
                     }
