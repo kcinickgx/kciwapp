@@ -778,11 +778,14 @@ void App::dibujar_visor() {
         g.renglon(t, (g.ancho - tw) / 2, g.alto / 2 - 10, 15, Color(0x8696a0));
         return;
     }
-    D2D1_SIZE_F t = b->GetSize();
-    float esc = std::min((g.ancho - 80) / t.width, (g.alto - 80) / t.height);
-    esc = std::min(esc, 2.0f);
-    float w = t.width * esc, h = t.height * esc;
-    g.bitmap(b, (g.ancho - w) / 2, (g.alto - h) / 2, w, h);
+    float x, y, w, h;
+    rect_visor(x, y, w, h);
+    g.bitmap(b, x, y, w, h);
+    if (visor_zoom > 1.0f) {
+        wchar_t z[16];
+        swprintf(z, 16, L"%.0f%%", visor_zoom * 100);
+        g.renglon(z, 16, 16, 14, Color(0xe9edef));
+    }
     g.renglon(L"✕", g.ancho - 40, 16, 22, Color(0xe9edef));
 }
 

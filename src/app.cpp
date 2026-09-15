@@ -1352,6 +1352,14 @@ void App::raton_mueve(float x, float y) {
         arrastrar_barra(lista, y, top, H, lista.max + H);
         pedir_dibujo();
     }
+    if (visor_arrastrando) {
+        visor_px += x - visor_ax;
+        visor_py += y - visor_ay;
+        visor_mov += std::abs(x - visor_ax) + std::abs(y - visor_ay);
+        visor_ax = x;
+        visor_ay = y;
+        pedir_dibujo();
+    }
     if (seek_msg >= 0 && seek_w > 0) {
         // Arrastrando sobre la onda: se sigue el mouse.
         double d = reproductor.duracion();
@@ -1527,6 +1535,7 @@ void App::raton_arriba(float, float) {
     arrastrando_barra = false;
     arrastrando_lista = false;
     seek_msg = -1;
+    visor_arrastrando = false;
     campo.arrastrando = false;
     buscador.arrastrando = false;
     if (sel_arrastrando) {
@@ -1542,7 +1551,10 @@ void App::raton_arriba(float, float) {
 }
 
 void App::rueda(float x, float y, float delta) {
-    if (visor) return;
+    if (visor) {
+        rueda_visor(x, y, delta);
+        return;
+    }
     // delta en "muescas" (120 = una); tres renglones por muesca, como Windows.
     UINT lineas = 3;
     SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lineas, 0);
