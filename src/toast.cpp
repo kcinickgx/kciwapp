@@ -208,10 +208,10 @@ void crear() {
     WNDCLASSW wc{};
     wc.lpfnWndProc = procedimiento;
     wc.hInstance = g_inst;
-    wc.lpszClassName = L"kciwapp2-aviso";
+    wc.lpszClassName = L"kciwapp2-toast";
     wc.hCursor = LoadCursor(nullptr, IDC_HAND);
     RegisterClassW(&wc);
-    g_hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"kciwapp2-aviso", L"", WS_POPUP, 0, 0,
+    g_hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"kciwapp2-toast", L"", WS_POPUP, 0, 0,
                              (int)(ANCHO + 2 * MARGEN), (int)ALTO_AVISO, nullptr, nullptr, g_inst, nullptr);
     // Esquinas redondeadas de la ventana (Win11) y fondo transparente por DWM.
     int esquina = 2 /*DWMWCP_ROUND*/;
