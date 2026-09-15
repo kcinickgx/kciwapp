@@ -213,16 +213,16 @@ Chat Chat::de_json(const Json& j) {
 
 bool Desplazable::animar(float dt) {
     limitar();
-    float d = objetivo - pos;
-    if (std::abs(d) < 0.05f) {
+    double d = objetivo - pos;
+    if (std::abs(d) < 0.05) {
         pos = objetivo;
         return false;
     }
     // Persigue al objetivo con una constante de tiempo corta: se siente
     // como el scroll de un navegador.
-    float k = 1.0f - std::exp(-dt / 0.055f);
+    double k = 1.0 - std::exp(-dt / 0.055);
     pos += d * k;
-    if (std::abs(objetivo - pos) < 0.05f) pos = objetivo;
+    if (std::abs(objetivo - pos) < 0.05) pos = objetivo;
     return true;
 }
 
@@ -288,7 +288,8 @@ void App::redimensionado() {
 bool App::animando() {
     return !lista.quieto() || !conv.quieto() || layout_pendiente > 0 ||
            (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
-           grab == Grab::Grabando || !reproduciendo_id.empty() || grab_escuchando;
+           grab == Grab::Grabando ||
+           ((!reproduciendo_id.empty() || grab_escuchando) && !reproductor.pausado() && !reproductor.terminado());
 }
 
 // ---- datos ----------------------------------------------------------------
@@ -879,17 +880,26 @@ void App::armar_vista(size_t i) {
     v.alto = v.by + v.bh + v.reacciones_alto;
 }
 
-float App::alto_contenido() const {
-    float h = 12;
-    for (auto& v : vistas) h += v.alto;
-    return h + 12;
+double App::alto_contenido() const {
+    return (inicio.size() == vistas.size() + 1 ? inicio.back() : 0.0) + 24;
+}
+
+void App::recalcular_inicios() {
+    inicio.resize(vistas.size() + 1);
+    double acum = 0;
+    for (size_t i = 0; i < vistas.size(); i++) {
+        inicio[i] = acum;
+        acum += vistas[i].alto;
+    }
+    inicio[vistas.size()] = acum;
 }
 
 bool App::al_final() const { return conv.objetivo >= conv.max - 4; }
 
 void App::bajar_al_final(bool ya) {
     float H = g.alto - alto_cabecera() - alto_pie;
-    conv.max = std::max(0.0f, alto_contenido() - H);
+    recalcular_inicios();
+    conv.max = std::max(0.0, alto_contenido() - H);
     conv.ir(conv.max, ya);
 }
 
@@ -929,7 +939,7 @@ void App::dibujar() {
 
     if (layout_pendiente > 0 && !chat_actual.empty()) {
         // Unos milisegundos por frame armando lo de arriba; la vista no se mueve.
-        float agregado = avanzar_layouts(2000, 5.0f);
+        double agregado = avanzar_layouts(2000, 5.0f);
         conv.max += agregado;
         conv.pos += agregado;
         conv.objetivo += agregado;
@@ -968,7 +978,7 @@ void App::armar_items() {
 }
 
 int App::item_en(float y) {
-    float yy = top_lista() - lista.pos;
+    float yy = (float)(top_lista() - lista.pos);
     for (size_t i = 0; i < items.size(); i++) {
         float h = items[i].tipo == ItemLista::Titulo ? TITULO_H : fila_h();
         if (y >= yy && y < yy + h) return (int)i;
@@ -994,10 +1004,10 @@ void App::dibujar_lista() {
     float H = g.alto - top;
     float total = 0;
     for (auto& it : items) total += it.tipo == ItemLista::Titulo ? TITULO_H : fila_h();
-    lista.max = std::max(0.0f, total - H);
+    lista.max = std::max(0.0, (double)total - H);
     lista.limitar();
     g.recortar(0, top, W, H);
-    float y = top - lista.pos;
+    float y = (float)(top - lista.pos);
     for (size_t k = 0; k < items.size(); k++) {
         const ItemLista& it = items[k];
         float FILA_H = fila_h();
@@ -1092,23 +1102,23 @@ void App::dibujar_lista() {
 
 // La barra de scroll de un area: pulgar proporcional, mas visible con el
 // mouse cerca o arrastrando.
-void App::barra_scroll(const Desplazable& d, float x, float top, float H, float total, bool cerca, bool arrastrando) {
+void App::barra_scroll(const Desplazable& d, float x, float top, float H, double total, bool cerca, bool arrastrando) {
     if (d.max <= 0 || total <= H) return;
-    float bh = std::max(30.0f, H * H / total);
-    float by = top + (H - bh) * (d.pos / d.max);
+    float bh = std::max(30.0f, (float)(H * H / total));
+    float by = top + (H - bh) * (float)(d.pos / d.max);
     g.rect_redondo(x, by, 6, bh, 3, Color(0xffffff, cerca || arrastrando ? 0.35f : 0.18f));
 }
 
 // Empieza a arrastrar el pulgar de una barra (o salta ahi si se clickeo la pista).
-void App::agarrar_barra(Desplazable& d, float y, float top, float H, float total) {
-    float bh = std::max(30.0f, H * H / total);
-    float by = top + (H - bh) * (d.pos / d.max);
+void App::agarrar_barra(Desplazable& d, float y, float top, float H, double total) {
+    float bh = std::max(30.0f, (float)(H * H / total));
+    float by = top + (H - bh) * (float)(d.pos / d.max);
     arrastre_origen = (y >= by && y <= by + bh) ? y - by : bh / 2;
 }
 
-void App::arrastrar_barra(Desplazable& d, float y, float top, float H, float total) {
-    float bh = std::max(30.0f, H * H / total);
-    float frac = (y - top - arrastre_origen) / (H - bh);
+void App::arrastrar_barra(Desplazable& d, float y, float top, float H, double total) {
+    float bh = std::max(30.0f, (float)(H * H / total));
+    double frac = (y - top - arrastre_origen) / (H - bh);
     d.ir(frac * d.max, true);
 }
 
@@ -1225,24 +1235,27 @@ void App::dibujar_conversacion() {
     if (rearmar) {
         bool abajo = al_final();
         armar_vistas();
-        conv.max = std::max(0.0f, alto_contenido() - H);
+        recalcular_inicios();
+        conv.max = std::max(0.0, alto_contenido() - H);
         if (abajo) conv.ir(conv.max, true);
     }
-    conv.max = std::max(0.0f, alto_contenido() - H);
+    recalcular_inicios();
+    conv.max = std::max(0.0, alto_contenido() - H);
     conv.limitar();
     if (conv.pos < 600 && hay_mas_viejos && !cargando_mensajes && layout_pendiente == 0) cargar_mas_viejos();
 
     g.recortar(x, top, W, H);
-    float y = top + 12 - conv.pos;
-    for (size_t i = 0; i < mensajes.size(); i++) {
+    // El primer mensaje que asoma, por busqueda binaria sobre los inicios.
+    double desde = conv.pos - 12;
+    size_t i0 = std::upper_bound(inicio.begin(), inicio.end() - 1, desde) - inicio.begin();
+    if (i0 > 0) i0--;
+    for (size_t i = i0; i < mensajes.size(); i++) {
         const VistaMensaje& v = vistas[i];
-        if (y + v.alto < top) {
-            y += v.alto;
-            continue;
-        }
+        if (v.alto <= 0) continue;
+        float y = y_de(i);
+        if (y + v.alto < top) continue;
         if (y > bottom) break;
         dibujar_mensaje(i, y);
-        y += v.alto;
     }
     barra_scroll(conv, x + W - 10, top, H, alto_contenido(),
                  mouse_x > x + W - 24 && mouse_x < x + W && mouse_y > top && mouse_y < bottom, arrastrando_barra);
@@ -1461,9 +1474,8 @@ void App::raton_mueve(float x, float y) {
     if (sel_arrastrando && sel_msg >= 0 && sel_msg < (int)mensajes.size()) {
         float ym = 0;
         // El mensaje de la seleccion, este donde este ahora.
-        float yy = alto_cabecera() + 12 - conv.pos;
-        for (int k = 0; k < sel_msg; k++) yy += vistas[k].alto;
-        ym = yy;
+        if (inicio.size() != vistas.size() + 1) recalcular_inicios();
+        ym = y_de((size_t)sel_msg);
         size_t idx = 0;
         en_texto(sel_msg, ym, x, y, &idx);
         sel_b = idx;
@@ -1578,9 +1590,9 @@ void App::raton_abajo(float x, float y, bool shift) {
     }
     if (y > top && conv.max > 0 && x > g.ancho - 24) {
         float H = bottom - top;
-        float total = alto_contenido();
-        float bh = std::max(30.0f, H * H / total);
-        float by = top + (H - bh) * (conv.pos / conv.max);
+        double total = alto_contenido();
+        float bh = std::max(30.0f, (float)(H * H / total));
+        float by = top + (H - bh) * (float)(conv.pos / conv.max);
         arrastrando_barra = true;
         arrastre_origen = (y >= by && y <= by + bh) ? y - by : bh / 2;
         raton_mueve(x, y);
@@ -1651,6 +1663,26 @@ void App::rueda(float x, float y, float delta) {
 }
 
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
+    if (vk == VK_F12) {
+        // Traza de depuracion del chat abierto.
+        char buf[512];
+        size_t sin_alto = 0;
+        for (size_t k = layout_pendiente; k < vistas.size(); k++)
+            if (vistas[k].alto <= 0) sin_alto++;
+        snprintf(buf, sizeof buf,
+                 "F12 chat=%s mensajes=%zu vistas=%zu pendiente=%zu sin_alto=%zu contenido=%.0f pos=%.0f obj=%.0f max=%.0f H=%.0f pie=%.0f ultimo_ts=%lld ultimo=%s",
+                 chat_actual.c_str(), mensajes.size(), vistas.size(), layout_pendiente, sin_alto, alto_contenido(), conv.pos,
+                 conv.objetivo, conv.max, (double)(g.alto - alto_cabecera() - alto_pie), (double)alto_pie,
+                 mensajes.empty() ? 0LL : mensajes.back().ts,
+                 mensajes.empty() ? "" : angosto(mensajes.back().texto.substr(0, 30)).c_str());
+        red::registrar(buf);
+        for (size_t k = vistas.size() > 5 ? vistas.size() - 5 : 0; k < vistas.size(); k++) {
+            snprintf(buf, sizeof buf, "  v[%zu] alto=%.0f by=%.0f bh=%.0f ancho_para=%.0f ts=%lld", k, vistas[k].alto, vistas[k].by,
+                     vistas[k].bh, vistas[k].ancho_para, mensajes[k].ts);
+            red::registrar(buf);
+        }
+        return;
+    }
     if (vk == VK_ESCAPE) {
         escapar();
         return;

@@ -64,21 +64,23 @@ struct Contacto {
 };
 
 // Scroll con animacion suave: la posicion persigue al objetivo.
+// En double: un chat de 200k mensajes mide 10 millones de pixeles, y ahi
+// un float ya no distingue fracciones de pixel (y acumula error al sumar).
 struct Desplazable {
-    float pos = 0, objetivo = 0, max = 0;
-    void rodar(float delta) { objetivo = std::clamp(objetivo + delta, 0.0f, max); }
-    void ir(float a, bool ya = false) {
-        objetivo = std::clamp(a, 0.0f, max);
+    double pos = 0, objetivo = 0, max = 0;
+    void rodar(double delta) { objetivo = std::clamp(objetivo + delta, 0.0, max); }
+    void ir(double a, bool ya = false) {
+        objetivo = std::clamp(a, 0.0, max);
         if (ya) pos = objetivo;
     }
     void limitar() {
-        max = std::max(max, 0.0f);
-        objetivo = std::clamp(objetivo, 0.0f, max);
-        pos = std::clamp(pos, 0.0f, max);
+        max = std::max(max, 0.0);
+        objetivo = std::clamp(objetivo, 0.0, max);
+        pos = std::clamp(pos, 0.0, max);
     }
     // Devuelve si sigue moviendose.
     bool animar(float dt);
-    bool quieto() const { return std::abs(objetivo - pos) < 0.05f; }
+    bool quieto() const { return std::abs(objetivo - pos) < 0.05; }
 };
 
 // Una imagen en la GPU (o en camino).
@@ -152,6 +154,12 @@ struct App {
     // Los layouts se arman de abajo para arriba, de a tandas por frame:
     // [layout_pendiente, n) ya estan armados; lo de arriba, todavia no.
     size_t layout_pendiente = 0;
+    // inicio[i] = alto acumulado hasta el mensaje i (desde el tope del
+    // contenido), en double; inicio[n] es el total. Se rearma por frame.
+    std::vector<double> inicio;
+    void recalcular_inicios();
+    // Donde cae en pantalla el renglon del mensaje i (su tope).
+    float y_de(size_t i) const { return (float)(alto_cabecera() + 12 + (i < inicio.size() ? inicio[i] : 0) - conv.pos); }
     bool cargando_mensajes = false;
     bool cargando_chats = false, recarga_pendiente = false, escuchando = false;
     bool resync_pendiente = false;   // el log de eventos se perdio: completar cada chat al abrirlo
@@ -345,9 +353,9 @@ struct App {
     void dibujar_cabecera();
     void dibujar_pie();
     void dibujar_visor();
-    void barra_scroll(const Desplazable& d, float x, float top, float H, float total, bool cerca, bool arrastrando);
-    void agarrar_barra(Desplazable& d, float y, float top, float H, float total);
-    void arrastrar_barra(Desplazable& d, float y, float top, float H, float total);
+    void barra_scroll(const Desplazable& d, float x, float top, float H, double total, bool cerca, bool arrastrando);
+    void agarrar_barra(Desplazable& d, float y, float top, float H, double total);
+    void arrastrar_barra(Desplazable& d, float y, float top, float H, double total);
     void tildes(float x, float y, bool doble, Color c);
     void dibujar_mensaje(size_t i, float y);
     void armar_items();
@@ -356,7 +364,7 @@ struct App {
     // Arma hasta `cuantos` layouts pendientes (o hasta agotar `ms_max`);
     // devuelve el alto agregado arriba de lo visible.
     float avanzar_layouts(int cuantos, float ms_max);
-    float alto_contenido() const;
+    double alto_contenido() const;
     void bajar_al_final(bool ya);
     bool al_final() const;
     Imagen& imagen(const std::string& clave, const std::wstring& ruta, bool animado);

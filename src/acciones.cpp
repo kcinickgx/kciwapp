@@ -150,14 +150,20 @@ std::wstring plano(const std::wstring& s) {
 // Que mensaje hay en la coordenada y de la conversacion; deja en y_msg el
 // tope del renglon del mensaje.
 int App::mensaje_en(float y, float* y_msg) {
-    float yy = alto_cabecera() + 12 - conv.pos;
-    for (size_t i = 0; i < vistas.size(); i++) {
-        const VistaMensaje& v = vistas[i];
-        if (y >= yy + v.by && y < yy + v.by + v.bh) {
+    if (inicio.size() != vistas.size() + 1) recalcular_inicios();
+    // Busqueda binaria del renglon que contiene y.
+    double desde = y - alto_cabecera() - 12 + conv.pos;
+    if (vistas.empty() || desde < 0) return -1;
+    size_t i = std::upper_bound(inicio.begin(), inicio.end() - 1, desde) - inicio.begin();
+    if (i > 0) i--;
+    // Los de alto 0 (sin armar) no se clickean; el vecino armado puede ser el bueno.
+    for (size_t k = i; k < vistas.size() && k < i + 3; k++) {
+        const VistaMensaje& v = vistas[k];
+        float yy = y_de(k);
+        if (v.alto > 0 && y >= yy + v.by && y < yy + v.by + v.bh) {
             if (y_msg) *y_msg = yy;
-            return (int)i;
+            return (int)k;
         }
-        yy += v.alto;
     }
     return -1;
 }
@@ -349,7 +355,8 @@ void App::agregar_mensaje(const Mensaje& m) {
     mensajes.push_back(m);
     vistas.emplace_back();
     armar_vista(mensajes.size() - 1);
-    conv.max = std::max(0.0f, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
+    recalcular_inicios();
+    conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
     if (abajo || m.propio) bajar_al_final(false);
 }
 
@@ -375,10 +382,9 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
     // Si ya esta cargado, alcanza con scrollear.
     for (size_t i = 0; i < mensajes.size(); i++)
         if (mensajes[i].id == id) {
-            float y = 12;
-            for (size_t k = 0; k < i; k++) y += vistas[k].alto;
+            recalcular_inicios();
             float H = g.alto - alto_cabecera() - alto_pie;
-            conv.ir(y - H / 2 + vistas[i].alto / 2, false);
+            conv.ir(12 + inicio[i] - H / 2 + vistas[i].alto / 2, false);
             pedir_dibujo();
             return;
         }
@@ -406,14 +412,14 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
             cache::guardar_mensajes(mensajes);
             armar_vistas();
             float H = g.alto - alto_cabecera() - alto_pie;
-            conv.max = std::max(0.0f, alto_contenido() - H);
-            float y = 12;
+            recalcular_inicios();
+            conv.max = std::max(0.0, alto_contenido() - H);
+            recalcular_inicios();
             for (size_t i = 0; i < mensajes.size(); i++) {
                 if (mensajes[i].id == id) {
-                    conv.ir(y - H / 2 + vistas[i].alto / 2, true);
+                    conv.ir(12 + inicio[i] - H / 2 + vistas[i].alto / 2, true);
                     break;
                 }
-                y += vistas[i].alto;
             }
             pedir_dibujo();
         });
