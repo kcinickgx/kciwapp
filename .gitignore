@@ -1,4 +1,7 @@
 portable/kciwapp2.exe
 portable/kciwapp2.pdb
+portable/kciwapp2.ilk
 portable/datos/
+portable/debug.log
+portable/mpv/
 build/

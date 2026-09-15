@@ -573,6 +573,10 @@ void App::abrir_media(int i) {
         abrir_visor(i);
         return;
     }
+    if ((m.tipo == "audio" || m.tipo == "nota") && reproductor_ok) {
+        reproducir_audio(i);
+        return;
+    }
     // Lo demas se abre con lo que tenga Windows (video, audio, documentos).
     Mensaje copia = m;
     red::en_fondo([this, copia] {
@@ -614,6 +618,8 @@ void App::dibujar_visor() {
 void App::escapar() {
     if (visor) {
         visor = false;
+    } else if (grab != Grab::Nada) {
+        grabar_cancelar();
     } else if (reenviando) {
         reenviando = false;
     } else if (editando) {

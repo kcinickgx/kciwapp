@@ -11,6 +11,7 @@
 #include "campo.h"
 #include "gfx.h"
 #include "json.h"
+#include "reproductor.h"
 
 #include <shellapi.h>
 
@@ -182,6 +183,17 @@ struct App {
     std::vector<Mensaje> resultados;
     std::wstring ultima_busqueda;
     bool buscando = false;
+    // Audio: un reproductor para notas de voz y audios, y la grabacion.
+    Reproductor reproductor;
+    bool reproductor_ok = false;
+    std::string reproduciendo_id;   // mensaje que suena (vacio si ninguno)
+    bool bajando_audio = false;
+    enum class Grab { Nada, Grabando, Lista } grab = Grab::Nada;
+    unsigned long long grab_desde = 0;
+    double grab_segundos = 0;
+    std::wstring grab_ruta;
+    std::vector<float> grab_niveles;
+    bool grab_escuchando = false;   // la vista previa sonando
 
     void iniciar(HWND h);
     void dibujar();
@@ -234,6 +246,15 @@ struct App {
     int mensaje_en(float y, float* y_msg);
     bool en_texto(int i, float y_msg, float x, float y, size_t* indice);
     void agregar_mensaje(const Mensaje& m);
+    // Audio (audio_ui.cpp)
+    void reproducir_audio(int i);
+    void grabar_empezar();
+    void grabar_parar();
+    void grabar_cancelar();
+    void grabar_mandar();
+    void grabar_escuchar();
+    bool click_grabacion(float x, float y, float yy, float ch);
+    void dibujar_grabacion(float x, float yy, float W, float ch);
 
     // Regiones (DIPs)
     float x_conv() const { return ancho_lista; }

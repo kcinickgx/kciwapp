@@ -251,6 +251,8 @@ void App::iniciar(HWND h) {
     };
     buscador.al_enviar = [this] { buscar_ahora(); };
     buscador.al_escapar = [this] { escapar(); };
+    reproductor_ok = reproductor.iniciar(carpeta_exe());
+    reproductor.al_cambiar = [this] { red::en_ui([this] { pedir_dibujo(); }); };
     aviso_estado = L"Connecting...";
     // Lo que quedo en la cache se muestra al instante; el server corrige.
     chats = cache::leer_chats();
@@ -269,7 +271,8 @@ void App::redimensionado() {
 }
 
 bool App::animando() {
-    return !lista.quieto() || !conv.quieto() || (!resaltado_id.empty() && ahora - resaltado_desde < 2000);
+    return !lista.quieto() || !conv.quieto() || (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
+           grab == Grab::Grabando || !reproduciendo_id.empty() || grab_escuchando;
 }
 
 // ---- datos ----------------------------------------------------------------
@@ -1003,6 +1006,10 @@ void App::dibujar_pie() {
         yy += ADJUNTO_H;
     }
     float ch = campo.alto(g);
+    if (grab != Grab::Nada) {
+        dibujar_grabacion(x, yy, W, ch);
+        return;
+    }
     // El clip a la izquierda, el campo, y el boton de mandar/grabar.
     g.renglon(L"\U0001F4CE", x + 18, yy + ch / 2 - 12, 20, Color(TXT_DIM));
     g.rect_redondo(x + 52, yy, W - 52 - 60, ch, 8, Color(BG_CAMPO));
@@ -1149,12 +1156,32 @@ void App::dibujar_mensaje(size_t i, float y) {
             g.rect_redondo(cx, cy, v.mw, v.mh, 6, Color(0x000000, 0.18f));
             bool audio = m.tipo == "audio" || m.tipo == "nota";
             g.circulo(cx + 22, cy + v.mh / 2, 16, Color(ACCENT));
-            g.renglon(audio ? L"▶" : L"\U0001F4C4", cx + 15, cy + v.mh / 2 - 9, 14, Color(0x111b21));
+            if (!(audio && reproduciendo_id == m.id))
+                g.renglon(audio ? L"▶" : L"\U0001F4C4", cx + 15, cy + v.mh / 2 - 9, 14, Color(0x111b21));
             std::wstring t = audio ? std::to_wstring(m.media->segundos / 60) + L":" +
                                          (m.media->segundos % 60 < 10 ? L"0" : L"") + std::to_wstring(m.media->segundos % 60)
                                    : ancho(m.media->nombre);
             if (audio) {
-                g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, v.mw - 64, 4, 2, Color(0xffffff, 0.25f));
+                bool suena = reproduciendo_id == m.id;
+                if (suena) {
+                    // Boton de pausa y barra de progreso viva.
+                    g.rect(cx + 17, cy + v.mh / 2 - 6, 4, 12, Color(0x111b21));
+                    g.rect(cx + 23, cy + v.mh / 2 - 6, 4, 12, Color(0x111b21));
+                    double d = reproductor.duracion(), pos = reproductor.posicion();
+                    if (d > 0) {
+                        float f = (float)std::clamp(pos / d, 0.0, 1.0);
+                        g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, (v.mw - 64) * f, 4, 2, Color(ACCENT));
+                        g.circulo(cx + 48 + (v.mw - 64) * f, cy + v.mh / 2, 6, Color(ACCENT));
+                        int s = (int)pos;
+                        t = std::to_wstring(s / 60) + L":" + (s % 60 < 10 ? L"0" : L"") + std::to_wstring(s % 60);
+                    }
+                    if (reproductor.terminado() || (reproductor.pausado() && reproductor.posicion() <= 0.01)) {
+                        // se apaga solo en el proximo frame
+                    }
+                } else if (bajando_audio && reproduciendo_id.empty()) {
+                    // nada especial
+                }
+                if (!suena) g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, v.mw - 64, 4, 2, Color(0xffffff, 0.25f));
                 g.renglon(t, cx + 48, cy + v.mh / 2 + 6, 11, Color(TXT_DIM));
             } else {
                 g.renglon(t, cx + 48, cy + 10, 13.5f, Color(TXT), DWRITE_FONT_WEIGHT_NORMAL, v.mw - 60);
@@ -1290,6 +1317,10 @@ void App::raton_abajo(float x, float y, bool shift) {
             return;
         }
         if (adjunto) yy += ADJUNTO_H;
+        if (grab != Grab::Nada) {
+            click_grabacion(x, y, yy, campo.alto(g));
+            return;
+        }
         if (x < x_conv() + 52) {
             elegir_archivo();
             return;
@@ -1297,7 +1328,7 @@ void App::raton_abajo(float x, float y, bool shift) {
         if (x > x_conv() + W - 60) {
             if (adjunto) enviar_adjunto();
             else if (!campo.texto.empty()) enviar_texto();
-            // (el microfono viene despues)
+            else grabar_empezar();
             pedir_dibujo();
             return;
         }

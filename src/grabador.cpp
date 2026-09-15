@@ -105,7 +105,7 @@ std::vector<int16_t> remuestrear_a_16k(const std::vector<float>& entrada, int fr
     }
 
     double paso = (double)frecuencia_in / (double)k_frecuencia_salida;
-    double duracion_muestras = entrada.size();
+    double duracion_muestras = (double)entrada.size();
     size_t n_salida = (size_t)(duracion_muestras / paso);
     salida.reserve(n_salida);
     double pos = 0.0;
