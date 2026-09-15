@@ -235,12 +235,9 @@ void mostrar(const std::wstring& titulo, const std::wstring& texto, const std::s
     Aviso av{titulo, texto, chat, mensaje, GetTickCount64() + (unsigned long long)std::max(2, ajustes::actual().segundos_aviso) * 1000};
     av.clave_foto = chat;
     if (!ruta_foto_http.empty()) pedir_foto(chat, ruta_foto_http);
-    // El mismo chat, si ya tiene aviso, se reemplaza (no se apilan 20 del mismo).
-    for (size_t i = 0; i < g_avisos.size(); i++)
-        if (g_avisos[i].chat == chat) {
-            g_avisos.erase(g_avisos.begin() + i);
-            break;
-        }
+    // Se apilan (el mas nuevo abajo) y se van yendo en orden: cada uno vive
+    // al menos un ratito mas que el anterior, aunque lleguen juntos.
+    if (!g_avisos.empty()) av.hasta = std::max(av.hasta, g_avisos.back().hasta + 700);
     g_avisos.push_back(av);
     while ((int)g_avisos.size() > MAXIMO) g_avisos.pop_front();
     ubicar();
