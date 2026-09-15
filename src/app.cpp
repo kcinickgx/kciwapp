@@ -279,7 +279,10 @@ void App::iniciar(HWND h) {
         if (adjunto) enviar_adjunto();
         else enviar_texto();
     };
-    campo.al_cambiar = [this] { pedir_dibujo(); };
+    campo.al_cambiar = [this] {
+        pedir_dibujo();
+        teclear_presencia();
+    };
     campo.al_escapar = [this] { escapar(); };
     campo.foco = true;
     buscador.indicio = L"Search or start new chat";
@@ -420,6 +423,12 @@ void App::abrir_chat(const std::string& jid) {
     if (jid == chat_actual) return;
     if (seleccionando) terminar_seleccion();
     if (busca_chat_abierta) cerrar_busqueda_chat();
+    if (!presencia_mandada.empty()) mandar_presencia("");
+    {
+        // Para que el telefono nos mande el "typing" de este contacto.
+        std::string cuerpo = "{\"chat\":" + json_texto(jid) + "}";
+        red::en_fondo([cuerpo] { red::mandar_json(L"/presencia", cuerpo); });
+    }
     // El borrador del chat que se deja queda guardado.
     if (!chat_actual.empty()) {
         borradores[chat_actual] = campo.texto;
@@ -650,6 +659,42 @@ void App::cargar_mas_viejos() {
     });
 }
 
+// "typing..." / "recording audio..." del chat, o "" si no hay nadie (o ya paso).
+std::wstring App::texto_escribiendo(const std::string& chat) {
+    auto it = escribiendo.find(chat);
+    if (it == escribiendo.end()) return L"";
+    if (it->second.hasta <= GetTickCount64()) {
+        escribiendo.erase(it);
+        return L"";
+    }
+    std::wstring t = it->second.grabando ? L"recording audio..." : L"typing...";
+    const Chat* c = chat_de(chat);
+    if (c && c->es_grupo) t = nombre_de(it->second.quien) + L" is " + t;
+    return t;
+}
+
+// Le avisa al server (y por el a WhatsApp) que estamos escribiendo/grabando.
+void App::mandar_presencia(const std::string& estado) {
+    if (chat_actual.empty()) return;
+    presencia_mandada = estado;
+    presencia_ts = GetTickCount64();
+    std::string cuerpo = "{\"chat\":" + json_texto(chat_actual) + ",\"estado\":" + json_texto(estado) + "}";
+    red::en_fondo([cuerpo] { red::mandar_json(L"/escribiendo", cuerpo); });
+    // Si dejamos de escribir, a los 5 s se manda "paused" (timer 6).
+    if (!estado.empty()) SetTimer(hwnd, 6, 5000, nullptr);
+    else KillTimer(hwnd, 6);
+}
+
+void App::teclear_presencia() {
+    if (campo.texto.empty()) {
+        if (presencia_mandada == "typing") mandar_presencia("");
+        return;
+    }
+    // WhatsApp repite el composing cada tanto; con uno cada 4 s alcanza.
+    if (presencia_mandada != "typing" || GetTickCount64() - presencia_ts > 4000) mandar_presencia("typing");
+    else SetTimer(hwnd, 6, 5000, nullptr);
+}
+
 void App::marcar_leido(const std::string& jid, const std::vector<std::string>& ids) {
     bool habia = false;
     for (auto& c : chats)
@@ -682,6 +727,7 @@ void App::enviar_texto() {
     while (!t.empty() && (t.back() == L' ' || t.back() == L'\n')) t.pop_back();
     if (t.empty() || chat_actual.empty()) return;
     campo.poner(L"");
+    if (!presencia_mandada.empty()) mandar_presencia("");
     std::string chat = chat_actual;
     if (editando) {
         std::string id = editando->id;
@@ -851,6 +897,16 @@ bool App::aplicar_evento(const Json& e) {
     } else if (tipo == "leido") {
         for (auto& c : chats)
             if (c.jid == chat) c.no_leidos = 0;
+    } else if (tipo == "escribiendo") {
+        // Efimero: si el evento es viejo (reconexion, arranque) no vale.
+        long long ts = e["ts"].entero();
+        std::string estado = d["estado"].str();
+        if (estado == "nada" || ts < ahora_ms() - 20000) escribiendo.erase(chat);
+        else {
+            escribiendo[chat] = {d["quien"].str(), estado == "grabando", GetTickCount64() + 12000};
+            SetTimer(hwnd, 4, 12500, nullptr);  // para que se apague solo
+        }
+        pedir_dibujo();
     } else if (tipo == "sesion") {
         conectado = d["conectado"].bul();
         aviso_estado = conectado ? L"" : L"Server not connected to WhatsApp";
@@ -1342,9 +1398,14 @@ void App::dibujar_lista() {
         float ancho_prev = W - tx - 16;
         if (c.no_leidos) ancho_prev -= 34;
         float py = y + FILA_H * 0.53f;
+        std::wstring escribe = texto_escribiendo(c.jid);
+        if (!escribe.empty()) {
+            g.renglon(escribe, tx, py, letra_lista - 2, Color(ACCENT()), DWRITE_FONT_WEIGHT_NORMAL, ancho_prev);
+        } else {
         g.renglon(prev, tx, py, letra_lista - 2, Color(prev.rfind(L"Draft:", 0) == 0 ? 0xf15c6d : TXT_DIM()),
                   DWRITE_FONT_WEIGHT_NORMAL, ancho_prev);
-        if (c.ultimo && c.ultimo->propio && prev.rfind(L"Draft:", 0) != 0) {
+        }
+        if (escribe.empty() && c.ultimo && c.ultimo->propio && prev.rfind(L"Draft:", 0) != 0) {
             int estado = c.jid == mi_jid ? std::max(c.ultimo->estado, 2) : c.ultimo->estado;
             tildes(tx, py + 3, estado >= 2, Color(estado >= 3 ? TICK_AZUL() : TXT_DIM()));
         }
@@ -1411,8 +1472,10 @@ void App::dibujar_cabecera() {
         return;
     }
     g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
-    std::wstring sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
-    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
+    std::wstring sub = texto_escribiendo(c->jid);
+    bool escribe = !sub.empty();
+    if (!escribe) sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
+    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(escribe ? ACCENT() : TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
     // La lupa para buscar en este chat.
     if (!seleccionando) g.lupa(x + W - 36, 27, 8, Color(TXT_DIM()));
 }

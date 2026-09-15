@@ -145,6 +145,11 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 KillTimer(h, 5);
                 app->buscar_en_chat();
             }
+            if (wp == 6 && app) {
+                KillTimer(h, 6);
+                // Dejamos de teclear: paused (salvo que estemos grabando).
+                if (app->presencia_mandada == "typing") app->mandar_presencia("");
+            }
             if (wp == 4 && app) {
                 KillTimer(h, 4);
                 app->pedir_dibujo();

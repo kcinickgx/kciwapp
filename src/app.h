@@ -270,6 +270,19 @@ struct App {
     int elegido_chat = -1;  // coincidencia elegida (-1 = se ve el panel)
     bool res_chat_completa = false, res_chat_buscando = false;
     std::wstring ultima_busqueda_chat;
+    // "typing..." de los demas, por chat: quien, si escribe o graba, y hasta cuando vale.
+    struct Escribiendo {
+        std::string quien;
+        bool grabando = false;
+        unsigned long long hasta = 0;
+    };
+    std::map<std::string, Escribiendo> escribiendo;
+    std::wstring texto_escribiendo(const std::string& chat);  // "" si nadie
+    // Lo nuestro: que estado mandamos por ultima vez y cuando.
+    std::string presencia_mandada;
+    unsigned long long presencia_ts = 0;
+    void mandar_presencia(const std::string& estado);  // "typing" | "recording" | ""
+    void teclear_presencia();  // al cambiar el texto del campo
     // Audio: un reproductor para notas de voz y audios, y la grabacion.
     Reproductor reproductor;
     bool reproductor_ok = false;

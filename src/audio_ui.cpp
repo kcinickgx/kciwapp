@@ -74,6 +74,7 @@ void App::grabar_empezar() {
     }
     grab = Grab::Grabando;
     grab_desde = GetTickCount64();
+    mandar_presencia("recording");
     grab_niveles.clear();
     if (!reproduciendo_id.empty()) {
         reproductor.parar();
@@ -88,11 +89,15 @@ void App::grabar_parar() {
     grab_niveles = grabador::niveles();
     grabador::parar();
     grab = Grab::Lista;
+    mandar_presencia("");
     pedir_dibujo();
 }
 
 void App::grabar_cancelar() {
-    if (grab == Grab::Grabando) grabador::parar();
+    if (grab == Grab::Grabando) {
+        grabador::parar();
+        mandar_presencia("");
+    }
     if (grab_escuchando) {
         reproductor.parar();
         grab_escuchando = false;
