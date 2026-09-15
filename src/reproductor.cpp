@@ -2,6 +2,7 @@
 
 #include "mpv/client.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
