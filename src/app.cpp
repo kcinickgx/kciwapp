@@ -1183,7 +1183,9 @@ bool App::alguien_escribe(const std::string& chat) const {
 
 // La burbuja del que escribe: tres puntos que laten, o el microfono si graba.
 void App::dibujar_burbuja_escribiendo(float y) {
-    float x = x_conv() + 14, bw = 62, bh = ESCRIBIENDO_H - 10;
+    // Como un mensaje nuevo de otro bloque: 8 px de aire arriba.
+    y += 8;
+    float x = x_conv() + 14, bw = 62, bh = ESCRIBIENDO_H - 14;
     auto it = escribiendo.find(chat_actual);
     if (it != escribiendo.end() && it->second.grabando) {
         // Como WhatsApp: una burbuja redonda con el microfono titilando.
