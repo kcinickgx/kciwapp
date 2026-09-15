@@ -47,6 +47,8 @@ struct Reproductor {
     // grabador::dispositivos(false) (mismo formato de id que usa WASAPI), o
     // vacio para "auto" (el dispositivo por defecto del sistema).
     void salida(const std::wstring& id_dispositivo_wasapi_o_vacio);
+    // Velocidad de reproduccion (1.0 normal). Queda para los proximos archivos tambien.
+    void velocidad(double v);
 
     // Se llama desde el hilo interno de eventos de mpv cada vez que cambia
     // time-pos/duration/pause, o cuando el archivo termina. OJO: NO es el

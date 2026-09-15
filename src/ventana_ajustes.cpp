@@ -406,13 +406,12 @@ float seccion_colores(Gfx& g, float x, float y, float ancho_contenido) {
     // al tema Custom y cambia a Custom (como hacia la version vieja).
     const float FILA_C = 28.0f;  // mas apretadas que el resto
     for (int i = 0; i < CC_CANTIDAD; i++) {
-        hover_si(g, x, y, ancho_contenido, FILA_C);
-        g.renglon(NOMBRE_CAMPO[i], x, y + (FILA_C - 16) / 2.0f, 14, Color(TXT()));
+        g.renglon(NOMBRE_CAMPO[i], x, y + (FILA_C - 19) / 2.0f, 14, Color(TXT()));
         unsigned c = leer_campo(ajustes::paleta(), i);
         float sw = 22.0f, sw_x = x + ancho_contenido - sw, sw_y = y + (FILA_C - sw) / 2.0f;
         std::wstring hx = wstr_de(ajustes::hex_de(c));
         float hw = g.medir(hx, 12.5f);
-        g.renglon(hx, sw_x - 12 - hw, y + (FILA - 12.5f) / 2.0f, 12.5f, Color(TXT_DIM()));
+        g.renglon(hx, sw_x - 12 - hw, y + (FILA_C - 17) / 2.0f, 12.5f, Color(TXT_DIM()));
         g.rect_redondo(sw_x, sw_y, sw, sw, 5, Color(c));
         g.borde_redondo(sw_x, sw_y, sw, sw, 5, Color(BORDE()), 1.0f);
         int campo = i;

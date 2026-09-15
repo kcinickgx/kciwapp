@@ -186,6 +186,8 @@ Mensaje Mensaje::de_json(const Json& j) {
         x.segundos = (int)md["segundos"].entero();
         x.estado = (int)md["estado"].entero();
         x.miniatura = md["miniatura"].bul();
+        const Json& onda = md["onda"];
+        for (size_t k = 0; k < onda.largo(); k++) x.onda.push_back((unsigned char)onda[k].entero());
         m.media = x;
     }
     const Json& rs = j["reacciones"];
@@ -748,7 +750,7 @@ void App::armar_vista(size_t i) {
         y += v.mh + (m.texto.empty() ? 0 : 6);
     } else if (m.media && !m.borrado) {
         v.mw = std::min(interior, 280.0f);
-        v.mh = (m.tipo == "audio" || m.tipo == "nota") ? 46.0f : 54.0f;
+        v.mh = (m.tipo == "audio" || m.tipo == "nota") ? 58.0f : 54.0f;
         v.mx = PAD_X;
         v.my = y;
         ancho_contenido = std::max(ancho_contenido, v.mw);
@@ -1260,39 +1262,15 @@ void App::dibujar_mensaje(size_t i, float y) {
                 }
             }
         } else if (m.media) {
-            // Audio o documento: una tarjeta simple por ahora.
-            g.rect_redondo(cx, cy, v.mw, v.mh, 6, Color(0x000000, 0.18f));
             bool audio = m.tipo == "audio" || m.tipo == "nota";
-            g.circulo(cx + 22, cy + v.mh / 2, 16, Color(ACCENT()));
-            if (!(audio && reproduciendo_id == m.id))
-                g.renglon(audio ? L"▶" : L"\U0001F4C4", cx + 15, cy + v.mh / 2 - 9, 14, Color(0x111b21));
-            std::wstring t = audio ? std::to_wstring(m.media->segundos / 60) + L":" +
-                                         (m.media->segundos % 60 < 10 ? L"0" : L"") + std::to_wstring(m.media->segundos % 60)
-                                   : ancho(m.media->nombre);
             if (audio) {
-                bool suena = reproduciendo_id == m.id;
-                if (suena) {
-                    // Boton de pausa y barra de progreso viva.
-                    g.rect(cx + 17, cy + v.mh / 2 - 6, 4, 12, Color(0x111b21));
-                    g.rect(cx + 23, cy + v.mh / 2 - 6, 4, 12, Color(0x111b21));
-                    double d = reproductor.duracion(), pos = reproductor.posicion();
-                    if (d > 0) {
-                        float f = (float)std::clamp(pos / d, 0.0, 1.0);
-                        g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, (v.mw - 64) * f, 4, 2, Color(ACCENT()));
-                        g.circulo(cx + 48 + (v.mw - 64) * f, cy + v.mh / 2, 6, Color(ACCENT()));
-                        int s = (int)pos;
-                        t = std::to_wstring(s / 60) + L":" + (s % 60 < 10 ? L"0" : L"") + std::to_wstring(s % 60);
-                    }
-                    if (reproductor.terminado() || (reproductor.pausado() && reproductor.posicion() <= 0.01)) {
-                        // se apaga solo en el proximo frame
-                    }
-                } else if (bajando_audio && reproduciendo_id.empty()) {
-                    // nada especial
-                }
-                if (!suena) g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, v.mw - 64, 4, 2, Color(0xffffff, 0.25f));
-                g.renglon(t, cx + 48, cy + v.mh / 2 + 6, 11, Color(TXT_DIM()));
+                dibujar_audio((int)i, cx, cy, v.mw, v.mh);
             } else {
-                g.renglon(t, cx + 48, cy + 10, 13.5f, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, v.mw - 60);
+                // Documento: nombre y tamano.
+                g.rect_redondo(cx, cy, v.mw, v.mh, 6, Color(0x000000, 0.18f));
+                g.circulo(cx + 22, cy + v.mh / 2, 16, Color(ACCENT()));
+                g.renglon(L"\U0001F4C4", cx + 15, cy + v.mh / 2 - 9, 14, Color(0x111b21));
+                g.renglon(ancho(m.media->nombre), cx + 48, cy + 10, 13.5f, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, v.mw - 60);
                 std::wstring tam = std::to_wstring(m.media->bytes / 1024) + L" KB";
                 g.renglon(tam, cx + 48, cy + 30, 11, Color(TXT_DIM()));
             }
@@ -1522,7 +1500,12 @@ void App::raton_abajo(float x, float y, bool shift) {
         } else {
             const VistaMensaje& v = vistas[i];
             float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
-            if (v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh) abrir_media(i);
+            if (v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh) {
+                if ((mensajes[i].tipo == "audio" || mensajes[i].tipo == "nota") && reproductor_ok)
+                    click_audio(i, x - mx, y - my, v.mw, v.mh);
+                else
+                    abrir_media(i);
+            }
         }
     }
     pedir_dibujo();

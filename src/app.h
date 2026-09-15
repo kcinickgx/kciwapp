@@ -21,6 +21,7 @@ struct Media {
     long long bytes = 0;
     int ancho = 0, alto = 0, segundos = 0, estado = 0;
     bool miniatura = false;
+    std::vector<unsigned char> onda;  // 64 valores 0..100 (notas de voz)
 };
 
 struct Reaccion {
@@ -198,6 +199,7 @@ struct App {
     bool reproductor_ok = false;
     std::string reproduciendo_id;   // mensaje que suena (vacio si ninguno)
     bool bajando_audio = false;
+    double velocidad_audio = 1.0;   // 1x / 1.5x / 2x, global
     enum class Grab { Nada, Grabando, Lista } grab = Grab::Nada;
     unsigned long long grab_desde = 0;
     double grab_segundos = 0;
@@ -301,6 +303,8 @@ struct App {
     void dibujar_fondo_chat(float x, float y, float w, float h);
     // Audio (audio_ui.cpp)
     void reproducir_audio(int i);
+    void dibujar_audio(int i, float cx, float cy, float w, float h);
+    void click_audio(int i, float rx, float ry, float w, float h);
     void grabar_empezar();
     void grabar_parar();
     void grabar_cancelar();

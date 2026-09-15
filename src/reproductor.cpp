@@ -182,6 +182,13 @@ void Reproductor::salida(const std::wstring& id_dispositivo_wasapi_o_vacio) {
     reinterpret_cast<PFN_set_property_string>(fn_set_property_string)(mpv, "audio-device", valor.c_str());
 }
 
+void Reproductor::velocidad(double v) {
+    if (!mpv) return;
+    char buf[32];
+    snprintf(buf, sizeof buf, "%.2f", v);
+    reinterpret_cast<PFN_set_property_string>(fn_set_property_string)(mpv, "speed", buf);
+}
+
 void Reproductor::despertar_trampolin(void* datos) {
     auto* self = static_cast<Reproductor*>(datos);
     {

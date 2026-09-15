@@ -54,6 +54,7 @@ void App::reproducir_audio(int i) {
             grab_escuchando = false;
             reproduciendo_id = copia.id;
             reproductor.abrir(ruta);
+            reproductor.velocidad(velocidad_audio);
             reproductor.reproducir();
             pedir_dibujo();
         });
@@ -205,4 +206,88 @@ bool App::click_grabacion(float x, float y, float yy, float ch) {
     }
     if (grab == Grab::Lista && x < x_conv() + 52 + 40) grabar_escuchar();
     return true;
+}
+
+// ---- la tarjeta de audio --------------------------------------------------
+
+// Geometria de la tarjeta: play a la izquierda, la onda en el medio (clickeable
+// para adelantar), tiempo abajo y, mientras suena, el boton de velocidad.
+namespace {
+const float AUDIO_ONDA_X = 52.0f;   // donde arranca la onda
+const float AUDIO_ONDA_DER = 14.0f; // margen derecho
+const float AUDIO_VEL_W = 40.0f;    // el boton 1x/1.5x/2x
+}  // namespace
+
+void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
+    const Mensaje& m = mensajes[i];
+    bool suena = reproduciendo_id == m.id;
+    bool nota = m.tipo == "nota";
+    g.rect_redondo(cx, cy, w, h, 6, Color(0x000000, 0.18f));
+    // Play / pausa
+    float pcx = cx + 24, pcy = cy + h / 2;
+    g.circulo(pcx, pcy, 17, Color(ACCENT()));
+    if (suena && !reproductor.pausado() && !reproductor.terminado()) {
+        g.rect(pcx - 6, pcy - 7, 4, 14, Color(0x111b21));
+        g.rect(pcx + 2, pcy - 7, 4, 14, Color(0x111b21));
+    } else {
+        g.renglon(L"\u25B6", pcx - 7, pcy - 10, 15, Color(0x111b21));
+    }
+    // La onda: 64 barras de WhatsApp, o una plana si no hay (audio comun).
+    float ox = cx + AUDIO_ONDA_X, ow = w - AUDIO_ONDA_X - AUDIO_ONDA_DER - (suena ? AUDIO_VEL_W + 8 : 0);
+    float oy = cy + 12, oh = 24;
+    double d = suena ? reproductor.duracion() : (double)m.media->segundos;
+    double pos = suena ? reproductor.posicion() : 0;
+    float f = d > 0 ? (float)std::clamp(pos / d, 0.0, 1.0) : 0;
+    int barras = 64;
+    float paso = ow / barras;
+    for (int k = 0; k < barras; k++) {
+        float nivel;
+        if (m.media->onda.size() >= 64) nivel = m.media->onda[k] / 100.0f;
+        else nivel = nota ? 0.3f : 0.18f + 0.1f * ((k * 7) % 5);
+        float bh = std::max(3.0f, nivel * oh);
+        bool pasado = (k + 0.5f) / barras <= f;
+        g.rect_redondo(ox + k * paso + paso * 0.2f, oy + (oh - bh) / 2, std::max(1.5f, paso * 0.6f), bh, 1,
+                       Color(pasado ? ACCENT() : (nota ? TXT_DIM() : TXT_DIM()), pasado ? 1.0f : 0.6f));
+    }
+    if (suena) g.circulo(ox + ow * f, oy + oh / 2, 5, Color(ACCENT()));
+    // Tiempo: lo que va (si suena) o el largo.
+    int seg = (int)(suena ? pos : (double)m.media->segundos);
+    std::wstring t = std::to_wstring(seg / 60) + L":" + (seg % 60 < 10 ? L"0" : L"") + std::to_wstring(seg % 60);
+    g.renglon(t, ox, cy + h - 17, 11, Color(TXT_DIM()));
+    if (nota && !suena) g.renglon(L"\U0001F3A4", cx + w - 30, cy + h - 19, 12, Color(TXT_DIM()));
+    // Velocidad, solo mientras suena.
+    if (suena) {
+        float vx = cx + w - AUDIO_ONDA_DER - AUDIO_VEL_W, vy = cy + 12;
+        g.rect_redondo(vx, vy, AUDIO_VEL_W, 24, 12, Color(TXT_DIM(), 0.35f));
+        wchar_t buf[8];
+        swprintf(buf, 8, velocidad_audio == 1.5 ? L"1.5x" : (velocidad_audio == 2.0 ? L"2x" : L"1x"));
+        float tw = g.medir(buf, 12, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        g.renglon(buf, vx + (AUDIO_VEL_W - tw) / 2, vy + 4, 12, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    }
+}
+
+// Click dentro de la tarjeta (coordenadas relativas a ella).
+void App::click_audio(int i, float rx, float ry, float w, float h) {
+    const Mensaje& m = mensajes[i];
+    bool suena = reproduciendo_id == m.id;
+    if (suena) {
+        float vx = w - AUDIO_ONDA_DER - AUDIO_VEL_W;
+        if (rx >= vx && ry >= 8 && ry <= 40) {
+            velocidad_audio = velocidad_audio == 1.0 ? 1.5 : (velocidad_audio == 1.5 ? 2.0 : 1.0);
+            reproductor.velocidad(velocidad_audio);
+            pedir_dibujo();
+            return;
+        }
+        float ox = AUDIO_ONDA_X, ow = w - AUDIO_ONDA_X - AUDIO_ONDA_DER - AUDIO_VEL_W - 8;
+        if (rx >= ox && rx <= ox + ow && ry >= 6 && ry <= 42) {
+            double d = reproductor.duracion();
+            if (d > 0) {
+                reproductor.ir_a(d * (rx - ox) / ow);
+                if (reproductor.pausado()) reproductor.reproducir();
+            }
+            pedir_dibujo();
+            return;
+        }
+    }
+    reproducir_audio(i);
 }
