@@ -267,10 +267,21 @@ void en_luz(float y) {
     aplicar_hsl(g_picker.h, g_picker.s, l);
 }
 
+std::string g_tema_antes;  // el tema que habia al abrir el picker, para el Cancel
+
 void abrir_picker(int campo, float swatch_x, float swatch_y, float swatch_w, float swatch_h) {
     g_picker.abierto = true;
     g_picker.campo = campo;
     g_picker.arrastre = 0;
+    // Editar un color de un preset: el preset se copia a Custom y se pasa a Custom.
+    g_tema_antes = ajustes::actual().tema;
+    if (g_tema_antes != "custom") {
+        Paleta base = ajustes::paleta();
+        ajustes::cambiar([base](Ajustes& a) {
+            a.custom = base;
+            a.tema = "custom";
+        });
+    }
     unsigned c = leer_campo(ajustes::actual().custom, campo);
     g_picker.original = c;
     Hsl hh = hsl_de_hex(c);
@@ -292,6 +303,11 @@ void cancelar_picker() {
         unsigned c = g_picker.original;
         int campo = g_picker.campo;
         ajustes::cambiar([campo, c](Ajustes& a) { escribir_campo(a.custom, campo, c); });
+    }
+    // Si se habia pasado a Custom solo por este picker, se vuelve al tema de antes.
+    if (g_tema_antes != "custom") {
+        std::string t = g_tema_antes;
+        ajustes::cambiar([t](Ajustes& a) { a.tema = t; });
     }
     g_picker.abierto = false;
     g_picker.arrastre = 0;
@@ -362,15 +378,12 @@ float seccion_tema(Gfx& g, float x, float y, float ancho_contenido) {
 float seccion_colores(Gfx& g, float x, float y, float ancho_contenido) {
     y = titulo_seccion(g, x, y, L"COLORS");
     y += 6;
-    if (ajustes::actual().tema != "custom") {
-        g.renglon(L"Select the Custom theme to edit colors", x, y + 4, 13, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL,
-                  ancho_contenido);
-        return y + FILA;
-    }
+    // Se muestran los colores del tema que este activo; tocar uno lo copia
+    // al tema Custom y cambia a Custom (como hacia la version vieja).
     for (int i = 0; i < CC_CANTIDAD; i++) {
         hover_si(g, x, y, ancho_contenido, FILA);
         g.renglon(NOMBRE_CAMPO[i], x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
-        unsigned c = leer_campo(ajustes::actual().custom, i);
+        unsigned c = leer_campo(ajustes::paleta(), i);
         float sw = 28.0f, sw_x = x + ancho_contenido - sw, sw_y = y + (FILA - sw) / 2.0f;
         std::wstring hx = wstr_de(ajustes::hex_de(c));
         float hw = g.medir(hx, 12.5f);
