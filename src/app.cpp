@@ -475,6 +475,7 @@ void App::abrir_chat(const std::string& jid) {
     layout_pendiente = 0;
     layout_gen++;
     tandas_listas.clear();
+    vista_parcial = false;
     cargando_mensajes = true;
     hay_mas_viejos = true;
     conv = Desplazable();
@@ -623,6 +624,12 @@ void App::abrir_chat(const std::string& jid) {
 // Los mensajes del chat que se deja quedan en memoria (hasta 6 chats).
 void App::recordar_chat() {
     if (chat_actual.empty() || mensajes.empty()) return;
+    if (vista_parcial) {
+        // Solo una ventana: mejor no recordarla, que al volver se cargue entero.
+        mensajes.clear();
+        vista_parcial = false;
+        return;
+    }
     en_memoria[chat_actual] = {std::move(mensajes), hay_mas_viejos};
     en_memoria_orden.erase(std::remove(en_memoria_orden.begin(), en_memoria_orden.end(), chat_actual), en_memoria_orden.end());
     en_memoria_orden.push_back(chat_actual);

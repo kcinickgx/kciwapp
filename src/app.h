@@ -176,6 +176,9 @@ struct App {
     // Donde cae en pantalla el renglon del mensaje i (su tope).
     float y_de(size_t i) const { return (float)(alto_cabecera() + 12 + (i < inicio.size() ? inicio[i] : 0) - conv.pos); }
     bool cargando_mensajes = false;
+    // La conversacion es solo una ventana alrededor de un mensaje (salto
+    // desde una busqueda): no se guarda en memoria al irse, se recarga entera.
+    bool vista_parcial = false;
     bool cargando_chats = false, recarga_pendiente = false, escuchando = false;
     bool resync_pendiente = false;   // el log de eventos se perdio: completar cada chat al abrirlo
     // Los ultimos chats visitados quedan en memoria (mensajes ya parseados),

@@ -426,9 +426,14 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
         red::en_ui([this, mio, id, ja, jd] {
             if (mio != chat_actual) return;
             cargando_mensajes = false;
+            // Lo que estuviera armandose en fondo (p. ej. el chat entero) ya
+            // no vale: si se aplicara sobre esta ventana chica, rompe todo.
+            layout_gen++;
+            tandas_listas.clear();
             mensajes.clear();
             vistas.clear();
             layout_pendiente = 0;
+            vista_parcial = true;
             for (size_t i = 0; i < ja.largo(); i++) mensajes.push_back(Mensaje::de_json(ja[i]));
             for (size_t i = 0; i < jd.largo(); i++) {
                 Mensaje m = Mensaje::de_json(jd[i]);
