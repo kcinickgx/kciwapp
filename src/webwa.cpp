@@ -394,9 +394,14 @@ std::wstring js_buscar_chat(const std::wstring& que) {
     return L"(function(q){var s=document.querySelector('#side [contenteditable=\"true\"]')||document.querySelector('[data-tab=\"3\"]');"
            L"if(!s)return 'sin buscador';s.focus();document.execCommand('selectAll',false,null);document.execCommand('insertText',false,q);return 'ok'})(" + js_literal(que) + L")";
 }
+// Enter en el buscador (WhatsApp Web abre el primer resultado) y, por si
+// no, click en la primera fila con foto/titulo de la lista.
 const wchar_t* JS_PRIMER_RESULTADO =
-    L"(function(){var r=document.querySelector('#pane-side [role=\"listitem\"],#pane-side [role=\"row\"],#pane-side [role=\"gridcell\"]');"
-    L"if(!r)return 'no';var c=r.querySelector('[role=\"button\"],[tabindex]')||r;c.click();return 'ok'})()";
+    L"(function(){var s=document.querySelector('#side [contenteditable=\"true\"]')||document.querySelector('[data-tab=\"3\"]');"
+    L"if(s){['keydown','keypress','keyup'].forEach(function(t){s.dispatchEvent(new KeyboardEvent(t,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}))})}"
+    L"var filas=document.querySelectorAll('#pane-side [role=\"listitem\"],#pane-side [role=\"row\"]');"
+    L"for(var i=0;i<filas.length;i++){var r=filas[i];if(r.querySelector('img,span[title]')){var c=r.querySelector('[role=\"button\"],[tabindex]')||r;c.click();return 'ok'}}"
+    L"return s?'enter':'no'})()";
 
 void intentar_llamada_pendiente() {
     if (!g_pendiente.hay || !g_principal.web) return;
@@ -426,7 +431,7 @@ void intentar_llamada_pendiente() {
         ejecutar(g_principal, js_chat_abierto(p.nombre, p.telefono), [](const std::wstring& r) {
             if (resultado_str(r) == "si" && g_pendiente.paso == 1) g_pendiente.paso = 2;
         });
-        if (p.ticks > 8 && !p.navego) {
+        if (p.ticks > 10 && !p.navego) {
             // Plan B: la pagina entera con el chat.
             p.navego = true;
             registrar("el buscador no lo encontro; recargo con /send");
