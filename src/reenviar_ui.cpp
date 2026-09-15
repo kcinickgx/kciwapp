@@ -152,7 +152,7 @@ void App::dibujar_modal_reenvio() {
             float tx = l.x + l.w - 44, ty = cy - 11;
             g.rect_redondo(tx, ty, 22, 22, 11, Color(elegido ? ACCENT() : BG_CAMPO()));
             if (!elegido) g.borde_redondo(tx, ty, 22, 22, 11, Color(BORDE()), 1.0f);
-            if (elegido) tildes(tx + 3, ty + 4, false, Color(0x111b21));
+            if (elegido) tildes(tx + 6.75f, ty + 5.5f, false, Color(0x111b21));
         }
         y += FILA_DEST;
         if (y > l.y + l.h) break;

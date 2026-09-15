@@ -1591,7 +1591,7 @@ void App::dibujar_mensaje(size_t i, float y) {
         float cx = x + 18, cy = by + v.bh / 2;
         g.circulo(cx, cy, 10, Color(marcado ? ACCENT() : BG_CAMPO()));
         if (!marcado) g.borde_redondo(cx - 10, cy - 10, 20, 20, 10, Color(TXT_DIM()), 1.0f);
-        else tildes(cx - 7, cy - 6, false, Color(0x111b21));
+        else tildes(cx - 4.25f, cy - 5.5f, false, Color(0x111b21));
         if (!m.propio) bx += 26;
     }
     Color fondo(m.propio ? BUBBLE_MIA() : BUBBLE_OTRA());
