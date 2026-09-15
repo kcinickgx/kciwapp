@@ -622,6 +622,8 @@ bool App::aplicar_evento(const Json& e) {
         std::string id = d["id"].str();
         int estado = (int)d["estado"].entero();
         cache::poner_estado(chat, id, estado);
+        for (auto& c : chats)
+            if (c.jid == chat && c.ultimo && c.ultimo->id == id) c.ultimo->estado = std::max(c.ultimo->estado, estado);
         if (chat != chat_actual) return false;
         for (auto& x : mensajes)
             if (x.id == id) x.estado = std::max(x.estado, estado);
