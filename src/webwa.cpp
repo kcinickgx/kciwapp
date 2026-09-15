@@ -338,7 +338,7 @@ const wchar_t* JS_VIDEO =
     L"var r=vs[0].getBoundingClientRect();return (r.width>=innerWidth*0.5)?'si':'no'})()";
 
 const wchar_t* JS_DIAG_VIDEO =
-    L"(function(){try{var o=['url='+location.href+' title='+document.title+' readyState='+document.readyState+' body='+(document.body?document.body.children.length:-1)];"
+    L"(function(){try{var o=['url='+location.href+' title='+document.title+' readyState='+document.readyState+' vis='+document.visibilityState+' inner='+innerWidth+'x'+innerHeight+' outer='+outerWidth+'x'+outerHeight+' body='+(document.body?document.body.children.length:-1)];"
     L"var vs=document.querySelectorAll('video');o.push('videos='+vs.length+' iframes='+document.querySelectorAll('iframe').length+' canvas='+document.querySelectorAll('canvas').length);"
     L"for(var i=0;i<vs.length;i++){var v=vs[i];var r=v.getBoundingClientRect();var lab='';"
     L"try{var t=v.srcObject&&v.srcObject.getVideoTracks();lab=t&&t.length?('['+t[0].label+']'):'sin-track'}catch(e){lab='err'}"
@@ -417,7 +417,7 @@ bool iniciar(HWND padre, const std::wstring& carpeta_exe) {
     // (los botones se buscan por su aria-label).
     opciones->put_AdditionalBrowserArguments(
         L"--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling "
-        L"--autoplay-policy=no-user-gesture-required");
+        L"--disable-features=CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required");
     opciones->put_Language(L"en-US");
     g_activo = true;
     g_cargando = true;
