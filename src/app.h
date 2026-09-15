@@ -433,6 +433,7 @@ struct App {
     // El rect donde se dibuja la foto del visor (con zoom y paneo).
     bool rect_visor(float& x, float& y, float& w, float& h);
     std::wstring bajar_media(const Mensaje& m);
+    void copiar_media(int i);
     void elegir_archivo();
     void copiar_seleccion();
     int mensaje_en(float y, float* y_msg);

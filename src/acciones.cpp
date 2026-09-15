@@ -14,7 +14,7 @@ namespace {
 
 
 enum IdMenu {
-    M_RESPONDER = 1, M_COPIAR, M_REENVIAR, M_EDITAR, M_BORRAR, M_ABRIR, M_GUARDAR, M_MOSTRAR,
+    M_RESPONDER = 1, M_COPIAR, M_REENVIAR, M_EDITAR, M_BORRAR, M_ABRIR, M_GUARDAR, M_MOSTRAR, M_COPIAR_MEDIA,
     M_REACCION = 100  // + indice
 };
 
@@ -222,6 +222,7 @@ void App::menu_contextual(int i) {
     if (m.media && !m.borrado) {
         items.push_back({L"", 0, nullptr, true});
         items.push_back({L"Open", M_ABRIR, L"\uE8E5"});
+        items.push_back({m.tipo == "imagen" || m.tipo == "figurita" ? L"Copy image" : L"Copy file", M_COPIAR_MEDIA, L"\uE8C8"});
         items.push_back({L"Save as...", M_GUARDAR, L"\uE74E"});
     }
     if (!m.borrado) {
@@ -240,6 +241,7 @@ void App::menu_contextual(int i) {
             case M_EDITAR: editar(i); break;
             case M_BORRAR: borrar(i); break;
             case M_ABRIR: abrir_media(i); break;
+            case M_COPIAR_MEDIA: copiar_media(i); break;
             case M_GUARDAR: {
                 std::wstring origen = bajar_media(mensajes[i]);
                 if (origen.empty()) break;
@@ -612,6 +614,60 @@ void App::elegir_archivo() {
 // ---- media ----------------------------------------------------------------
 
 // Baja (si hace falta) el adjunto a datos\media y devuelve la ruta local.
+// Copia el adjunto al portapapeles: como archivo (CF_HDROP, para pegar en
+// el Explorador, en otro chat de kciwapp o en cualquier app) y, si es una
+// imagen, tambien como bitmap (CF_DIB, para Paint, navegadores, etc.).
+void App::copiar_media(int i) {
+    if (i < 0 || i >= (int)mensajes.size() || !mensajes[i].media) return;
+    const Mensaje& m = mensajes[i];
+    std::wstring ruta = bajar_media(m);
+    if (ruta.empty()) {
+        aviso_estado = L"Media not available";
+        pedir_dibujo();
+        return;
+    }
+    if (!OpenClipboard(hwnd)) return;
+    EmptyClipboard();
+    // CF_HDROP: DROPFILES + ruta + doble nulo.
+    size_t largo = (ruta.size() + 2) * sizeof(wchar_t);
+    HGLOBAL hd = GlobalAlloc(GMEM_MOVEABLE, sizeof(DROPFILES) + largo);
+    if (hd) {
+        auto* df = (DROPFILES*)GlobalLock(hd);
+        memset(df, 0, sizeof(DROPFILES));
+        df->pFiles = sizeof(DROPFILES);
+        df->fWide = TRUE;
+        auto* p = (wchar_t*)((char*)df + sizeof(DROPFILES));
+        memcpy(p, ruta.c_str(), ruta.size() * sizeof(wchar_t));
+        p[ruta.size()] = p[ruta.size() + 1] = 0;
+        GlobalUnlock(hd);
+        SetClipboardData(CF_HDROP, hd);
+    }
+    if (m.tipo == "imagen" || m.tipo == "figurita") {
+        Pixeles px = g.decodificar(leer_archivo(ruta), false);
+        if (!px.vacio() && !px.bgra.empty()) {
+            // DIB de 32 bits, de abajo hacia arriba (lo que todos entienden).
+            size_t fila = (size_t)px.ancho * 4, total = fila * px.alto;
+            HGLOBAL hb = GlobalAlloc(GMEM_MOVEABLE, sizeof(BITMAPINFOHEADER) + total);
+            if (hb) {
+                auto* bih = (BITMAPINFOHEADER*)GlobalLock(hb);
+                memset(bih, 0, sizeof *bih);
+                bih->biSize = sizeof *bih;
+                bih->biWidth = px.ancho;
+                bih->biHeight = px.alto;
+                bih->biPlanes = 1;
+                bih->biBitCount = 32;
+                bih->biCompression = BI_RGB;
+                bih->biSizeImage = (DWORD)total;
+                auto* dst = (unsigned char*)(bih + 1);
+                for (int y = 0; y < px.alto; y++) memcpy(dst + (size_t)(px.alto - 1 - y) * fila, px.bgra.data() + (size_t)y * fila, fila);
+                GlobalUnlock(hb);
+                SetClipboardData(CF_DIB, hb);
+            }
+        }
+    }
+    CloseClipboard();
+}
+
 std::wstring App::bajar_media(const Mensaje& m) {
     if (!m.media) return L"";
     std::wstring carpeta = carpeta_exe() + L"\\datos\\media";
