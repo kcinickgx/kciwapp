@@ -228,6 +228,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     app.iniciar(h);
     g_app = &app;
     // Bandeja y globos de notificacion; el click en un globo abre ese mensaje.
+    toast::al_rechazar([](const std::string& id) {
+        std::string cuerpo = "{\"id\":" + json_texto(id) + "}";
+        red::en_fondo([cuerpo] { red::mandar_json(L"/llamada/rechazar", cuerpo); });
+    });
     toast::iniciar(inst, [](const std::string& chat, const std::string& mensaje) {
         if (!g_app) return;
         HWND h = g_app->hwnd;

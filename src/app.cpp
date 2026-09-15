@@ -898,6 +898,20 @@ bool App::aplicar_evento(const Json& e) {
     } else if (tipo == "leido") {
         for (auto& c : chats)
             if (c.jid == chat) c.no_leidos = 0;
+    } else if (tipo == "llamada") {
+        std::string estado = d["estado"].str(), id = d["id"].str();
+        long long ts = e["ts"].entero();
+        if (estado == "entrante" && ts > ahora_ms() - 60000) {
+            std::string de = d["de"].str();
+            const Chat* c = chat_de(chat);
+            std::wstring titulo = c ? c->nombre : nombre_de(chat);
+            std::wstring texto = d["video"].bul() ? L"Incoming video call" : L"Incoming voice call";
+            if (c && c->es_grupo) texto += L" from " + nombre_de(de);
+            bool con_foto = (c && c->tiene_foto) || (contactos.count(chat) && contactos[chat].tiene_foto);
+            toast::llamada(titulo, texto, chat, id, con_foto ? L"/foto/" + ancho(chat) : L"");
+        } else if (estado != "entrante") {
+            toast::llamada_terminada(id);
+        }
     } else if (tipo == "escribiendo") {
         // Efimero: si el evento es viejo (reconexion, arranque) no vale.
         long long ts = e["ts"].entero();

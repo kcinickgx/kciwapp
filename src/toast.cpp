@@ -1,7 +1,9 @@
 #include "toast.h"
 
 #include <dwmapi.h>
+#include <mmsystem.h>
 #include <windowsx.h>
+#pragma comment(lib, "winmm.lib")
 
 #include <deque>
 #include <map>
@@ -22,7 +24,24 @@ struct Aviso {
     std::string chat, mensaje;
     unsigned long long hasta = 0;
     std::string clave_foto;
+    std::string id_llamada;  // no vacio = llamada entrante (con boton Reject)
 };
+
+constexpr float BOTONES_H = 36.0f;
+float alto_de(const Aviso& a) { return ALTO_AVISO + (a.id_llamada.empty() ? 0 : BOTONES_H); }
+std::function<void(const std::string&)> g_al_rechazar;
+bool g_sonando = false;
+
+void sonar(bool si) {
+    if (si == g_sonando) return;
+    g_sonando = si;
+    if (si) {
+        wchar_t ruta[MAX_PATH];
+        GetWindowsDirectoryW(ruta, MAX_PATH);
+        wcscat_s(ruta, L"\\Media\\Ring01.wav");
+        PlaySoundW(ruta, nullptr, SND_FILENAME | SND_ASYNC | SND_LOOP | SND_NODEFAULT);
+    } else PlaySoundW(nullptr, nullptr, 0);
+}
 
 HWND g_hwnd = nullptr;
 HINSTANCE g_inst = nullptr;
@@ -63,7 +82,11 @@ std::vector<Monitor> lista_monitores() {
     return r;
 }
 
-float alto_total() { return (float)g_avisos.size() * (ALTO_AVISO + SEPARACION) - SEPARACION + 2 * MARGEN; }
+float alto_total() {
+    float h = 2 * MARGEN - SEPARACION;
+    for (auto& a : g_avisos) h += alto_de(a) + SEPARACION;
+    return h;
+}
 
 // Ubica la ventana en la esquina elegida del monitor elegido.
 void ubicar() {
@@ -110,11 +133,21 @@ void dibujar() {
     g.ctx->Clear(Color(BG_APP()).d2d());
     float y = MARGEN;
     for (auto& av : g_avisos) {
-        float x = MARGEN;
+        float x = MARGEN, alto = alto_de(av);
         bool encima = g_mouse_x >= x && g_mouse_x < x + ANCHO && g_mouse_y >= y && g_mouse_y < y + ALTO_AVISO;
-        g.rect_redondo(x, y, ANCHO, ALTO_AVISO, 12, Color(encima ? BG_HOVER() : BG_PANEL()));
-        g.borde_redondo(x, y, ANCHO, ALTO_AVISO, 12, Color(BORDE()), 1.0f);
-        g.rect_redondo(x, y + 12, 4, ALTO_AVISO - 24, 2, Color(ACCENT()));
+        g.rect_redondo(x, y, ANCHO, alto, 12, Color(encima ? BG_HOVER() : BG_PANEL()));
+        g.borde_redondo(x, y, ANCHO, alto, 12, Color(BORDE()), 1.0f);
+        g.rect_redondo(x, y + 12, 4, ALTO_AVISO - 24, 2, Color(av.id_llamada.empty() ? ACCENT() : 0xf15c6d));
+        if (!av.id_llamada.empty()) {
+            // Reject (rojo) y "Answer on phone" (solo cierra el aviso).
+            float by = y + ALTO_AVISO - 4, bw = 120, bh = 28;
+            g.rect_redondo(x + ANCHO - bw - 14, by, bw, bh, 6, Color(0xf15c6d));
+            float tw = g.medir(L"Reject", 13);
+            g.renglon(L"Reject", x + ANCHO - bw - 14 + (bw - tw) / 2, by + 6, 13, Color(0xffffff), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            g.rect_redondo(x + ANCHO - 2 * bw - 24, by, bw, bh, 6, Color(BG_CAMPO()));
+            tw = g.medir(L"Answer on phone", 13);
+            g.renglon(L"Answer on phone", x + ANCHO - 2 * bw - 24 + (bw - tw) / 2, by + 6, 13, Color(TXT()));
+        }
         float r = 26, cx = x + 20 + r, cy = y + ALTO_AVISO / 2;
         auto it = g_fotos.find(av.clave_foto);
         if (it != g_fotos.end() && it->second) g.bitmap_circular(it->second.Get(), cx, cy, r);
@@ -134,7 +167,7 @@ void dibujar() {
             g.dibujar_texto(l.Get(), tx, y + 38, Color(TXT_DIM()));
         }
         g.renglon(L"✕", x + ANCHO - 30, y + 10, 14, Color(TXT_DIM()));
-        y += ALTO_AVISO + SEPARACION;
+        y += alto + SEPARACION;
     }
     g.terminar_frame();
 }
@@ -167,11 +200,27 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             float e = GetDpiForWindow(h) / 96.0f;
             float x = GET_X_LPARAM(lp) / e, y = GET_Y_LPARAM(lp) / e;
             float yy = MARGEN;
-            for (size_t i = 0; i < g_avisos.size(); i++, yy += ALTO_AVISO + SEPARACION) {
-                if (y < yy || y >= yy + ALTO_AVISO) continue;
+            for (size_t i = 0; i < g_avisos.size(); i++) {
+                float alto = alto_de(g_avisos[i]);
+                if (y < yy || y >= yy + alto) {
+                    yy += alto + SEPARACION;
+                    continue;
+                }
                 Aviso av = g_avisos[i];
-                g_avisos.erase(g_avisos.begin() + i);
                 bool cerrar = x >= MARGEN + ANCHO - 40 && y < yy + 34;
+                if (!av.id_llamada.empty()) {
+                    float by = yy + ALTO_AVISO - 4, bw = 120;
+                    bool en_botones = y >= by && y < by + 28;
+                    bool rechazar = en_botones && x >= MARGEN + ANCHO - bw - 14 && x < MARGEN + ANCHO - 14;
+                    bool atender = en_botones && x >= MARGEN + ANCHO - 2 * bw - 24 && x < MARGEN + ANCHO - bw - 24;
+                    if (!rechazar && !atender && !cerrar) break;  // el resto del aviso no hace nada
+                    if (rechazar && g_al_rechazar) g_al_rechazar(av.id_llamada);
+                    cerrar = true;
+                }
+                g_avisos.erase(g_avisos.begin() + i);
+                bool queda_llamada = false;
+                for (auto& o : g_avisos) queda_llamada = queda_llamada || !o.id_llamada.empty();
+                if (!queda_llamada) sonar(false);
                 if (g_avisos.empty()) ShowWindow(h, SW_HIDE);
                 else ubicar();
                 InvalidateRect(h, nullptr, FALSE);
@@ -193,6 +242,9 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 if (g_avisos.empty()) ShowWindow(h, SW_HIDE);
                 else ubicar();
                 InvalidateRect(h, nullptr, FALSE);
+                bool queda_llamada = false;
+                for (auto& o : g_avisos) queda_llamada = queda_llamada || !o.id_llamada.empty();
+                if (!queda_llamada) sonar(false);
             }
             if (g_avisos.empty()) KillTimer(h, TIMER_AVISOS);
             return 0;
@@ -252,7 +304,42 @@ std::vector<std::wstring> monitores() {
 
 void cerrar_todos() {
     g_avisos.clear();
+    sonar(false);
     if (g_hwnd) ShowWindow(g_hwnd, SW_HIDE);
 }
+
+void llamada(const std::wstring& titulo, const std::wstring& texto, const std::string& chat,
+             const std::string& id_llamada, const std::wstring& ruta_foto_http) {
+    crear();
+    if (!g_hwnd) return;
+    for (auto& a : g_avisos)
+        if (a.id_llamada == id_llamada) return;
+    // Un minuto: WhatsApp corta sola antes, y ahi llega el "fin".
+    Aviso av{titulo, texto, chat, "", GetTickCount64() + 60000, chat, id_llamada};
+    if (!ruta_foto_http.empty()) pedir_foto(chat, ruta_foto_http);
+    g_avisos.push_back(av);
+    while ((int)g_avisos.size() > MAXIMO) g_avisos.pop_front();
+    ubicar();
+    SetTimer(g_hwnd, TIMER_AVISOS, 250, nullptr);
+    InvalidateRect(g_hwnd, nullptr, FALSE);
+    sonar(true);
+}
+
+void llamada_terminada(const std::string& id_llamada) {
+    for (size_t i = 0; i < g_avisos.size(); i++)
+        if (g_avisos[i].id_llamada == id_llamada) {
+            g_avisos.erase(g_avisos.begin() + i);
+            break;
+        }
+    bool queda_llamada = false;
+    for (auto& o : g_avisos) queda_llamada = queda_llamada || !o.id_llamada.empty();
+    if (!queda_llamada) sonar(false);
+    if (!g_hwnd) return;
+    if (g_avisos.empty()) ShowWindow(g_hwnd, SW_HIDE);
+    else ubicar();
+    InvalidateRect(g_hwnd, nullptr, FALSE);
+}
+
+void al_rechazar(std::function<void(const std::string&)> f) { g_al_rechazar = std::move(f); }
 
 }  // namespace toast
