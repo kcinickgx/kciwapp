@@ -984,14 +984,63 @@ void App::bajar_al_final(bool ya) {
     conv.ir(conv.max, ya);
 }
 
+// Copia local de las imagenes (fotos, miniaturas, avatares): en
+// datos\media, con el nombre de la clave. Lo que esta ahi no se vuelve a
+// pedir al server nunca.
+static std::wstring ruta_local_de(const std::string& clave) {
+    std::string n = clave;
+    for (auto& c : n)
+        if (c == ':' || c == '@' || c == '/' || c == '?' || c == '=') c = '_';
+    return carpeta_exe() + L"\\datos\\media\\" + ancho(n) + L".bin";
+}
+
+static std::string leer_bytes(const std::wstring& ruta) {
+    std::string s;
+    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return s;
+    LARGE_INTEGER tam;
+    GetFileSizeEx(h, &tam);
+    s.resize((size_t)tam.QuadPart);
+    DWORD leido = 0;
+    size_t total = 0;
+    while (total < s.size() && ReadFile(h, s.data() + total, (DWORD)std::min<size_t>(1 << 20, s.size() - total), &leido, nullptr) && leido > 0)
+        total += leido;
+    CloseHandle(h);
+    s.resize(total);
+    return s;
+}
+
+static void escribir_bytes(const std::wstring& ruta, const std::string& datos) {
+    CreateDirectoryW((carpeta_exe() + L"\\datos").c_str(), nullptr);
+    CreateDirectoryW((carpeta_exe() + L"\\datos\\media").c_str(), nullptr);
+    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return;
+    DWORD escrito = 0;
+    size_t total = 0;
+    while (total < datos.size() && WriteFile(h, datos.data() + total, (DWORD)std::min<size_t>(1 << 20, datos.size() - total), &escrito, nullptr))
+        total += escrito;
+    CloseHandle(h);
+}
+
 Imagen& App::imagen(const std::string& clave, const std::wstring& ruta, bool animado) {
     Imagen& im = imagenes[clave];
     if (!im.pedida) {
         im.pedida = true;
         red::en_fondo([this, clave, ruta, animado] {
-            Respuesta r = red::obtener(ruta, 120000);
+            // Primero el disco; si no esta, el server, y se guarda.
+            // Los avatares no se guardan (cambian y son chicos).
+            bool guardable = clave.rfind("foto:", 0) != 0;
+            std::wstring local = ruta_local_de(clave);
+            std::string datos = guardable ? leer_bytes(local) : std::string();
+            if (datos.empty()) {
+                Respuesta r = red::obtener(ruta, 120000);
+                if (r.ok()) {
+                    datos = r.cuerpo;
+                    if (guardable && !datos.empty()) escribir_bytes(local, datos);
+                }
+            }
             Pixeles p;
-            if (r.ok()) p = g.decodificar(r.cuerpo, animado);
+            if (!datos.empty()) p = g.decodificar(datos, animado);
             red::en_ui([this, clave, p] {
                 Imagen& x = imagenes[clave];
                 if (p.vacio()) {
