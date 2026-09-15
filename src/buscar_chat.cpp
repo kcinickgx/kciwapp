@@ -198,8 +198,13 @@ bool App::click_busqueda_chat(float x, float y, bool shift) {
     if (chat_actual.empty() || x < ancho_lista || info_abierto) return false;
     float xc = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie;
     if (y < top) {
-        // La lupa (o la cruz cuando esta abierta), arriba a la derecha.
-        if (x > xc + W - 56 && !seleccionando) {
+        // "Cargar todo" (a la derecha de la lupa) y la lupa (o la cruz cuando esta abierta).
+        if (!busca_chat_abierta && x > xc + W - 56 && !seleccionando) {
+            if (ajustes::actual().mensajes_por_chat > 0 && hay_mas_viejos && !cargando_todo) cargar_todo_el_chat();
+            return true;
+        }
+        if (busca_chat_abierta ? (x > xc + W - 56) : (x > xc + W - 92 && x <= xc + W - 56)) {
+            if (seleccionando) return false;
             if (busca_chat_abierta) cerrar_busqueda_chat();
             else abrir_busqueda_chat();
             return true;
@@ -238,8 +243,13 @@ bool App::clickeable_busqueda_chat(float x, float y) const {
     if (chat_actual.empty() || x < ancho_lista || info_abierto) return false;
     float xc = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie;
     if (y < top) {
-        if (x > xc + W - 56) return true;
-        if (!busca_chat_abierta) return false;
+        if (busca_chat_abierta) {
+            if (x > xc + W - 56) return true;
+        } else {
+            if (x > xc + W - 56) return ajustes::actual().mensajes_por_chat > 0 && hay_mas_viejos && !cargando_todo;
+            if (x > xc + W - 92) return true;
+            return false;
+        }
         float tx = xc + 16 + 40 + 14, cw = xc + W - 56 - tx;
         return elegido_chat >= 0 && !res_chat.empty() && x >= tx + cw - NAVEGADOR_W + 106 && x < tx + cw;
     }

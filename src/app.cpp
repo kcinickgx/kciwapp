@@ -319,7 +319,7 @@ void App::redimensionado() {
 bool App::animando() {
     return !lista.quieto() || !conv.quieto() ||
            (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
-           alguien_escribe(chat_actual) ||
+           alguien_escribe(chat_actual) || cargando_todo ||
            grab == Grab::Grabando ||
            ((!reproduciendo_id.empty() || grab_escuchando) && !reproductor.pausado() && !reproductor.terminado());
 }
@@ -1355,6 +1355,7 @@ void App::dibujar() {
     dibujar_cabecera();
     dibujar_barra_llamada();
     dibujar_pie();
+    dibujar_progreso_carga();
     dibujar_seleccion_barra();
     dibujar_info();
     dibujar_emojis();
@@ -1558,13 +1559,15 @@ void App::dibujar_cabecera() {
         dibujar_busqueda_cabecera(cx + r + 14, x, W, H);
         return;
     }
-    g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
+    g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 200);
     std::wstring sub = texto_escribiendo(c->jid);
     bool escribe = !sub.empty();
     if (!escribe) sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
-    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(escribe ? ACCENT() : TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
-    // La lupa para buscar en este chat, y los botones de llamar.
-    if (!seleccionando) g.lupa(x + W - 36, 27, 8, Color(TXT_DIM()));
+    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(escribe ? ACCENT() : TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 200);
+    // La lupa para buscar en este chat, "cargar todo" y los botones de llamar.
+    if (!seleccionando) g.lupa(x + W - 72, 27, 8, Color(TXT_DIM()));
+    if (!seleccionando && ajustes::actual().mensajes_por_chat > 0 && hay_mas_viejos && !cargando_todo)
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE896", x + W - 45, 21, 18, Color(TXT_DIM()));
     dibujar_botones_llamada();
 }
 
@@ -1690,6 +1693,104 @@ void App::dibujar_vinculacion() {
         g.renglon(p, cx - pw / 2, y, 14, Color(TXT_DIM()));
         y += 24;
     }
+}
+
+// Trae el chat entero (lo que falte de la cache y despues del server, de a
+// 20k) mostrando el progreso. Solo tiene sentido con preload parcial.
+void App::cargar_todo_el_chat() {
+    if (chat_actual.empty() || cargando_todo || cargando_mensajes || !hay_mas_viejos) return;
+    cargando_todo = true;
+    cargando_mensajes = true;
+    todo_cargado = (long long)mensajes.size();
+    todo_total = 0;
+    pedir_dibujo();
+    std::string mio = chat_actual;
+    long long mas_viejo = mensajes.empty() ? 0 : mensajes.front().ts;
+    red::en_fondo([this, mio, mas_viejo] {
+        long long viejo = mas_viejo;
+        Respuesta rc = red::obtener(L"/cantidad?chat=" + ancho(mio), 30000);
+        long long total = Json::parsear(rc.cuerpo)["cantidad"].entero();
+        red::en_ui([this, mio, total] {
+            if (mio == chat_actual) todo_total = std::max(total, todo_cargado);
+            pedir_dibujo();
+        });
+        // Primero lo que ya tiene la cache.
+        std::vector<Mensaje> resto = viejo > 0 ? cache::leer_mensajes(mio, viejo, 1000000) : std::vector<Mensaje>();
+        if (!resto.empty()) {
+            viejo = resto.front().ts;
+            red::en_ui([this, mio, resto] {
+                if (mio != chat_actual) return;
+                anteponer(resto);
+                todo_cargado += (long long)resto.size();
+                pedir_dibujo();
+            });
+        }
+        bool agotado = false, fallo = false;
+        for (;;) {
+            std::wstring url = L"/mensajes?chat=" + ancho(mio) + L"&limite=20000";
+            if (viejo > 0) url += L"&antes=" + std::to_wstring(viejo);
+            Respuesta r = red::obtener(url, 300000);
+            if (!r.ok()) {
+                fallo = true;
+                break;
+            }
+            std::vector<Mensaje> viejos;
+            Json j = Json::parsear(r.cuerpo);
+            for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
+            for (size_t i = 0; i < viejos.size(); i += 500)
+                cache::guardar_mensajes(std::vector<Mensaje>(viejos.begin() + i, viejos.begin() + std::min(viejos.size(), i + 500)));
+            agotado = viejos.size() < 20000;
+            if (viejos.empty()) break;
+            viejo = viejos.front().ts;
+            bool seguir = true;
+            red::en_ui([this, mio, viejos] {
+                if (mio != chat_actual) return;
+                anteponer(viejos);
+                todo_cargado += (long long)viejos.size();
+                pedir_dibujo();
+            });
+            (void)seguir;
+            if (agotado) break;
+        }
+        red::en_ui([this, mio, agotado, fallo] {
+            if (mio == chat_actual) {
+                cargando_mensajes = false;
+                hay_mas_viejos = fallo ? true : !agotado;
+                if (fallo) aviso_estado = L"Cannot reach the server";
+            }
+            cargando_todo = false;
+            pedir_dibujo();
+        });
+    });
+}
+
+// La ventanita de progreso, centrada sobre la conversacion.
+void App::dibujar_progreso_carga() {
+    if (!cargando_todo) return;
+    float W = 360, H = 110, x = x_conv() + (w_conv() - W) / 2, y = alto_cabecera() + (g.alto - alto_pie - alto_cabecera() - H) / 2;
+    g.rect_redondo(x, y, W, H, 12, Color(BG_PANEL()));
+    g.borde_redondo(x, y, W, H, 12, Color(BORDE()), 1.0f);
+    g.renglon(L"Loading all messages", x + 20, y + 16, 15, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    auto miles = [](long long n) {
+        std::wstring s = std::to_wstring(n), o;
+        int c = 0;
+        for (int i = (int)s.size() - 1; i >= 0; i--) {
+            o.insert(o.begin(), s[i]);
+            if (++c % 3 == 0 && i > 0) o.insert(o.begin(), L'.');
+        }
+        return o;
+    };
+    std::wstring t = miles(todo_cargado) + (todo_total > 0 ? L" / " + miles(todo_total) : L"");
+    float tw = g.medir(t, 13);
+    g.renglon(t, x + W - 20 - tw, y + 18, 13, Color(TXT_DIM()));
+    float bx = x + 20, by = y + 56, bw = W - 40, bh = 10;
+    g.rect_redondo(bx, by, bw, bh, 5, Color(BG_CAMPO()));
+    float f = todo_total > 0 ? std::clamp((float)todo_cargado / (float)todo_total, 0.0f, 1.0f) : 0.0f;
+    if (f > 0) g.rect_redondo(bx, by, bw * f, bh, 5, Color(ACCENT()));
+    int pct = (int)(f * 100 + 0.5f);
+    std::wstring p = todo_total > 0 ? std::to_wstring(pct) + L"%" : L"Counting...";
+    float pw = g.medir(p, 12);
+    g.renglon(p, x + (W - pw) / 2, y + 78, 12, Color(TXT_DIM()));
 }
 
 void App::dibujar_pantalla_vacia() {

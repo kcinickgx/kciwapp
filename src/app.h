@@ -309,6 +309,12 @@ struct App {
     std::string qr_datos;
     ComPtr<ID2D1Bitmap1> qr_bmp;
     void tic_vinculacion();
+    // "Cargar todo el chat" (boton de la cabecera cuando el preload es parcial),
+    // con ventana de progreso.
+    bool cargando_todo = false;
+    long long todo_cargado = 0, todo_total = 0;
+    void cargar_todo_el_chat();
+    void dibujar_progreso_carga();
     void dibujar_vinculacion();
     void terminar_llamada_ui();
     void colgar_llamada();

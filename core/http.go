@@ -31,6 +31,7 @@ func servirHTTP() {
 	mux.HandleFunc("GET /miembros", conToken(hMiembros))
 	mux.HandleFunc("GET /mensajes", conToken(hMensajes))
 	mux.HandleFunc("GET /buscar", conToken(hBuscar))
+	mux.HandleFunc("GET /cantidad", conToken(hCantidad))
 	mux.HandleFunc("POST /reenviar", conToken(hReenviar))
 	mux.HandleFunc("GET /eventos", conToken(hEventos))
 	mux.HandleFunc("GET /media/{id}", conToken(hMedia))
@@ -131,6 +132,13 @@ func hQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(png)
+}
+
+// GET /cantidad?chat=: cuantos mensajes hay del chat (para la barra de "cargar todo").
+func hCantidad(w http.ResponseWriter, r *http.Request) {
+	var n int64
+	db.QueryRow("SELECT COUNT(*) FROM mensajes WHERE chat = ?", r.URL.Query().Get("chat")).Scan(&n)
+	responder(w, map[string]any{"cantidad": n})
 }
 
 // ---- lecturas -------------------------------------------------------------

@@ -105,8 +105,8 @@ void App::dibujar_botones_llamada() {
     if (!c || c->es_grupo || !llamadas_disponibles() || busca_chat_abierta || seleccionando) return;
     float x = x_conv(), W = w_conv();
     Color col(llamada_activa ? BORDE() : TXT_DIM());
-    g.renglon_fuente(L"Segoe MDL2 Assets", L"", x + W - 100, 21, 18, col);
-    g.renglon_fuente(L"Segoe MDL2 Assets", L"", x + W - 140, 21, 17, col);
+    g.renglon_fuente(L"Segoe MDL2 Assets", L"", x + W - 136, 21, 18, col);
+    g.renglon_fuente(L"Segoe MDL2 Assets", L"", x + W - 176, 21, 17, col);
 }
 
 bool App::click_llamada(float x, float y) {
@@ -115,11 +115,11 @@ bool App::click_llamada(float x, float y) {
     // Botones de la cabecera.
     const Chat* c = chat_de(chat_actual);
     if (y < top && c && !c->es_grupo && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa) {
-        if (x >= xc + W - 108 && x < xc + W - 72) {
+        if (x >= xc + W - 144 && x < xc + W - 108) {
             iniciar_llamada(true);
             return true;
         }
-        if (x >= xc + W - 148 && x < xc + W - 108) {
+        if (x >= xc + W - 184 && x < xc + W - 144) {
             iniciar_llamada(false);
             return true;
         }
@@ -132,6 +132,6 @@ bool App::clickeable_llamada(float x, float y) const {
     float xc = x_conv(), W = w_conv(), top = alto_cabecera();
     const Chat* c = chat_de(chat_actual);
     if (y < top && c && !c->es_grupo && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa)
-        return x >= xc + W - 148 && x < xc + W - 72;
+        return x >= xc + W - 184 && x < xc + W - 108;
     return false;
 }
