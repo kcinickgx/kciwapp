@@ -337,6 +337,16 @@ const wchar_t* JS_VIDEO =
     L"if(vs.length>=2)return 'si';"
     L"var r=vs[0].getBoundingClientRect();return (r.width>=innerWidth*0.5)?'si':'no'})()";
 
+const wchar_t* JS_DIAG_VIDEO =
+    L"(function(){try{var o=['url='+location.href+' title='+document.title+' readyState='+document.readyState+' body='+(document.body?document.body.children.length:-1)];"
+    L"var vs=document.querySelectorAll('video');o.push('videos='+vs.length+' iframes='+document.querySelectorAll('iframe').length+' canvas='+document.querySelectorAll('canvas').length);"
+    L"for(var i=0;i<vs.length;i++){var v=vs[i];var r=v.getBoundingClientRect();var lab='';"
+    L"try{var t=v.srcObject&&v.srcObject.getVideoTracks();lab=t&&t.length?('['+t[0].label+']'):'sin-track'}catch(e){lab='err'}"
+    L"o.push('video '+v.videoWidth+'x'+v.videoHeight+' rs='+v.readyState+' paused='+v.paused+' muted='+v.muted+' rect='+Math.round(r.width)+'x'+Math.round(r.height)+' '+lab)}"
+    L"var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
+    L"o.push('cortar='+(e?'si':'no'));var t2=(document.body?document.body.innerText:'')||'';o.push('texto: '+t2.replace(/\s+/g,' ').slice(0,300));"
+    L"return o.join(' || ')}catch(e){return 'ERR '+e}})()";
+
 const wchar_t* JS_EN_LLAMADA =
     L"(function(){var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
     L"if(!e)return 'no';var c=e;for(var i=0;i<8&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;"
@@ -480,7 +490,12 @@ void sondear() {
                     if (g_al_conectar) g_al_conectar();
                 }
             });
-            ejecutar(g_llamada, JS_VIDEO, [](const std::wstring& r2) { g_video_fluye = resultado_str(r2) == "si"; });
+            ejecutar(g_llamada, JS_VIDEO, [](const std::wstring& r2) {
+                g_video_fluye = resultado_str(r2) == "si";
+                static int cada = 0;
+                if (!g_video_fluye && (cada++ % 5) == 0)
+                    ejecutar(g_llamada, JS_DIAG_VIDEO, [](const std::wstring& r3) { registrar("diag ventanita crudo: " + angosto(r3).substr(0, 600)); });
+            });
         } else {
             avisar_llamada(en_pagina);
             ejecutar(g_principal, JS_VIDEO, [](const std::wstring& r2) { g_video_fluye = resultado_str(r2) == "si"; });
