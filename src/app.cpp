@@ -1793,6 +1793,7 @@ void App::cargar_todo_el_chat() {
             todo_fin = GetTickCount64();
             SetTimer(hwnd, 4, 1000, nullptr);
             pedir_dibujo();
+            intentar_salto();
         });
     });
 }

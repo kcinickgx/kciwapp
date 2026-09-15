@@ -233,6 +233,10 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
             if (wp == 10 && app) app->tic_vinculacion();
+            if (wp == 11 && app) {
+                KillTimer(h, 11);
+                app->intentar_salto();
+            }
             if (wp == 8 && app) {
                 // Cada segundo: el reloj de la llamada; cada dos, el sondeo de WhatsApp Web.
                 static int tic = 0;

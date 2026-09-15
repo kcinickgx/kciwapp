@@ -428,6 +428,10 @@ struct App {
     bool rueda_modal_reenvio(float x, float y, float delta);
     void enviar_reenvio();
     void ir_a_mensaje(const std::string& chat, const std::string& id, long long ts);
+    // Salto pendiente a un mensaje que todavia no esta cargado.
+    std::string salto_chat, salto_id;
+    int salto_intentos = 0;
+    void intentar_salto();
     void buscar_ahora();
     void buscar_mas();
     void abrir_busqueda_chat();

@@ -389,77 +389,54 @@ void App::agregar_mensaje(const Mensaje& m) {
 
 // ---- ir a un mensaje (desde la busqueda o una notificacion) ---------------
 
+// Ir a un mensaje (busqueda, aviso, cita). Si no esta cargado, se trae el
+// chat entero (con la barra de progreso) y despues se scrollea: nunca se
+// reemplaza lo que hay por una ventanita alrededor del mensaje.
 void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long ts) {
+    (void)ts;
     if (chat != chat_actual) {
         if (busca_chat_abierta) cerrar_busqueda_chat();
-        // Se abre el chat con una ventana de mensajes alrededor del pedido.
-        borradores[chat_actual] = campo.texto;
-        recordar_chat();
-        chat_actual = chat;
-        mensajes.clear();
-        vistas.clear();
-        layout_pendiente = 0;
-        layout_gen++;
-        tandas_listas.clear();
-        cargando_mensajes = true;
-        hay_mas_viejos = true;
-        conv = Desplazable();
-        campo.poner(borradores[chat]);
-        respondiendo.reset();
-        editando.reset();
+        abrir_chat(chat);
     }
     resaltado_id = id;
     resaltado_desde = GetTickCount64();
-    // Si ya esta cargado, alcanza con scrollear.
+    salto_chat = chat;
+    salto_id = id;
+    salto_intentos = 0;
+    intentar_salto();
+}
+
+// Cada vez que se llama: si el mensaje ya esta, scrollea; si el chat esta
+// cargando, espera (timer 11); si falta, carga todo el chat.
+void App::intentar_salto() {
+    if (salto_id.empty()) return;
+    if (salto_chat != chat_actual) {
+        salto_id.clear();
+        return;
+    }
     for (size_t i = 0; i < mensajes.size(); i++)
-        if (mensajes[i].id == id) {
-            recalcular_inicios();
+        if (mensajes[i].id == salto_id) {
+            if (inicio.size() != vistas.size() + 1) recalcular_inicios();
             float H = g.alto - alto_cabecera() - alto_pie;
+            conv.max = std::max(0.0, alto_contenido() - H);
             conv.ir(12 + inicio[i] - H / 2 + vistas[i].alto / 2, false);
+            salto_id.clear();
             pedir_dibujo();
             return;
         }
-    cargando_mensajes = true;
-    std::string mio = chat;
-    red::en_fondo([this, mio, id, ts] {
-        Respuesta a = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&antes=" + std::to_wstring(ts + 1) + L"&limite=40");
-        Respuesta d = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&desde=" + std::to_wstring(ts + 1) + L"&limite=40");
-        Json ja = Json::parsear(a.cuerpo), jd = Json::parsear(d.cuerpo);
-        red::en_ui([this, mio, id, ja, jd] {
-            if (mio != chat_actual) return;
-            cargando_mensajes = false;
-            // Lo que estuviera armandose en fondo (p. ej. el chat entero) ya
-            // no vale: si se aplicara sobre esta ventana chica, rompe todo.
-            layout_gen++;
-            tandas_listas.clear();
-            mensajes.clear();
-            vistas.clear();
-            layout_pendiente = 0;
-            vista_parcial = true;
-            for (size_t i = 0; i < ja.largo(); i++) mensajes.push_back(Mensaje::de_json(ja[i]));
-            for (size_t i = 0; i < jd.largo(); i++) {
-                Mensaje m = Mensaje::de_json(jd[i]);
-                bool repetido = false;
-                for (auto& x : mensajes)
-                    if (x.id == m.id) repetido = true;
-                if (!repetido) mensajes.push_back(m);
-            }
-            hay_mas_viejos = ja.largo() >= 40;
-            cache::guardar_mensajes(mensajes);
-            armar_vistas();
-            float H = g.alto - alto_cabecera() - alto_pie;
-            recalcular_inicios();
-            conv.max = std::max(0.0, alto_contenido() - H);
-            recalcular_inicios();
-            for (size_t i = 0; i < mensajes.size(); i++) {
-                if (mensajes[i].id == id) {
-                    conv.ir(12 + inicio[i] - H / 2 + vistas[i].alto / 2, true);
-                    break;
-                }
-            }
-            pedir_dibujo();
-        });
-    });
+    if (cargando_mensajes || cargando_todo || layout_pendiente > 0) {
+        // Todavia cargando (o armando layouts: sin ellos las alturas no valen).
+        if (++salto_intentos < 600) SetTimer(hwnd, 11, 250, nullptr);
+        else salto_id.clear();
+        return;
+    }
+    if (hay_mas_viejos && ajustes::actual().mensajes_por_chat > 0) {
+        cargar_todo_el_chat();
+        SetTimer(hwnd, 11, 250, nullptr);
+        return;
+    }
+    // No esta ni estara (borrado, o el chat cambio): se deja.
+    salto_id.clear();
 }
 
 // ---- busqueda -------------------------------------------------------------
