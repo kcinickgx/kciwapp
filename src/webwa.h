@@ -30,6 +30,8 @@ void sondear();
 void llamar(const std::string& telefono, bool video);
 // Atender la llamada entrante que WhatsApp Web esta mostrando.
 void atender();
+// Que la llamada en curso (video) pase a la ventanita aparte de WhatsApp Web.
+void querer_popout(bool si);
 void colgar();
 void silenciar(bool si);
 bool en_llamada();

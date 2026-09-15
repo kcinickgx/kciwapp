@@ -215,6 +215,19 @@ void crear_vista_llamada(std::function<void()> listo) {
                     return S_OK;
                 }).Get(), &t);
             listo();
+            // Si la ventana de video ya estaba mostrando el recorte de la
+            // principal, pasa a mostrar la ventanita entera.
+            if (g_ventana) {
+                if (GetParent(g_principal.hwnd) != g_padre) SetParent(g_principal.hwnd, g_padre);
+                g_principal.ctrl->put_ZoomFactor(1.0);
+                SetWindowPos(g_principal.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER);
+                g_principal.visible = false;
+                SetParent(g_llamada.hwnd, g_ventana);
+                g_llamada.visible = true;
+                RECT c;
+                GetClientRect(g_ventana, &c);
+                SetWindowPos(g_llamada.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER | SWP_SHOWWINDOW);
+            }
             return S_OK;
         }).Get());
 }
@@ -247,6 +260,18 @@ void crear_vista_principal() {
                     args->GetDeferral(&def);
                     ComPtr<ICoreWebView2NewWindowRequestedEventArgs> a = args;
                     registrar("window.open -> vista de llamada");
+                    ComPtr<ICoreWebView2WindowFeatures> wf;
+                    if (SUCCEEDED(args->get_WindowFeatures(&wf)) && wf) {
+                        UINT w = 0, h = 0;
+                        BOOL hw = FALSE, hh = FALSE;
+                        wf->get_HasSize(&hw);
+                        if (hw) {
+                            wf->get_Width(&w);
+                            wf->get_Height(&h);
+                            if (w > 100 && h > 100) g_prop = (double)w / h;
+                        }
+                        (void)hh;
+                    }
                     crear_vista_llamada([a, def]() {
                         a->put_NewWindow(g_llamada.web.Get());
                         a->put_Handled(TRUE);
@@ -307,14 +332,40 @@ const wchar_t* JS_RECT_PANEL =
 constexpr UINT_PTR TIMER_ENCUADRE = 1;
 bool g_encuadrando = false;
 double g_prop = 900.0 / 620.0;  // proporcion del panel (ancho/alto); la ventana la sigue
+int g_popout_intentos = 0;      // clicks al boton de "abrir en ventana" de la llamada
+bool g_quiero_popout = false;   // solo en las de video
 
 // Acomoda el WebView2 adentro de la ventana de video para que se vea solo el
 // panel de la llamada: zoom para que el panel llene la ventana (manteniendo
 // la proporcion) y desplazamiento para que caiga en (0,0). La pagina no se
 // toca: sigue viendo un viewport de ANCHO_PX x ALTO_PX CSS px.
+const wchar_t* JS_POPOUT =
+    L"(function(){var b=document.querySelector('[aria-label=\"Pop out\"],[aria-label=\"Pop-out\"],[aria-label=\"Open in new window\"],[aria-label=\"Expand\"],"
+    L"[aria-label=\"Picture in picture\"],[data-icon=\"pop-out\"],[data-icon=\"popout\"],[data-icon=\"expand\"],[data-icon=\"pip\"],[data-icon=\"new-window\"]');"
+    L"if(b){b.click();return 'ok etiqueta'}"
+    L"var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
+    L"if(!e)return 'sin cortar';var fila=e;for(var i=0;i<4;i++){fila=fila.parentElement;if(!fila)return 'sin fila';"
+    L"var bs=Array.prototype.filter.call(fila.querySelectorAll('button,[role=button]'),function(x){var r=x.getBoundingClientRect();return r.width>0&&!e.contains(x)&&x!==e&&!x.contains(e)});"
+    L"var er=e.getBoundingClientRect();bs=bs.filter(function(x){var r=x.getBoundingClientRect();return Math.abs((r.top+r.height/2)-(er.top+er.height/2))<er.height});"
+    L"if(bs.length>=2){bs.sort(function(a,c){return a.getBoundingClientRect().left-c.getBoundingClientRect().left});"
+    L"var t=bs[bs.length-2];t.click();return 'ok fila '+(t.getAttribute('aria-label')||t.getAttribute('title')||t.outerHTML.slice(0,80))}}return 'no'})()";
+
 void encuadrar() {
     Vista& v = g_llamada.web ? g_llamada : g_principal;
     if (!g_ventana || !v.web || !v.ctrl || !v.visible || g_encuadrando) return;
+    if (&v == &g_llamada) {
+        // La ventanita de WhatsApp Web es solo la llamada: llena la ventana.
+        RECT c;
+        GetClientRect(g_ventana, &c);
+        RECT actual;
+        GetWindowRect(v.hwnd, &actual);
+        MapWindowPoints(nullptr, g_ventana, (POINT*)&actual, 2);
+        if (actual.left != 0 || actual.top != 0 || actual.right != c.right || actual.bottom != c.bottom) {
+            v.ctrl->put_ZoomFactor(1.0);
+            SetWindowPos(v.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER | SWP_SHOWWINDOW);
+        }
+        return;
+    }
     g_encuadrando = true;
     ejecutar(v, JS_RECT_PANEL, [&v](const std::wstring& res) {
         g_encuadrando = false;
@@ -476,14 +527,25 @@ void sondear() {
             avisar_llamada(en_pagina);
         }
         intentar_llamada_pendiente();
+        if (g_en_llamada && g_quiero_popout && !g_llamada.web && !g_llamada.creando && g_popout_intentos < 6) {
+            g_popout_intentos++;
+            ejecutar(g_principal, JS_POPOUT, [](const std::wstring& r) { registrar("pop-out: " + resultado_str(r)); });
+        }
     });
 }
 
 void llamar(const std::string& telefono, bool video) {
     if (!logueado()) return;
     g_pendiente = {true, video, 0, false};
+    g_quiero_popout = video;
+    g_popout_intentos = 0;
     registrar("llamar a " + telefono + (video ? " (video)" : ""));
     g_principal.web->Navigate((L"https://web.whatsapp.com/send?phone=" + ancho(telefono)).c_str());
+}
+
+void querer_popout(bool si) {
+    g_quiero_popout = si;
+    g_popout_intentos = 0;
 }
 
 void atender() {

@@ -41,6 +41,7 @@ void App::atender_llamada(const std::string& chat, bool video) {
     llamada_saliente = false;
     llamada_desde = 0;
     llamada_activa = true;
+    webwa::querer_popout(video);
     webwa::atender();
     if (chat != chat_actual) abrir_chat(chat);
     pedir_dibujo();
