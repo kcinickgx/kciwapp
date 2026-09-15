@@ -1,8 +1,20 @@
 # kciwapp — instalar en otra máquina
 
-Dos partes: un **server** (Linux; habla con WhatsApp como dispositivo
-vinculado, una cuenta por token) y el **cliente** (Windows, portable, no
-instala nada).
+Un solo cliente (Windows, portable) que se conecta a un server. Hay dos
+maneras, y la decide `portable\servidor.json`:
+
+- **Local, sin server**: `{"host": "127.0.0.1", "puerto": 8477, "token": ""}`.
+  El cliente lanza `core\kciwapp-core.exe` (el server en Go con SQLite) al
+  lado suyo, inventa el token la primera vez y muestra el QR. Todo queda en
+  `portable\datos\`. WhatsApp está online solo mientras el cliente corre
+  (si pasa 14 días cerrado, el teléfono desvincula el dispositivo).
+- **Server aparte** (Linux, 24/7, varias cuentas): `{"host": "192.168.1.10",
+  "puerto": 8080, "token": "un-token-largo"}` y el server de abajo.
+
+## 0. Cliente local (lo más simple)
+
+Copiar la carpeta `cliente\` del paquete y abrir `kciwapp2.exe`. Listo.
+Necesita Windows 10/11 x64 (WebView2 para las llamadas viene con Win11).
 
 ## 1. Server
 
@@ -49,11 +61,10 @@ ahí, borrar `cuentas/N` y `DROP DATABASE whatsapp_N`.
 
 Logs: `journalctl -u kciwapp-server -f` (cada línea lleva `[N]` con la cuenta).
 
-## 2. Cliente
+## 2. Cliente contra el server
 
-Copiar la carpeta `portable\` (exe, `mpv\`, `WebView2Loader.dll`, `emoji.txt`,
-`fondo-wa.webp`, `fondos\`) **sin** `datos\` ni `ajustes.json` (son de cada
-usuario: cache, media, sesión de WhatsApp Web). Editar `servidor.json`:
+La misma carpeta `cliente\` (sin `core\` si no se quiere el modo local),
+**sin** `datos\` ni `ajustes.json` de otro usuario. Editar `servidor.json`:
 
 ```json
 {"host": "192.168.1.10", "puerto": 8080, "token": "un-token-largo-inventado-por-vos"}
