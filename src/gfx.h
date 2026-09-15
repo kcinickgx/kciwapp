@@ -78,6 +78,8 @@ struct Gfx {
     void rect_redondo(float x, float y, float w, float h, float radio, Color c);
     void borde_redondo(float x, float y, float w, float h, float radio, Color c, float grosor = 1.0f);
     void circulo(float cx, float cy, float radio, Color c);
+    // Triangulo relleno (para el play): tres vertices.
+    void triangulo(float x1, float y1, float x2, float y2, float x3, float y3, Color c);
     void linea(float x1, float y1, float x2, float y2, Color c, float grosor = 1.0f);
     void recortar(float x, float y, float w, float h);
     void destapar();

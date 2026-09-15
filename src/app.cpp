@@ -754,7 +754,8 @@ void App::armar_vista(size_t i) {
         v.mx = PAD_X;
         v.my = y;
         ancho_contenido = std::max(ancho_contenido, v.mw);
-        y += v.mh + (m.texto.empty() ? 0 : 6);
+        // Sin texto, la hora va debajo de la tarjeta, no encima.
+        y += v.mh + (m.texto.empty() ? 16 : 6);
     }
 
     std::wstring t = m.texto;

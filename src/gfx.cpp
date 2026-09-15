@@ -189,6 +189,19 @@ void Gfx::circulo(float cx, float cy, float radio, Color c) {
     ctx->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radio, radio), pincel(c));
 }
 
+void Gfx::triangulo(float x1, float y1, float x2, float y2, float x3, float y3, Color c) {
+    ComPtr<ID2D1PathGeometry> geo;
+    fabrica->CreatePathGeometry(&geo);
+    ComPtr<ID2D1GeometrySink> sink;
+    geo->Open(&sink);
+    sink->BeginFigure(D2D1::Point2F(x1, y1), D2D1_FIGURE_BEGIN_FILLED);
+    sink->AddLine(D2D1::Point2F(x2, y2));
+    sink->AddLine(D2D1::Point2F(x3, y3));
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    sink->Close();
+    ctx->FillGeometry(geo.Get(), pincel(c));
+}
+
 void Gfx::linea(float x1, float y1, float x2, float y2, Color c, float grosor) {
     ctx->DrawLine(D2D1::Point2F(x1, y1), D2D1::Point2F(x2, y2), pincel(c), grosor);
 }
