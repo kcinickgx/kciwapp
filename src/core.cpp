@@ -13,7 +13,6 @@ namespace {
 
 HANDLE g_job = nullptr;
 HANDLE g_proceso = nullptr;
-const int PUERTO = 8477;
 
 std::string leer(const std::wstring& ruta) {
     std::string s;
@@ -35,15 +34,6 @@ bool escribir(const std::wstring& ruta, const std::string& datos) {
     return escrito == datos.size();
 }
 
-std::string token_nuevo() {
-    unsigned char b[24];
-    BCryptGenRandom(nullptr, b, sizeof b, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-    const char* abc = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    std::string t;
-    for (unsigned char c : b) t += abc[c % 62];
-    return t;
-}
-
 // Rutas con \ escapadas para JSON.
 std::string json_ruta(const std::wstring& r) {
     std::string s = angosto(r), o;
@@ -58,18 +48,23 @@ std::string json_ruta(const std::wstring& r) {
 
 namespace core {
 
-bool iniciar(const std::wstring& carpeta_exe, std::wstring& host, int& puerto, std::string& token) {
+std::string token_nuevo() {
+    unsigned char b[24];
+    BCryptGenRandom(nullptr, b, sizeof b, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    const char* abc = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    std::string t;
+    for (unsigned char c : b) t += abc[c % 62];
+    return t;
+}
+
+bool iniciar(const std::wstring& carpeta_exe, int puerto, const std::string& token) {
     std::wstring exe = carpeta_exe + L"\\core\\kciwapp-core.exe";
     if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
     std::wstring datos = carpeta_exe + L"\\datos";
     CreateDirectoryW(datos.c_str(), nullptr);
-    // El token: se inventa una vez y queda en datos\core.json.
     std::wstring ruta_cfg = datos + L"\\core.json";
-    Json j = Json::parsear(leer(ruta_cfg));
-    token = j["token"].str();
-    if (token.size() < 20) token = token_nuevo();
     std::string cfg = "{\n"
-                      "  \"escucha\": \"127.0.0.1:" + std::to_string(PUERTO) + "\",\n"
+                      "  \"escucha\": \"127.0.0.1:" + std::to_string(puerto) + "\",\n"
                       "  \"token\": \"" + token + "\",\n"
                       "  \"sqlite\": \"" + json_ruta(datos + L"\\core.sqlite3") + "\",\n"
                       "  \"store\": \"" + json_ruta(datos + L"\\store.db") + "\",\n"
@@ -107,9 +102,7 @@ bool iniciar(const std::wstring& carpeta_exe, std::wstring& host, int& puerto, s
     ResumeThread(pi.hThread);
     CloseHandle(pi.hThread);
     g_proceso = pi.hProcess;
-    host = L"127.0.0.1";
-    puerto = PUERTO;
-    red::registrar("core lanzado (pid " + std::to_string(pi.dwProcessId) + ")");
+    red::registrar("core lanzado (pid " + std::to_string(pi.dwProcessId) + ") en 127.0.0.1:" + std::to_string(puerto));
     return true;
 }
 

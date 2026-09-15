@@ -1,7 +1,6 @@
 // El core (kciwapp-core.exe, el server en Go con SQLite) corre al lado del
-// cliente, escuchando en 127.0.0.1. Se lanza al arrancar con un config
-// generado en datos\ (token al azar la primera vez) y muere con el cliente
-// (job object).
+// cliente cuando servidor.json apunta a 127.0.0.1. Se lanza al arrancar con
+// un config generado en datos\ y muere con el cliente (job object).
 #pragma once
 #include <windows.h>
 
@@ -9,9 +8,11 @@
 
 namespace core {
 
-// Lanza el core si existe core\kciwapp-core.exe. Deja en host/puerto/token
-// lo que hay que pasarle a red::configurar. Devuelve false si no esta.
-bool iniciar(const std::wstring& carpeta_exe, std::wstring& host, int& puerto, std::string& token);
+// Lanza core\kciwapp-core.exe escuchando en 127.0.0.1:puerto con ese token
+// (los dos vienen de servidor.json). Devuelve false si el exe no esta.
+bool iniciar(const std::wstring& carpeta_exe, int puerto, const std::string& token);
+// Un token al azar (24 letras/numeros), para servidor.json la primera vez.
+std::string token_nuevo();
 void cerrar();
 bool activo();
 

@@ -33,16 +33,49 @@ std::wstring carpeta_datos() {
 // servidor.json al lado del exe: {"host": "...", "puerto": 8080, "token": "..."}
 std::wstring ruta_config() { return carpeta_exe() + L"\\servidor.json"; }
 
-bool leer_config() {
-    HANDLE h = CreateFileW(ruta_config().c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (h == INVALID_HANDLE_VALUE) return false;
+std::string leer_archivo_chico(const std::wstring& ruta) {
+    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return "";
     std::string s;
     char buf[4096];
     DWORD leido = 0;
     while (ReadFile(h, buf, sizeof buf, &leido, nullptr) && leido > 0) s.append(buf, leido);
     CloseHandle(h);
-    Json j = Json::parsear(s);
-    red::configurar(ancho(j["host"].str()), (int)j["puerto"].entero(8080), j["token"].str());
+    return s;
+}
+
+// servidor.json manda: host 127.0.0.1 = se levanta el core local (SQLite en
+// datos\) con ese puerto y token (el token se inventa y se guarda la primera
+// vez); cualquier otro host = un kciwapp-server remoto. Sin archivo = local.
+bool configurar_conexion() {
+    Json j = Json::parsear(leer_archivo_chico(ruta_config()));
+    std::string host = j["host"].str("127.0.0.1");
+    int puerto = (int)j["puerto"].entero(host == "127.0.0.1" ? 8477 : 8080);
+    std::string token = j["token"].str();
+    bool local = host == "127.0.0.1" || host == "localhost";
+    if (local) {
+        host = "127.0.0.1";
+        if (token.size() < 20) {
+            token = core::token_nuevo();
+            std::string s = "{\"host\": \"127.0.0.1\", \"puerto\": " + std::to_string(puerto) + ", \"token\": \"" + token + "\"}\n";
+            HANDLE h = CreateFileW(ruta_config().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (h != INVALID_HANDLE_VALUE) {
+                DWORD e = 0;
+                WriteFile(h, s.data(), (DWORD)s.size(), &e, nullptr);
+                CloseHandle(h);
+            }
+        }
+        if (!core::iniciar(carpeta_exe(), puerto, token)) {
+            MessageBoxW(nullptr, (L"servidor.json points to 127.0.0.1 but core\\kciwapp-core.exe is missing:\n" + carpeta_exe() + L"\\core").c_str(),
+                        L"kciwapp", MB_ICONERROR);
+            return false;
+        }
+    } else if (token.empty()) {
+        std::wstring m = L"Invalid " + ruta_config() + L"\n\n{\"host\": \"192.168.5.15\", \"puerto\": 8080, \"token\": \"...\"}";
+        MessageBoxW(nullptr, m.c_str(), L"kciwapp", MB_ICONERROR);
+        return false;
+    }
+    red::configurar(ancho(host), puerto, token);
     return red::configurado();
 }
 
@@ -255,31 +288,39 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-    // Una sola instancia (antes del core: dos clientes lanzarian dos cores).
-    HANDLE unica = CreateMutexW(nullptr, TRUE, L"Local\\kciwapp2-instancia");
+    // Una sola instancia por carpeta (antes del core: dos clientes lanzarian
+    // dos cores). Dos portables distintos si pueden convivir.
+    std::wstring nombre_mutex = L"Local\\kciwapp2-";
+    {
+        unsigned long long h = 1469598103934665603ULL;
+        for (wchar_t c : carpeta_exe()) h = (h ^ (unsigned long long)towlower(c)) * 1099511628211ULL;
+        wchar_t hex[24];
+        swprintf(hex, 24, L"%016llx", h);
+        nombre_mutex += hex;
+    }
+    HANDLE unica = CreateMutexW(nullptr, TRUE, nombre_mutex.c_str());
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        if (HWND otra = FindWindowW(L"kciwapp2", nullptr)) {
-            if (IsIconic(otra)) ShowWindow(otra, SW_RESTORE);
-            SetForegroundWindow(otra);
+        // La otra instancia de esta misma carpeta: se la trae al frente.
+        HWND otra = nullptr;
+        while ((otra = FindWindowExW(nullptr, otra, L"kciwapp2", nullptr)) != nullptr) {
+            DWORD pid = 0;
+            GetWindowThreadProcessId(otra, &pid);
+            HANDLE ph = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (!ph) continue;
+            wchar_t ruta[MAX_PATH];
+            DWORD n = MAX_PATH;
+            bool misma = QueryFullProcessImageNameW(ph, 0, ruta, &n) && _wcsnicmp(ruta, carpeta_exe().c_str(), carpeta_exe().size()) == 0;
+            CloseHandle(ph);
+            if (misma) {
+                if (IsIconic(otra)) ShowWindow(otra, SW_RESTORE);
+                SetForegroundWindow(otra);
+                break;
+            }
         }
         return 0;
     }
 
-    // Con core\kciwapp-core.exe al lado, todo corre local (SQLite en datos\);
-    // si no, servidor.json apunta a un kciwapp-server.
-    {
-        std::wstring host;
-        int puerto = 0;
-        std::string token;
-        if (core::iniciar(carpeta_exe(), host, puerto, token)) {
-            red::configurar(host, puerto, token);
-        } else if (!leer_config()) {
-            std::wstring m = L"Missing core\\kciwapp-core.exe, and no " + ruta_config() +
-                             L"\n\n{\"host\": \"192.168.5.15\", \"puerto\": 8080, \"token\": \"...\"}";
-            MessageBoxW(nullptr, m.c_str(), L"kciwapp", MB_ICONERROR);
-            return 1;
-        }
-    }
+    if (!configurar_conexion()) return 1;
 
     // Menus contextuales oscuros: SetPreferredAppMode(ForceDark) de uxtheme
     // (ordinal 135, sin documentar pero estable desde 1809).
