@@ -1618,8 +1618,8 @@ void App::dibujar_mensaje(size_t i, float y) {
     if (m.id == resaltado_id) {
         if (busca_chat_abierta && elegido_chat >= 0) {
             // Elegido desde el buscador del chat: queda marcado hasta cerrarlo.
-            g.rect_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT(), 0.30f));
-            g.borde_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT()), 2.0f);
+            g.rect_redondo(bx, by, v.bw, v.bh, 8, Color(ACCENT(), 0.30f));
+            g.borde_redondo(bx + 0.5f, by + 0.5f, v.bw - 1, v.bh - 1, 8, Color(ACCENT()), 1.0f);
         } else {
             float t = (ahora - resaltado_desde) / 2000.0f;
             if (t < 1) g.rect_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT(), 0.35f * (1 - t)));
