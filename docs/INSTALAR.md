@@ -23,11 +23,13 @@ ponerlo antes desde SlackBuilds (`sbopkg -i ffmpeg`); sin el anda igual pero
 sin notas de voz convertidas, stickers ni miniaturas de video. El binario es
 estatico, corre en cualquier Linux x64.
 
-Vincular el teléfono: abrir `http://<ip>:8080/qr` en cualquier navegador y
-escanear desde WhatsApp → Dispositivos vinculados → Vincular un dispositivo.
-Baja lo mismo que WhatsApp Web (los chats recientes). Para pedir el historial
-completo (hasta 3 años, solo texto) poner `"historia": "completa"` en
-`config.json` **antes** de vincular. Los adjuntos se bajan cuando se abren.
+Vincular el teléfono: el server arranca sin sesión y no genera nada solo.
+Al abrir el cliente con el `servidor.json` correcto, el cliente le pide el
+QR y lo muestra en su ventana: WhatsApp → Dispositivos vinculados → Vincular
+un dispositivo → escanear. Baja lo mismo que WhatsApp Web (los chats
+recientes). Para pedir el historial completo (hasta 3 años, solo texto) poner
+`"historia": "completa"` en `config.json` **antes** de vincular. Los adjuntos
+se bajan cuando se abren.
 
 `config.json`:
 
