@@ -664,7 +664,7 @@ bool App::aplicar_evento(const Json& e) {
         int estado = (int)d["estado"].entero();
         for (auto& x : mensajes)
             if (x.media && x.media->id == id) x.media->estado = estado;
-        imagenes.erase("media:" + std::to_string(id));
+        if (estado == 1) imagenes.erase("media:" + std::to_string(id));
     } else if (tipo == "chat" || tipo == "chats" || tipo == "contactos" || tipo == "contacto" || tipo == "historia") {
         return true;
     } else if (tipo == "leido") {
@@ -1257,6 +1257,12 @@ void App::dibujar_mensaje(size_t i, float y) {
                     g.bitmap(b, cx + (v.mw - dw) / 2, cy + (v.mh - dh) / 2, dw, dh);
                 } else {
                     g.rect(cx, cy, v.mw, v.mh, Color(0x000000, 0.2f));
+                    // Vencido en WhatsApp: se le pidio al telefono, se espera.
+                    if (m.media->estado == 2 || imagenes["media:" + std::to_string(m.media->id)].fallo) {
+                        std::wstring t = L"Requesting from phone...";
+                        float tw = g.medir(t, 12);
+                        g.renglon(t, cx + (v.mw - tw) / 2, cy + v.mh / 2 - 8, 12, Color(TXT_DIM()));
+                    }
                 }
                 g.destapar_redondo();
                 if (es_video) {
@@ -1337,12 +1343,7 @@ void App::raton_mueve(float x, float y) {
     int antes = chat_bajo_mouse;
     chat_bajo_mouse = x < ancho_lista && y > top_lista() ? item_en(y) : -1;
     if (antes != chat_bajo_mouse || emojis_abierto || info_abierto) pedir_dibujo();
-    cursor_mano = false;
-    if (x >= ancho_lista && !visor && !info_abierto && !sel_arrastrando) {
-        float ym = 0;
-        int i = mensaje_en(y, &ym);
-        if (i >= 0 && !enlace_en(i, ym, x, y).empty()) cursor_mano = true;
-    }
+    cursor_mano = sobre_clickeable(x, y);
     if (arrastrando_barra) {
         float top = alto_cabecera(), H = g.alto - alto_pie - top;
         arrastrar_barra(conv, y, top, H, alto_contenido());
@@ -1696,4 +1697,44 @@ void App::dibujar_fondo_chat(float x, float y, float w, float h) {
         g.bitmap(fondo_bmp.Get(), x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
         g.destapar();
     }
+}
+
+// Que hay bajo el mouse que se pueda clickear: para poner la manito.
+bool App::sobre_clickeable(float x, float y) {
+    if (visor) {
+        if (visor_video) return true;
+        float ix, iy, iw, ih;
+        return !(rect_visor(ix, iy, iw, ih) && x >= ix && x <= ix + iw && y >= iy && y <= iy + ih) ||
+               (x > g.ancho - 50 && y < 50);
+    }
+    if (x < ancho_lista) {
+        if (y < 60) return x > ancho_lista - 56;              // engranaje
+        if (y < top_lista()) return false;                     // buscador
+        int k = item_en(y);
+        return k >= 0 && k < (int)items.size() && items[k].tipo != ItemLista::Titulo;
+    }
+    if (emojis_abierto) return true;
+    if (info_abierto) return y < alto_cabecera() + 60 || y > alto_cabecera();
+    float top = alto_cabecera(), bottom = g.alto - alto_pie, W = w_conv();
+    if (y < top) return !chat_actual.empty();                  // cabecera -> info
+    if (y >= bottom) {
+        if (chat_actual.empty()) return false;
+        float yy = bottom + 8;
+        if ((respondiendo || editando) && y < yy + BARRA_H) return x > x_conv() + W - 56;
+        if (respondiendo || editando) yy += BARRA_H;
+        if (adjunto && y < yy + ADJUNTO_H) return x > x_conv() + W - 56 || (x > x_conv() + W - 180 && y > yy + ADJUNTO_H - 40);
+        if (adjunto) yy += ADJUNTO_H;
+        if (grab != Grab::Nada) return x < x_conv() + 92 || x > x_conv() + W - 60;
+        return x < x_conv() + 82 || x > x_conv() + W - 60;    // emoji, clip, mandar/mic
+    }
+    if (conv.max - conv.objetivo > 150 && x > x_conv() + W - 68 && x < x_conv() + W - 20 && y > bottom - 60 && y < bottom - 12)
+        return true;                                           // ir al final
+    if (conv.max > 0 && x > g.ancho - 24) return true;         // barra
+    float ym = 0;
+    int i = mensaje_en(y, &ym);
+    if (i < 0) return false;
+    if (!enlace_en(i, ym, x, y).empty()) return true;
+    const VistaMensaje& v = vistas[i];
+    float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
+    return v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh;  // foto, video, audio, documento
 }

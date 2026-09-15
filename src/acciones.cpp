@@ -611,12 +611,14 @@ void App::abrir_visor(int i) {
     visor_px = visor_py = 0;
     visor_arrastrando = false;
     visor_clave = "media:" + std::to_string(m.media->id);
-    imagen(visor_clave, L"/media/" + std::to_wstring(m.media->id), m.tipo == "figurita");
+    visor_url = L"/media/" + std::to_wstring(m.media->id);
+    visor_animado = m.tipo == "figurita";
+    imagen(visor_clave, visor_url, visor_animado);
     pedir_dibujo();
 }
 
 bool App::rect_visor(float& x, float& y, float& w, float& h) {
-    Imagen& im = imagenes[visor_clave];
+    Imagen& im = imagen(visor_clave, visor_url, visor_animado);
     ID2D1Bitmap1* b = im.cuadro_actual(g, ahora);
     if (!b) return false;
     D2D1_SIZE_F t = b->GetSize();
@@ -769,11 +771,11 @@ void App::dibujar_visor() {
         necesita_dibujar = !pausado;
         return;
     }
-    Imagen& im = imagenes[visor_clave];
+    Imagen& im = imagen(visor_clave, visor_url, visor_animado);
     ID2D1Bitmap1* b = im.cuadro_actual(g, ahora);
     if (!im.anim.cuadros.empty()) necesita_dibujar = true;
     if (!b) {
-        std::wstring t = im.fallo ? L"Could not load the image" : L"Loading...";
+        std::wstring t = im.fallo ? L"Not on WhatsApp's servers anymore. Asked your phone to re-upload it..." : L"Loading...";
         float tw = g.medir(t, 15);
         g.renglon(t, (g.ancho - tw) / 2, g.alto / 2 - 10, 15, Color(0x8696a0));
         return;

@@ -189,7 +189,9 @@ struct App {
     bool visor_video = false;
     HWND ventana_video = nullptr;  // ventana hija donde mpv dibuja
     std::string visor_clave;
-    std::wstring visor_ruta;
+    std::wstring visor_ruta;      // archivo local (video)
+    std::wstring visor_url;       // ruta http de la foto, para volver a pedirla
+    bool visor_animado = false;
     // Zoom y paneo del visor de fotos: 1 = entra en la ventana.
     float visor_zoom = 1.0f, visor_px = 0, visor_py = 0;
     bool visor_arrastrando = false;
@@ -293,6 +295,8 @@ struct App {
     void copiar_seleccion();
     int mensaje_en(float y, float* y_msg);
     bool en_texto(int i, float y_msg, float x, float y, size_t* indice);
+    // Si en (x, y) hay algo que se pueda clickear (para el cursor de mano).
+    bool sobre_clickeable(float x, float y);
     std::wstring enlace_en(int i, float y_msg, float x, float y);
     void agregar_mensaje(const Mensaje& m);
     // Emojis (emoji_ui.cpp). El panel se dibuja encima de todo, anclado
