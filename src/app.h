@@ -149,6 +149,9 @@ struct App {
     std::string chat_actual;
     std::vector<Mensaje> mensajes;
     std::vector<VistaMensaje> vistas;
+    // Los layouts se arman de abajo para arriba, de a tandas por frame:
+    // [layout_pendiente, n) ya estan armados; lo de arriba, todavia no.
+    size_t layout_pendiente = 0;
     bool cargando_mensajes = false;
     bool cargando_chats = false, recarga_pendiente = false, escuchando = false;
     bool hay_mas_viejos = true;
@@ -349,6 +352,9 @@ struct App {
     void armar_items();
     void armar_vistas();
     void armar_vista(size_t i);
+    // Arma hasta `cuantos` layouts pendientes (o hasta agotar `ms_max`);
+    // devuelve el alto agregado arriba de lo visible.
+    float avanzar_layouts(int cuantos, float ms_max);
     float alto_contenido() const;
     void bajar_al_final(bool ya);
     bool al_final() const;

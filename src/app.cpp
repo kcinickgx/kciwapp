@@ -285,7 +285,8 @@ void App::redimensionado() {
 }
 
 bool App::animando() {
-    return !lista.quieto() || !conv.quieto() || (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
+    return !lista.quieto() || !conv.quieto() || layout_pendiente > 0 ||
+           (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
            grab == Grab::Grabando || !reproduciendo_id.empty() || grab_escuchando;
 }
 
@@ -416,14 +417,21 @@ void App::abrir_chat(const std::string& jid) {
     // pisan lo cacheado: estados, ediciones, reacciones).
     int cuantos = ajustes::actual().mensajes_por_chat;
     if (cuantos <= 0) cuantos = 1000000;
-    mensajes = cache::leer_mensajes(jid, 0, cuantos);
-    if (!mensajes.empty()) {
-        armar_vistas();
-        bajar_al_final(true);
-    }
     pedir_dibujo();
     std::string mio = jid;
     red::en_fondo([this, mio, cuantos] {
+        // La cache se lee en este hilo (con "All" son miles de filas) y se
+        // muestra apenas esta; el server viene despues.
+        std::vector<Mensaje> de_cache = cache::leer_mensajes(mio, 0, cuantos);
+        if (!de_cache.empty()) {
+            red::en_ui([this, mio, de_cache] {
+                if (mio != chat_actual || !mensajes.empty()) return;
+                mensajes = de_cache;
+                armar_vistas();
+                bajar_al_final(true);
+                pedir_dibujo();
+            });
+        }
         Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(cuantos), 300000);
         Json j = Json::parsear(r.cuerpo);
         std::vector<Mensaje> nuevos;
@@ -486,15 +494,12 @@ void App::cargar_mas_viejos() {
                 hay_mas_viejos = false;
                 return;
             }
-            float antes_alto = alto_contenido();
             mensajes.insert(mensajes.begin(), viejos.begin(), viejos.end());
+            vistas.insert(vistas.begin(), viejos.size(), VistaMensaje());
+            layout_pendiente += viejos.size();
             if (sel_msg >= 0) sel_msg += (int)viejos.size();
-            armar_vistas();
-            // Que lo que se veia siga en el mismo lugar.
-            float agregado = alto_contenido() - antes_alto;
-            conv.max += agregado;
-            conv.pos += agregado;
-            conv.objetivo += agregado;
+            // El que era el primero ahora tiene un anterior: su divisor puede cambiar.
+            if (layout_pendiente < vistas.size()) armar_vista(layout_pendiente);
             pedir_dibujo();
         });
     });
@@ -690,8 +695,25 @@ bool App::aplicar_evento(const Json& e) {
 // ---- layout de mensajes ---------------------------------------------------
 
 void App::armar_vistas() {
-    vistas.resize(mensajes.size());
-    for (size_t i = 0; i < mensajes.size(); i++) armar_vista(i);
+    vistas.assign(mensajes.size(), VistaMensaje());
+    layout_pendiente = mensajes.size();
+    // Lo ultimo (lo que se ve) se arma ya; el resto, de a tandas por frame.
+    avanzar_layouts(120, 1000.0f);
+}
+
+float App::avanzar_layouts(int cuantos, float ms_max) {
+    LARGE_INTEGER f, t0, t1;
+    QueryPerformanceFrequency(&f);
+    QueryPerformanceCounter(&t0);
+    float agregado = 0;
+    while (layout_pendiente > 0 && cuantos-- > 0) {
+        layout_pendiente--;
+        armar_vista(layout_pendiente);
+        agregado += vistas[layout_pendiente].alto;
+        QueryPerformanceCounter(&t1);
+        if ((t1.QuadPart - t0.QuadPart) * 1000.0f / f.QuadPart > ms_max) break;
+    }
+    return agregado;
 }
 
 void App::armar_vista(size_t i) {
@@ -867,6 +889,13 @@ void App::dibujar() {
     conv.animar(dt);
     necesita_dibujar = false;
 
+    if (layout_pendiente > 0 && !chat_actual.empty()) {
+        // Unos milisegundos por frame armando lo de arriba; la vista no se mueve.
+        float agregado = avanzar_layouts(2000, 5.0f);
+        conv.max += agregado;
+        conv.pos += agregado;
+        conv.objetivo += agregado;
+    }
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
     aplicar_ajustes();
@@ -1153,8 +1182,8 @@ void App::dibujar_conversacion() {
     }
     // Las vistas armadas con otro ancho se rearman.
     bool rearmar = false;
-    for (auto& v : vistas)
-        if (v.ancho_para != W) { rearmar = true; break; }
+    for (size_t k = layout_pendiente; k < vistas.size(); k++)
+        if (vistas[k].ancho_para != W) { rearmar = true; break; }
     if (rearmar) {
         bool abajo = al_final();
         armar_vistas();
@@ -1163,7 +1192,7 @@ void App::dibujar_conversacion() {
     }
     conv.max = std::max(0.0f, alto_contenido() - H);
     conv.limitar();
-    if (conv.pos < 600 && hay_mas_viejos && !cargando_mensajes) cargar_mas_viejos();
+    if (conv.pos < 600 && hay_mas_viejos && !cargando_mensajes && layout_pendiente == 0) cargar_mas_viejos();
 
     g.recortar(x, top, W, H);
     float y = top + 12 - conv.pos;
