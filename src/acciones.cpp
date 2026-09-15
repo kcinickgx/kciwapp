@@ -4,6 +4,7 @@
 
 #include <commdlg.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <shlwapi.h>
 
 #include "cache.h"
