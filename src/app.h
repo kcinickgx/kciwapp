@@ -117,6 +117,10 @@ struct VistaMensaje {
     std::wstring divisor_texto;
     bool nuevo_bloque = false;
     float reacciones_alto = 0;
+    // Los layouts de DirectWrite (texto/nombre/cita) se sueltan cuando el
+    // mensaje queda lejos de la vista (son lo que mas RAM come); el alto y
+    // las medidas quedan, y se rearman al volver a verse.
+    bool liviana = false;
     // Links dentro del texto: rango en el layout y la URL.
     struct Enlace {
         size_t inicio, largo;
@@ -179,6 +183,7 @@ struct App {
     // La conversacion es solo una ventana alrededor de un mensaje (salto
     // desde una busqueda): no se guarda en memoria al irse, se recarga entera.
     bool vista_parcial = false;
+    unsigned alivio_contador = 0;
     bool cargando_chats = false, recarga_pendiente = false, escuchando = false;
     bool resync_pendiente = false;   // el log de eventos se perdio: completar cada chat al abrirlo
     // Los ultimos chats visitados quedan en memoria (mensajes ya parseados),
@@ -319,6 +324,9 @@ struct App {
     unsigned long long todo_fin = 0;  // cuando termino (la ventanita queda un momento)
     void cargar_todo_el_chat();
     void dibujar_progreso_carga();
+    // Suelta los layouts de los mensajes lejos de lo visible (cada tanto).
+    void aliviar_vistas(size_t visible_desde, size_t visible_hasta);
+    void rearmar_si_liviana(size_t i);
     // Transcripcion de notas de voz con whisper.cpp (portable\whisper\), a pedido.
     std::set<std::string> transcribiendo;  // ids en curso
     bool whisper_disponible() const;

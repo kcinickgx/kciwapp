@@ -1,5 +1,7 @@
 #include "app.h"
 
+#include <malloc.h>
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -472,6 +474,9 @@ void App::abrir_chat(const std::string& jid) {
     chat_actual = jid;
     mensajes.clear();
     vistas.clear();
+    vistas.shrink_to_fit();
+    inicio.clear();
+    inicio.shrink_to_fit();
     layout_pendiente = 0;
     layout_gen++;
     tandas_listas.clear();
@@ -636,6 +641,7 @@ void App::recordar_chat() {
     while (en_memoria_orden.size() > 6) {
         en_memoria.erase(en_memoria_orden.front());
         en_memoria_orden.erase(en_memoria_orden.begin());
+        _heapmin();  // que el heap devuelva las paginas libres al sistema
     }
     mensajes.clear();
 }
@@ -1099,6 +1105,34 @@ double App::avanzar_layouts(int cuantos, float ms_max) {
         if ((t1.QuadPart - t0.QuadPart) * 1000.0f / f.QuadPart > ms_max) break;
     }
     return agregado;
+}
+
+// Si el mensaje esta a mas de 1500 de lo visible, sus layouts se sueltan
+// (quedan alto y medidas). Con 400k mensajes eso es la diferencia entre
+// cientos de MB y nada.
+void App::aliviar_vistas(size_t visible_desde, size_t visible_hasta) {
+    const size_t MARGEN = 1500;
+    size_t a = visible_desde > MARGEN ? visible_desde - MARGEN : 0;
+    size_t b = std::min(vistas.size(), visible_hasta + MARGEN);
+    for (size_t k = 0; k < vistas.size(); k++) {
+        if (k >= a && k < b) continue;
+        VistaMensaje& v = vistas[k];
+        if (v.liviana || (!v.texto && !v.nombre && !v.cita)) continue;
+        v.texto.Reset();
+        v.nombre.Reset();
+        v.cita.Reset();
+        v.liviana = true;
+    }
+}
+
+void App::rearmar_si_liviana(size_t i) {
+    if (i >= vistas.size() || !vistas[i].liviana) return;
+    float antes = vistas[i].alto;
+    armar_vista(i);
+    if (vistas[i].alto != antes) {
+        // No deberia cambiar (mismo ancho), pero por las dudas se corrigen los inicios.
+        recalcular_inicios();
+    }
 }
 
 void App::armar_vista(size_t i) {
@@ -1951,14 +1985,18 @@ void App::dibujar_conversacion() {
     double desde = conv.pos - 12;
     size_t i0 = std::upper_bound(inicio.begin(), inicio.end() - 1, desde) - inicio.begin();
     if (i0 > 0) i0--;
+    size_t i1 = i0;
     for (size_t i = i0; i < mensajes.size(); i++) {
         const VistaMensaje& v = vistas[i];
         if (v.alto <= 0) continue;
         float y = y_de(i);
         if (y + v.alto < top) continue;
         if (y > bottom) break;
+        rearmar_si_liviana(i);
         dibujar_mensaje(i, y);
+        i1 = i;
     }
+    if (layout_pendiente == 0 && (++alivio_contador % 120) == 0) aliviar_vistas(i0, i1);
     if (alguien_escribe(chat_actual) && inicio.size() == vistas.size() + 1) {
         float y = y_de(vistas.size());
         if (y < bottom && y + ESCRIBIENDO_H > top) dibujar_burbuja_escribiendo(y);
