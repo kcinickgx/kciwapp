@@ -153,7 +153,17 @@ void atender_trabajo(LPARAM lp) {
 void registrar(const std::string& linea) {
     static std::mutex mu;
     std::lock_guard<std::mutex> l(mu);
-    FILE* f = fopen("C:/Projects/kciwapp2/portable/debug.log", "a");
+    // Al lado del exe: portable\datos\debug.log.
+    static std::wstring ruta;
+    if (ruta.empty()) {
+        wchar_t buf[MAX_PATH];
+        GetModuleFileNameW(nullptr, buf, MAX_PATH);
+        ruta = buf;
+        ruta = ruta.substr(0, ruta.find_last_of(L"\\/")) + L"\\datos";
+        CreateDirectoryW(ruta.c_str(), nullptr);
+        ruta += L"\\debug.log";
+    }
+    FILE* f = _wfopen(ruta.c_str(), L"a");
     if (f) {
         SYSTEMTIME t;
         GetLocalTime(&t);
