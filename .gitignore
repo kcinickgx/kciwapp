@@ -8,3 +8,4 @@ build/
 release/
 portable/core/*.exe
 portable/core/*.txt
+portable/whisper/

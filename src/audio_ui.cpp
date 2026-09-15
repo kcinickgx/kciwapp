@@ -272,6 +272,15 @@ void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
         swprintf(buf, 8, velocidad_audio == 1.5 ? L"1.5x" : (velocidad_audio == 2.0 ? L"2x" : L"1x"));
         float tw = g.medir(buf, 12, DWRITE_FONT_WEIGHT_SEMI_BOLD);
         g.renglon(buf, vx + (AUDIO_VEL_W - tw) / 2, vy + 4, 12, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        // Transcribir (whisper), debajo: solo si no hay texto todavia.
+        if (m.texto.empty() && whisper_disponible()) {
+            bool en_curso = transcribiendo.count(m.id) > 0;
+            float ty = cy + h - 22;
+            g.rect_redondo(vx, ty, AUDIO_VEL_W, 18, 9, Color(TXT_DIM(), en_curso ? 0.2f : 0.35f));
+            const wchar_t* ic = en_curso ? L"\uE895" : L"\uED1E";  // Sync / Subtitles
+            float iw = g.medir_fuente(L"Segoe MDL2 Assets", ic, 12);
+            g.renglon_fuente(L"Segoe MDL2 Assets", ic, vx + (AUDIO_VEL_W - iw) / 2, ty + 3, 12, Color(TXT(), en_curso ? 0.6f : 1.0f));
+        }
     }
 }
 
@@ -283,6 +292,10 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
     bool suena = reproduciendo_id == m.id;
     {
         float vx = w - AUDIO_ONDA_DER - AUDIO_VEL_W;
+        if (rx >= vx && ry >= h - 24 && m.texto.empty() && whisper_disponible()) {
+            transcribir(i);
+            return;
+        }
         if (rx >= vx && ry >= 8 && ry <= 40) {
             velocidad_audio = velocidad_audio == 1.0 ? 1.5 : (velocidad_audio == 1.5 ? 2.0 : 1.0);
             reproductor.velocidad(velocidad_audio);
@@ -306,4 +319,90 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
         }
     }
     reproducir_audio(i);
+}
+
+// ---- transcripcion (whisper.cpp) --------------------------------------------
+
+bool App::whisper_disponible() const {
+    static int cache = -1;
+    if (cache < 0) {
+        std::wstring d = carpeta_exe() + L"\\whisper\\";
+        cache = (GetFileAttributesW((d + L"whisper-cli.exe").c_str()) != INVALID_FILE_ATTRIBUTES &&
+                 GetFileAttributesW((d + L"ggml-large-v3-turbo.bin").c_str()) != INVALID_FILE_ATTRIBUTES) ? 1 : 0;
+    }
+    return cache == 1;
+}
+
+// Baja el WAV 16 kHz del server, corre whisper-cli escondido y manda el texto
+// al server (que lo guarda como texto del mensaje y avisa por eventos).
+void App::transcribir(int i) {
+    if (i < 0 || i >= (int)mensajes.size() || !mensajes[i].media) return;
+    const Mensaje& m = mensajes[i];
+    if (transcribiendo.count(m.id)) return;
+    transcribiendo.insert(m.id);
+    pedir_dibujo();
+    std::string chat = m.chat, id = m.id;
+    long long mid = m.media->id;
+    std::wstring base = carpeta_exe() + L"\\datos\\tmp";
+    CreateDirectoryW(base.c_str(), nullptr);
+    std::wstring wav = base + L"\\t" + std::to_wstring(mid) + L".wav";
+    std::wstring salida = base + L"\\t" + std::to_wstring(mid);
+    std::wstring exe = carpeta_exe() + L"\\whisper\\whisper-cli.exe";
+    std::wstring modelo = carpeta_exe() + L"\\whisper\\ggml-large-v3-turbo.bin";
+    red::en_fondo([this, chat, id, mid, wav, salida, exe, modelo] {
+        std::wstring error;
+        Respuesta r = red::obtener(L"/media/" + std::to_wstring(mid) + L"?wav=1", 120000);
+        if (!r.ok()) error = L"Could not get the audio";
+        else {
+            HANDLE h = CreateFileW(wav.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (h == INVALID_HANDLE_VALUE) error = L"Cannot write temp file";
+            else {
+                DWORD e = 0;
+                WriteFile(h, r.cuerpo.data(), (DWORD)r.cuerpo.size(), &e, nullptr);
+                CloseHandle(h);
+            }
+        }
+        std::string texto;
+        if (error.empty()) {
+            std::wstring linea = L"\"" + exe + L"\" -m \"" + modelo + L"\" -l auto -nt -np -f \"" + wav + L"\" -otxt -of \"" + salida + L"\"";
+            STARTUPINFOW si{sizeof si};
+            PROCESS_INFORMATION pi{};
+            if (CreateProcessW(nullptr, linea.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
+                               (carpeta_exe() + L"\\whisper").c_str(), &si, &pi)) {
+                WaitForSingleObject(pi.hProcess, 600000);
+                DWORD codigo = 1;
+                GetExitCodeProcess(pi.hProcess, &codigo);
+                CloseHandle(pi.hThread);
+                CloseHandle(pi.hProcess);
+                HANDLE h = CreateFileW((salida + L".txt").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+                if (h != INVALID_HANDLE_VALUE) {
+                    char buf[4096];
+                    DWORD leido = 0;
+                    while (ReadFile(h, buf, sizeof buf, &leido, nullptr) && leido > 0) texto.append(buf, leido);
+                    CloseHandle(h);
+                    DeleteFileW((salida + L".txt").c_str());
+                } else error = L"whisper failed (" + std::to_wstring(codigo) + L")";
+            } else error = L"Cannot run whisper-cli.exe";
+            DeleteFileW(wav.c_str());
+        }
+        // Limpieza: sin saltos de linea sueltos ni espacios de mas.
+        std::string limpio;
+        for (char c : texto) {
+            if (c == '\r') continue;
+            if (c == '\n') c = ' ';
+            if (c == ' ' && !limpio.empty() && limpio.back() == ' ') continue;
+            limpio += c;
+        }
+        while (!limpio.empty() && limpio.back() == ' ') limpio.pop_back();
+        while (!limpio.empty() && limpio.front() == ' ') limpio.erase(limpio.begin());
+        if (error.empty()) {
+            Respuesta p = red::mandar_json(L"/transcripcion", "{\"chat\":" + json_texto(chat) + ",\"id\":" + json_texto(id) + ",\"texto\":" + json_texto(limpio) + "}");
+            if (!p.ok()) error = L"Server rejected the transcript";
+        }
+        red::en_ui([this, id, error] {
+            transcribiendo.erase(id);
+            if (!error.empty()) aviso_estado = error;
+            pedir_dibujo();
+        });
+    });
 }

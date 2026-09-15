@@ -890,7 +890,7 @@ bool App::aplicar_evento(const Json& e) {
         if (chat != chat_actual) return false;
         for (auto& x : mensajes)
             if (x.id == id) x.estado = std::max(x.estado, estado);
-    } else if (tipo == "editado" || tipo == "borrado") {
+    } else if (tipo == "editado" || tipo == "borrado" || tipo == "transcripcion") {
         std::string id = d["id"].str();
         if (tipo == "borrado") cache::marcar_borrado(chat, id);
         else cache::editar_texto(chat, id, ancho(d["texto"].str()));
@@ -905,9 +905,15 @@ bool App::aplicar_evento(const Json& e) {
                 if (tipo == "borrado") mensajes[i].borrado = true;
                 else {
                     mensajes[i].texto = ancho(d["texto"].str());
-                    mensajes[i].editado = true;
+                    if (tipo == "editado") mensajes[i].editado = true;
                 }
+                float antes = vistas[i].alto;
                 armar_vista(i);
+                if (vistas[i].alto != antes) {
+                    // Cambio el alto: los de abajo se corren.
+                    recalcular_inicios();
+                    conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
+                }
             }
     } else if (tipo == "reaccion") {
         if (chat != chat_actual) return false;

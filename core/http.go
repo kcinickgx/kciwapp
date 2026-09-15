@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os/exec"
 	"encoding/json"
 	"errors"
 	"io"
@@ -32,6 +34,7 @@ func servirHTTP() {
 	mux.HandleFunc("GET /mensajes", conToken(hMensajes))
 	mux.HandleFunc("GET /buscar", conToken(hBuscar))
 	mux.HandleFunc("GET /cantidad", conToken(hCantidad))
+	mux.HandleFunc("POST /transcripcion", conToken(hTranscripcion))
 	mux.HandleFunc("POST /reenviar", conToken(hReenviar))
 	mux.HandleFunc("GET /eventos", conToken(hEventos))
 	mux.HandleFunc("GET /media/{id}", conToken(hMedia))
@@ -334,6 +337,20 @@ func hMedia(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if r.URL.Query().Get("wav") == "1" {
+		// Para transcribir: WAV 16 kHz mono, generado una vez al lado del original.
+		wav := ruta + ".16k.wav"
+		if _, err := os.Stat(wav); err != nil {
+			cmd := exec.Command("ffmpeg", "-y", "-loglevel", "error", "-i", ruta, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fallar(w, 500, fmt.Errorf("ffmpeg: %v %s", err, out))
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "audio/wav")
+		http.ServeFile(w, r, wav)
+		return
+	}
 	if mimeT != "" {
 		w.Header().Set("Content-Type", mimeT)
 	}
@@ -341,6 +358,27 @@ func hMedia(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", "inline; filename=\""+strings.ReplaceAll(nombre, "\"", "")+"\"")
 	}
 	http.ServeFile(w, r, ruta)
+}
+
+// POST /transcripcion {chat, id, texto}: la transcripcion de una nota de voz
+// queda como texto del mensaje (se ve debajo del audio y entra en la busqueda).
+func hTranscripcion(w http.ResponseWriter, r *http.Request) {
+	var p struct {
+		Chat  string `json:"chat"`
+		ID    string `json:"id"`
+		Texto string `json:"texto"`
+	}
+	if err := leerJSON(r, &p); err != nil {
+		fallar(w, 400, err)
+		return
+	}
+	texto := strings.TrimSpace(p.Texto)
+	if texto == "" {
+		texto = "(no speech detected)"
+	}
+	db.Exec("UPDATE mensajes SET texto = ? WHERE chat = ? AND id_wa = ?", texto, p.Chat, p.ID)
+	evento("transcripcion", p.Chat, map[string]any{"id": p.ID, "texto": texto})
+	responder(w, map[string]any{"ok": true})
 }
 
 func hMiniatura(w http.ResponseWriter, r *http.Request) {

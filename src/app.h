@@ -319,6 +319,10 @@ struct App {
     unsigned long long todo_fin = 0;  // cuando termino (la ventanita queda un momento)
     void cargar_todo_el_chat();
     void dibujar_progreso_carga();
+    // Transcripcion de notas de voz con whisper.cpp (portable\whisper\), a pedido.
+    std::set<std::string> transcribiendo;  // ids en curso
+    bool whisper_disponible() const;
+    void transcribir(int i);
     void dibujar_vinculacion();
     void terminar_llamada_ui();
     void colgar_llamada();
