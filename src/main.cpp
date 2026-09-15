@@ -282,7 +282,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     g_app = nullptr;
     // Una sola instancia: si ya hay una, se la trae al frente y listo (dos
     // procesos se pisarian la cache y el cursor de eventos).
-    HANDLE unica = CreateMutexW(nullptr, TRUE, L"Local\kciwapp2-instancia");
+    HANDLE unica = CreateMutexW(nullptr, TRUE, L"Local\\kciwapp2-instancia");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         if (HWND otra = FindWindowW(L"kciwapp2", nullptr)) {
             if (IsIconic(otra)) ShowWindow(otra, SW_RESTORE);
