@@ -16,6 +16,13 @@ Instala MariaDB y ffmpeg, crea la base `whatsapp`, deja el binario y el
 config en `/opt/kciwapp-server`, un servicio `kciwapp-server` y lo arranca.
 Al final imprime la URL del QR y el `servidor.json` para el cliente.
 
+**Slackware 15**: `./instalar-slackware.sh` hace lo mismo con la MariaDB que
+trae Slackware y un `/etc/rc.d/rc.kciwapp-server` (start/stop/restart/status)
+enganchado en `rc.local`; log en `/var/log/kciwapp-server.log`. ffmpeg hay que
+ponerlo antes desde SlackBuilds (`sbopkg -i ffmpeg`); sin el anda igual pero
+sin notas de voz convertidas, stickers ni miniaturas de video. El binario es
+estatico, corre en cualquier Linux x64.
+
 Vincular el teléfono: abrir `http://<ip>:8080/qr` en cualquier navegador y
 escanear desde WhatsApp → Dispositivos vinculados → Vincular un dispositivo.
 Baja lo mismo que WhatsApp Web (los chats recientes). Para pedir el historial
