@@ -2110,6 +2110,19 @@ void App::dibujar_mensaje(size_t i, float y) {
             v.texto->HitTestTextRange((UINT32)a, (UINT32)(b - a), tx, ty, cajas.data(), cuantos, &cuantos);
             for (auto& c : cajas) g.rect(c.left, c.top, c.width, c.height, Color(0x53bdeb, 0.4f));
         }
+        // Con el buscador del chat abierto, lo buscado va marcado en cada burbuja.
+        if (busca_chat_abierta && ultima_busqueda_chat.size() >= 2 && !m.borrado) {
+            std::wstring texto_plano = plano(m.texto), termino = plano(ultima_busqueda_chat);
+            size_t desde = 0;
+            while ((desde = texto_plano.find(termino, desde)) != std::wstring::npos) {
+                UINT32 cuantos = 0;
+                v.texto->HitTestTextRange((UINT32)desde, (UINT32)termino.size(), tx, ty, nullptr, 0, &cuantos);
+                std::vector<DWRITE_HIT_TEST_METRICS> cajas(cuantos);
+                v.texto->HitTestTextRange((UINT32)desde, (UINT32)termino.size(), tx, ty, cajas.data(), cuantos, &cuantos);
+                for (auto& c : cajas) g.rect_redondo(c.left - 1, c.top, c.width + 2, c.height, 3, Color(0xff5252, 0.45f));
+                desde += termino.size();
+            }
+        }
         g.dibujar_texto(v.texto.Get(), tx, ty, Color(m.borrado ? TXT_DIM() : TXT()));
     }
     // Hora y tildes
