@@ -161,6 +161,7 @@ bool App::click_emojis(float x, float y) {
     if (!p.tiene(x, y)) {
         emojis_abierto = false;
         emoji_buscador.foco = false;
+        emoji_para_reaccion = -1;
         pedir_dibujo();
         return false;
     }
@@ -220,8 +221,19 @@ bool App::rueda_emojis(float x, float y, float delta) {
 }
 
 void App::elegir_emoji(const std::wstring& simbolo) {
-    campo.insertar(simbolo);
     emoji::usar(simbolo);
+    if (emoji_para_reaccion >= 0) {
+        // El selector se abrio desde el "+" de la barra de reacciones.
+        int i = emoji_para_reaccion;
+        emoji_para_reaccion = -1;
+        emojis_abierto = false;
+        emoji_buscador.foco = false;
+        campo.foco = true;
+        if (i < (int)mensajes.size()) reaccionar(i, simbolo);
+        pedir_dibujo();
+        return;
+    }
+    campo.insertar(simbolo);
     campo.foco = true;
     emoji_buscador.foco = false;
     pedir_dibujo();

@@ -1426,6 +1426,9 @@ void App::dibujar_conversacion() {
         if (y > bottom) break;
         dibujar_mensaje(i, y);
     }
+    if (msg_bajo_mouse >= 0 && msg_bajo_mouse < (int)vistas.size()) dibujar_reacciones_de(msg_bajo_mouse, y_de((size_t)msg_bajo_mouse));
+    if (reaccion_msg >= 0 && reaccion_msg != msg_bajo_mouse && reaccion_msg < (int)vistas.size())
+        dibujar_reacciones_de(reaccion_msg, y_de((size_t)reaccion_msg));
     barra_scroll(conv, x + W - 10, top, H, alto_contenido(),
                  mouse_x > x + W - 24 && mouse_x < x + W && mouse_y > top && mouse_y < bottom, arrastrando_barra);
     // Boton para ir al final, cuando estamos lejos de el.
@@ -1603,6 +1606,22 @@ void App::raton_mueve(float x, float y) {
     chat_bajo_mouse = x < ancho_lista && y > top_lista() ? item_en(y) : -1;
     if (antes != chat_bajo_mouse || emojis_abierto || info_abierto) pedir_dibujo();
     cursor_mano = sobre_clickeable(x, y);
+    {
+        int antes_msg = msg_bajo_mouse;
+        msg_bajo_mouse = -1;
+        if (x >= ancho_lista && !visor && !info_abierto && y > alto_cabecera() && y < g.alto - alto_pie) {
+            float ym = 0;
+            int i = mensaje_en(y, &ym);
+            // Tambien vale estar sobre la carita (que esta fuera de la burbuja).
+            if (i < 0 && antes_msg >= 0 && antes_msg < (int)vistas.size()) {
+                float yy = y_de((size_t)antes_msg);
+                if (y >= yy + vistas[antes_msg].by - 4 && y <= yy + vistas[antes_msg].by + vistas[antes_msg].bh + 4) i = antes_msg;
+            }
+            msg_bajo_mouse = i;
+        }
+        if (antes_msg != msg_bajo_mouse) pedir_dibujo();
+        if (reaccion_msg >= 0) pedir_dibujo();
+    }
     if (arrastrando_barra) {
         float top = alto_cabecera(), H = g.alto - alto_pie - top;
         arrastrar_barra(conv, y, top, H, alto_contenido());
@@ -1767,8 +1786,9 @@ void App::raton_abajo(float x, float y, bool shift) {
         raton_mueve(x, y);
         return;
     }
-    // Click en la conversacion: seleccion de texto, o abrir media.
+    // Click en la conversacion: reacciones, seleccion de texto, o abrir media.
     campo.foco = true;
+    if (click_reacciones(x, y)) return;
     sel_msg = -1;
     float ym = 0;
     int i = mensaje_en(y, &ym);

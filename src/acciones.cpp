@@ -206,12 +206,6 @@ void App::raton_derecho(float x, float y) {
 void App::menu_contextual(int i) {
     const Mensaje& m = mensajes[i];
     HMENU menu = CreatePopupMenu();
-    // Reacciones rapidas arriba, como en WhatsApp.
-    HMENU reac = CreatePopupMenu();
-    for (int k = 0; k < 6; k++) AppendMenuW(reac, MF_STRING, M_REACCION + k, REACCIONES_RAPIDAS[k]);
-    AppendMenuW(reac, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(reac, MF_STRING, M_REACCION + 99, L"Remove reaction");
-    AppendMenuW(menu, MF_POPUP, (UINT_PTR)reac, L"React");
     AppendMenuW(menu, MF_STRING, M_RESPONDER, L"Reply");
     if (!m.texto.empty() || sel_msg == i) AppendMenuW(menu, MF_STRING, M_COPIAR, L"Copy");
     if (!m.borrado) AppendMenuW(menu, MF_STRING, M_REENVIAR, L"Forward");
@@ -233,11 +227,6 @@ void App::menu_contextual(int i) {
     DestroyMenu(menu);
     campo.foco = true;
     pedir_dibujo();
-    if (id >= M_REACCION) {
-        int k = id - M_REACCION;
-        reaccionar(i, k == 99 ? L"" : REACCIONES_RAPIDAS[k]);
-        return;
-    }
     switch (id) {
         case M_RESPONDER: responder(i); break;
         case M_COPIAR: copiar_mensaje(i); break;
@@ -827,7 +816,10 @@ void App::escapar() {
     } else if (emojis_abierto) {
         emojis_abierto = false;
         emoji_buscador.foco = false;
+        emoji_para_reaccion = -1;
         campo.foco = true;
+    } else if (reaccion_msg >= 0) {
+        reaccion_msg = -1;
     } else if (info_abierto) {
         cerrar_info();
     } else if (grab != Grab::Nada) {
@@ -870,4 +862,106 @@ void App::doble_click(float x, float y) {
         sel_b = b;
         pedir_dibujo();
     }
+}
+
+// ---- la carita de reaccion y la barra -------------------------------------
+
+namespace {
+const float REAC_R = 14.0f;        // radio de la carita
+const float REAC_ANCHO = 44.0f;    // cada emoji de la barra
+const float REAC_ALTO = 46.0f;
+
+// Donde va la carita del mensaje i: al costado de la burbuja, del lado libre.
+void pos_carita(const App& a, int i, float y, float& cx, float& cy) {
+    const VistaMensaje& v = a.vistas[i];
+    const Mensaje& m = a.mensajes[i];
+    cx = m.propio ? a.x_conv() + v.bx - 22 : a.x_conv() + v.bx + v.bw + 22;
+    cy = y + v.by + v.bh / 2;
+}
+
+// La barra: 6 emojis + "+", arriba de la carita, sin salirse de la ventana.
+void rect_barra(const App& a, int i, float y, float& bx, float& by, float& bw) {
+    float cx, cy;
+    pos_carita(a, i, y, cx, cy);
+    bw = REAC_ANCHO * 7 + 8;
+    bx = cx - bw / 2;
+    bx = std::clamp(bx, a.x_conv() + 8, a.g.ancho - bw - 8);
+    by = cy - REAC_R - REAC_ALTO - 6;
+    if (by < a.alto_cabecera() + 4) by = cy + REAC_R + 6;
+}
+}  // namespace
+
+void App::dibujar_reacciones_de(int i, float y) {
+    if (i < 0 || i >= (int)vistas.size() || mensajes[i].borrado) return;
+    bool mostrar = i == msg_bajo_mouse || i == reaccion_msg;
+    if (!mostrar || reenviando) return;
+    float cx, cy;
+    pos_carita(*this, i, y, cx, cy);
+    g.circulo(cx, cy, REAC_R, Color(BG_PANEL()));
+    g.borde_redondo(cx - REAC_R, cy - REAC_R, 2 * REAC_R, 2 * REAC_R, REAC_R, Color(BORDE()), 1.0f);
+    // Carita sonriente dibujada: circulo, ojos y sonrisa.
+    Color c(TXT_DIM());
+    g.ctx->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 7.5f, 7.5f), g.pincel(c), 1.3f);
+    g.circulo(cx - 2.8f, cy - 2.2f, 1.1f, c);
+    g.circulo(cx + 2.8f, cy - 2.2f, 1.1f, c);
+    g.linea(cx - 3.5f, cy + 1.8f, cx - 1.5f, cy + 3.6f, c, 1.2f);
+    g.linea(cx - 1.5f, cy + 3.6f, cx + 1.5f, cy + 3.6f, c, 1.2f);
+    g.linea(cx + 1.5f, cy + 3.6f, cx + 3.5f, cy + 1.8f, c, 1.2f);
+    if (i != reaccion_msg) return;
+    float bx, by, bw;
+    rect_barra(*this, i, y, bx, by, bw);
+    g.rect_redondo(bx + 2, by + 3, bw, REAC_ALTO, REAC_ALTO / 2, Color(0x000000, 0.3f));
+    g.rect_redondo(bx, by, bw, REAC_ALTO, REAC_ALTO / 2, Color(BG_PANEL()));
+    g.borde_redondo(bx, by, bw, REAC_ALTO, REAC_ALTO / 2, Color(BORDE()), 1.0f);
+    for (int k = 0; k < 7; k++) {
+        float ex = bx + 4 + k * REAC_ANCHO;
+        bool encima = mouse_x >= ex && mouse_x < ex + REAC_ANCHO && mouse_y >= by && mouse_y < by + REAC_ALTO;
+        if (encima) g.circulo(ex + REAC_ANCHO / 2, by + REAC_ALTO / 2, REAC_ANCHO / 2 - 3, Color(BG_CAMPO()));
+        if (k < 6) {
+            // La que ya puse, marcada.
+            bool mia = false;
+            for (auto& r : mensajes[i].reacciones)
+                if (r.remitente == mi_jid && r.emoji == REACCIONES_RAPIDAS[k]) mia = true;
+            if (mia) g.circulo(ex + REAC_ANCHO / 2, by + REAC_ALTO / 2, REAC_ANCHO / 2 - 3, Color(ACCENT(), 0.35f));
+            g.renglon(REACCIONES_RAPIDAS[k], ex + (REAC_ANCHO - 26) / 2, by + 9, 24, Color(TXT()));
+        } else {
+            g.circulo(ex + REAC_ANCHO / 2, by + REAC_ALTO / 2, 13, Color(BG_CAMPO()));
+            g.renglon(L"+", ex + REAC_ANCHO / 2 - 6, by + 11, 20, Color(TXT_DIM()));
+        }
+    }
+}
+
+// Click en la carita o en la barra; devuelve si se lo comio.
+bool App::click_reacciones(float x, float y) {
+    if (reaccion_msg >= 0 && reaccion_msg < (int)vistas.size()) {
+        float ym = y_de((size_t)reaccion_msg);
+        float bx, by, bw;
+        rect_barra(*this, reaccion_msg, ym, bx, by, bw);
+        if (x >= bx && x < bx + bw && y >= by && y < by + REAC_ALTO) {
+            int k = (int)((x - bx - 4) / REAC_ANCHO);
+            int i = reaccion_msg;
+            reaccion_msg = -1;
+            if (k >= 0 && k < 6) reaccionar(i, REACCIONES_RAPIDAS[k]);
+            else if (k == 6) {
+                emoji_para_reaccion = i;
+                emojis_abierto = true;
+                emoji_buscador.foco = true;
+                campo.foco = false;
+            }
+            pedir_dibujo();
+            return true;
+        }
+        reaccion_msg = -1;
+        pedir_dibujo();
+    }
+    if (msg_bajo_mouse >= 0 && msg_bajo_mouse < (int)vistas.size() && !mensajes[msg_bajo_mouse].borrado) {
+        float cx, cy;
+        pos_carita(*this, msg_bajo_mouse, y_de((size_t)msg_bajo_mouse), cx, cy);
+        if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= (REAC_R + 4) * (REAC_R + 4)) {
+            reaccion_msg = msg_bajo_mouse;
+            pedir_dibujo();
+            return true;
+        }
+    }
+    return false;
 }

@@ -198,6 +198,9 @@ struct App {
     std::optional<Mensaje> respondiendo, editando;
     std::string resaltado_id;
     unsigned long long resaltado_desde = 0;
+    int msg_bajo_mouse = -1;   // para la carita de reaccion al costado
+    int reaccion_msg = -1;     // mensaje con la barra de reacciones abierta
+    int emoji_para_reaccion = -1;  // el selector de emojis abierto para reaccionar a este
     int sel_msg = -1;          // mensaje con texto seleccionado
     size_t sel_a = 0, sel_b = 0;
     bool sel_arrastrando = false;
@@ -298,6 +301,9 @@ struct App {
     void editar(int i);
     void borrar(int i);
     void reaccionar(int i, const std::wstring& emoji);
+    // La carita al costado del mensaje y la barra de reacciones rapidas.
+    void dibujar_reacciones_de(int i, float y);
+    bool click_reacciones(float x, float y);
     void copiar_mensaje(int i);
     void reenviar(int i);
     void reenviar_a(const std::string& destino);
