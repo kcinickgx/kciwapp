@@ -195,6 +195,7 @@ struct App {
     // Zoom y paneo del visor de fotos: 1 = entra en la ventana.
     float visor_zoom = 1.0f, visor_px = 0, visor_py = 0;
     bool visor_arrastrando = false;
+    bool visor_seek = false;      // arrastrando la barra del video
     float visor_ax = 0, visor_ay = 0, visor_mov = 0;
     // Busqueda
     std::vector<Mensaje> resultados;

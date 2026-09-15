@@ -662,9 +662,16 @@ bool App::aplicar_evento(const Json& e) {
     } else if (tipo == "media") {
         long long id = d["id"].entero();
         int estado = (int)d["estado"].entero();
+        bool mini = d["miniatura"].bul();
         for (auto& x : mensajes)
-            if (x.media && x.media->id == id) x.media->estado = estado;
-        if (estado == 1) imagenes.erase("media:" + std::to_string(id));
+            if (x.media && x.media->id == id) {
+                x.media->estado = estado;
+                if (mini) x.media->miniatura = true;
+            }
+        if (estado == 1) {
+            imagenes.erase("media:" + std::to_string(id));
+            imagenes.erase("mini:" + std::to_string(id));
+        }
     } else if (tipo == "chat" || tipo == "chats" || tipo == "contactos" || tipo == "contacto" || tipo == "historia") {
         return true;
     } else if (tipo == "leido") {
@@ -1354,6 +1361,11 @@ void App::raton_mueve(float x, float y) {
         arrastrar_barra(lista, y, top, H, lista.max + H);
         pedir_dibujo();
     }
+    if (visor_seek && seek_w > 0) {
+        double d = reproductor.duracion();
+        if (d > 0) reproductor.ir_a(d * std::clamp((x - seek_x) / seek_w, 0.0f, 1.0f));
+        pedir_dibujo();
+    }
     if (visor_arrastrando) {
         visor_px += x - visor_ax;
         visor_py += y - visor_ay;
@@ -1537,6 +1549,7 @@ void App::raton_arriba(float, float) {
     arrastrando_barra = false;
     arrastrando_lista = false;
     seek_msg = -1;
+    visor_seek = false;
     visor_arrastrando = false;
     campo.arrastrando = false;
     buscador.arrastrando = false;
