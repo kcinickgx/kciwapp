@@ -306,6 +306,7 @@ const wchar_t* JS_RECT_PANEL =
 
 constexpr UINT_PTR TIMER_ENCUADRE = 1;
 bool g_encuadrando = false;
+double g_prop = 900.0 / 620.0;  // proporcion del panel (ancho/alto); la ventana la sigue
 
 // Acomoda el WebView2 adentro de la ventana de video para que se vea solo el
 // panel de la llamada: zoom para que el panel llene la ventana (manteniendo
@@ -327,6 +328,17 @@ void encuadrar() {
         GetClientRect(g_ventana, &c);
         double Wc = c.right, Hc = c.bottom;
         double dpi = GetDpiForWindow(g_ventana) / 96.0;
+        // La ventana toma la proporcion del panel (asi no asoma la pagina alrededor).
+        double prop = cw / ch;
+        if (std::abs(prop - g_prop) > 0.01 || std::abs(Wc / Hc - prop) > 0.01) {
+            g_prop = prop;
+            RECT wr;
+            GetWindowRect(g_ventana, &wr);
+            int extra_w = (wr.right - wr.left) - c.right, extra_h = (wr.bottom - wr.top) - c.bottom;
+            int nh = (int)(Wc / prop + 0.5);
+            SetWindowPos(g_ventana, nullptr, 0, 0, (int)Wc + extra_w, nh + extra_h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            return;  // WM_SIZE vuelve a encuadrar
+        }
         double z = std::min(Wc / (cw * dpi), Hc / (ch * dpi));
         z = std::clamp(z, 0.25, 5.0);
         double z0 = 1;
@@ -516,7 +528,7 @@ static LRESULT CALLBACK proc_ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             GetWindowRect(h, &wr);
             GetClientRect(h, &cr);
             int extra_w = (wr.right - wr.left) - cr.right, extra_h = (wr.bottom - wr.top) - cr.bottom;
-            const double prop = 900.0 / 620.0;
+            const double prop = g_prop;
             int w = (r->right - r->left) - extra_w, hh = (r->bottom - r->top) - extra_h;
             bool por_alto = wp == WMSZ_TOP || wp == WMSZ_BOTTOM;
             if (por_alto) w = (int)(hh * prop + 0.5);
