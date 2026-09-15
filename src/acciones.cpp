@@ -216,14 +216,15 @@ void App::raton_derecho(float x, float y) {
 void App::menu_contextual(int i) {
     const Mensaje& m = mensajes[i];
     std::vector<ItemMenu> items;
+    // Copy va primero: el de la media (imagen/archivo) si hay, si no el del texto.
+    if (m.media && !m.borrado) items.push_back({m.tipo == "imagen" || m.tipo == "figurita" ? L"Copy image" : L"Copy file", M_COPIAR_MEDIA, L"\uE8C8"});
+    else if (!m.texto.empty() || sel_msg == i) items.push_back({L"Copy", M_COPIAR, L"\uE8C8"});
     items.push_back({L"Reply", M_RESPONDER, L"\uE97A"});
-    if (!m.texto.empty() || sel_msg == i) items.push_back({L"Copy", M_COPIAR, L"\uE8C8"});
     if (!m.borrado) items.push_back({L"Forward", M_REENVIAR, L"\uE72A"});
     if (m.propio && !m.borrado && !m.media && !m.texto.empty()) items.push_back({L"Edit", M_EDITAR, L"\uE70F"});
     if (m.media && !m.borrado) {
         items.push_back({L"", 0, nullptr, true});
         items.push_back({L"Open", M_ABRIR, L"\uE8E5"});
-        items.push_back({m.tipo == "imagen" || m.tipo == "figurita" ? L"Copy image" : L"Copy file", M_COPIAR_MEDIA, L"\uE8C8"});
         items.push_back({L"Save as...", M_GUARDAR, L"\uE74E"});
     }
     if (!m.borrado) {
