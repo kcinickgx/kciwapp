@@ -34,12 +34,14 @@ void colgar();
 void silenciar(bool si);
 bool en_llamada();
 bool silenciado();
-// Mostrar/ocultar la ventana de la llamada (video) en un rectangulo de la
-// ventana principal, en pixeles fisicos.
-void mostrar_llamada(const RECT* r);
+// Mostrar (video) u ocultar la llamada. Se muestra en una ventana propia,
+// aparte de la principal, con solo el panel de la llamada.
+void mostrar_llamada(bool si);
 
 // Avisos hacia la app (en el hilo de la UI).
 void al_cambiar_llamada(std::function<void(bool en_llamada)> f);
+// La ventana de la llamada se cerro con la X: hay que cortar.
+void al_cerrar_ventana(std::function<void()> f);
 
 // Debug: vuelca los aria-label / data-icon que hay en las dos paginas al log.
 void volcar_dom();

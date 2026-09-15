@@ -67,7 +67,7 @@ void App::terminar_llamada_ui() {
     llamada_activa = false;
     llamada_desde = 0;
     llamada_video = false;
-    webwa::mostrar_llamada(nullptr);
+    webwa::mostrar_llamada(false);
     pedir_dibujo();
 }
 
@@ -76,17 +76,8 @@ void App::colgar_llamada() {
     terminar_llamada_ui();
 }
 
-// La ventana de la llamada (video) ocupa la conversacion, debajo de la barra.
-void App::ubicar_video_llamada() {
-    if (!llamada_activa || !llamada_video) {
-        webwa::mostrar_llamada(nullptr);
-        return;
-    }
-    float e = GetDpiForWindow(hwnd) / 96.0f;
-    float x = x_conv(), y = alto_cabecera() + BARRA_LLAMADA_H, w = w_conv(), h = g.alto - alto_pie - y;
-    RECT r{(LONG)(x * e), (LONG)(y * e), (LONG)((x + w) * e), (LONG)((y + h) * e)};
-    webwa::mostrar_llamada(&r);
-}
+// La videollamada va en una ventana aparte (solo el panel de la llamada).
+void App::ubicar_video_llamada() { webwa::mostrar_llamada(llamada_activa && llamada_video); }
 
 float App::alto_barra_llamada() const { return llamada_activa ? BARRA_LLAMADA_H : 0.0f; }
 

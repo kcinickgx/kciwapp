@@ -315,6 +315,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     webwa::al_cambiar_llamada([](bool en) {
         if (g_app) g_app->llamada_cambio(en);
     });
+    webwa::al_cerrar_ventana([]() {
+        if (g_app) g_app->colgar_llamada();
+    });
     SetTimer(h, 8, 1000, nullptr);
     toast::al_rechazar([](const std::string& id) {
         std::string cuerpo = "{\"id\":" + json_texto(id) + "}";

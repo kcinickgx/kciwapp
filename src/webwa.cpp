@@ -1,5 +1,6 @@
 #include "webwa.h"
 
+#include <dwmapi.h>
 #include <wrl.h>
 
 #include "WebView2.h"
@@ -35,6 +36,8 @@ Vista g_principal, g_llamada;
 bool g_activo = false, g_logueado = false, g_cargando = true, g_en_llamada = false, g_silenciado = false;
 std::string g_qr;
 std::function<void(bool)> g_al_cambiar;
+std::function<void()> g_al_cerrar_ventana;
+HWND g_ventana = nullptr;  // la ventana propia de la videollamada
 bool g_sondeando = false;
 
 // Llamada pedida y todavia no concretada: se intenta apretar el boton en
@@ -161,6 +164,10 @@ void configurar_permisos(Vista& v) {
 }
 
 void cerrar_vista(Vista& v) {
+    if (v.visible && g_ventana) {
+        DestroyWindow(g_ventana);
+        g_ventana = nullptr;
+    }
     if (v.ctrl) v.ctrl->Close();
     v.ctrl.Reset();
     v.web.Reset();
@@ -390,6 +397,8 @@ bool iniciar(HWND padre, const std::wstring& carpeta_exe) {
 
 void cerrar() {
     if (!g_activo) return;
+    if (g_ventana) DestroyWindow(g_ventana);
+    g_ventana = nullptr;
     cerrar_vista(g_llamada);
     cerrar_vista(g_principal);
     g_env.Reset();
@@ -469,17 +478,88 @@ void silenciar(bool si) {
     });
 }
 
-void mostrar_llamada(const RECT* r) {
+// La ventana propia de la videollamada: adentro va la vista (reparentada).
+static LRESULT CALLBACK proc_ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_SIZE: {
+            Vista& v = g_llamada.web ? g_llamada : g_principal;
+            if (v.hwnd && GetParent(v.hwnd) == h) {
+                RECT c;
+                GetClientRect(h, &c);
+                SetWindowPos(v.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER);
+            }
+            return 0;
+        }
+        case WM_SIZING: {
+            // Se agranda manteniendo la proporcion del area de la llamada.
+            RECT* r = (RECT*)lp;
+            RECT wr, cr;
+            GetWindowRect(h, &wr);
+            GetClientRect(h, &cr);
+            int extra_w = (wr.right - wr.left) - cr.right, extra_h = (wr.bottom - wr.top) - cr.bottom;
+            const double prop = 900.0 / 620.0;
+            int w = (r->right - r->left) - extra_w, hh = (r->bottom - r->top) - extra_h;
+            bool por_alto = wp == WMSZ_TOP || wp == WMSZ_BOTTOM;
+            if (por_alto) w = (int)(hh * prop + 0.5);
+            else hh = (int)(w / prop + 0.5);
+            if (wp == WMSZ_LEFT || wp == WMSZ_TOPLEFT || wp == WMSZ_BOTTOMLEFT) r->left = r->right - (w + extra_w);
+            else r->right = r->left + (w + extra_w);
+            if (wp == WMSZ_TOP || wp == WMSZ_TOPLEFT || wp == WMSZ_TOPRIGHT) r->top = r->bottom - (hh + extra_h);
+            else r->bottom = r->top + (hh + extra_h);
+            return TRUE;
+        }
+        case WM_CLOSE:
+            // Cerrar la ventana corta la llamada.
+            if (g_al_cerrar_ventana) g_al_cerrar_ventana();
+            return 0;
+        case WM_DESTROY:
+            g_ventana = nullptr;
+            return 0;
+    }
+    return DefWindowProcW(h, msg, wp, lp);
+}
+
+void mostrar_llamada(bool si) {
     Vista& v = g_llamada.web ? g_llamada : g_principal;
     if (!v.hwnd) return;
-    if (r) {
-        SetWindowPos(v.hwnd, HWND_TOP, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_SHOWWINDOW);
+    if (si) {
+        if (!g_ventana) {
+            static bool registrada = false;
+            if (!registrada) {
+                WNDCLASSW wc{};
+                wc.lpfnWndProc = proc_ventana;
+                wc.hInstance = GetModuleHandleW(nullptr);
+                wc.lpszClassName = L"kciwapp2-llamada";
+                wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+                wc.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1));
+                RegisterClassW(&wc);
+                registrada = true;
+            }
+            // Centrada sobre la principal.
+            RECT rp;
+            GetWindowRect(g_padre, &rp);
+            UINT dpi = GetDpiForWindow(g_padre);
+            int w = MulDiv(900, dpi, 96), h = MulDiv(620, dpi, 96);
+            int x = rp.left + ((rp.right - rp.left) - w) / 2, y = rp.top + ((rp.bottom - rp.top) - h) / 2;
+            g_ventana = CreateWindowExW(0, L"kciwapp2-llamada", L"Video call", WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr, nullptr,
+                                        GetModuleHandleW(nullptr), nullptr);
+            BOOL oscuro = TRUE;
+            DwmSetWindowAttribute(g_ventana, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &oscuro, sizeof oscuro);
+        }
+        if (GetParent(v.hwnd) != g_ventana) SetParent(v.hwnd, g_ventana);
+        RECT c;
+        GetClientRect(g_ventana, &c);
+        SetWindowPos(v.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER | SWP_SHOWWINDOW);
+        ShowWindow(g_ventana, SW_SHOW);
         v.visible = true;
         aislar_llamada(false);
     } else {
         if (v.visible) aislar_llamada(true);
+        if (GetParent(v.hwnd) != g_padre) SetParent(v.hwnd, g_padre);
         SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER);
         v.visible = false;
+        if (g_ventana) DestroyWindow(g_ventana);
+        g_ventana = nullptr;
     }
     if (v.ctrl) {
         RECT c;
@@ -487,6 +567,8 @@ void mostrar_llamada(const RECT* r) {
         v.ctrl->put_Bounds(c);
     }
 }
+
+void al_cerrar_ventana(std::function<void()> f) { g_al_cerrar_ventana = std::move(f); }
 
 void volcar_dom() {
     const wchar_t* js =
