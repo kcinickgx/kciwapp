@@ -535,6 +535,30 @@ float seccion_letras(Gfx& g, float x, float y, float ancho_contenido) {
     return y;
 }
 
+// Cuantos mensajes se cargan al abrir un chat: 200 / 1000 / 5000 / todos.
+float seccion_chat(Gfx& g, float x, float y, float ancho_contenido) {
+    y = titulo_seccion(g, x, y, L"CHAT");
+    y += 6;
+    g.renglon(L"Messages loaded per chat", x, y + (FILA - 19) / 2.0f, 14, Color(TXT()));
+    static const std::pair<int, const wchar_t*> opciones[] = {{200, L"200"}, {1000, L"1000"}, {5000, L"5000"}, {0, L"All"}};
+    float bw = 56.0f, bh = 28.0f, by = y + (FILA - bh) / 2.0f;
+    float bx = x + ancho_contenido - 4 * (bw + 6) + 6;
+    int actual = ajustes::actual().mensajes_por_chat;
+    for (auto& [valor, etiqueta] : opciones) {
+        bool activo = valor == actual;
+        g.rect_redondo(bx, by, bw, bh, 6, Color(activo ? ACCENT() : BG_CAMPO()));
+        float tw = g.medir(etiqueta, 13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        g.renglon(etiqueta, bx + (bw - tw) / 2, by + 5, 13, Color(activo ? 0x111b21 : TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        int v = valor;
+        agregar_clic(g_clics, bx, by, bw, bh, [v]() { ajustes::cambiar([v](Ajustes& a) { a.mensajes_por_chat = v; }); });
+        bx += bw + 6;
+    }
+    y += FILA;
+    g.renglon(L"\"All\" can take a while on big chats; it applies when you open a chat.", x, y, 12, Color(TXT_DIM()),
+              DWRITE_FONT_WEIGHT_NORMAL, ancho_contenido);
+    return y + 22;
+}
+
 float seccion_notificaciones(Gfx& g, float x, float y, float ancho_contenido) {
     y = titulo_seccion(g, x, y, L"NOTIFICATIONS");
     y += 6;
@@ -672,6 +696,7 @@ void dibujar_todo() {
     y = seccion_colores(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_fondo(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_letras(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
+    y = seccion_chat(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_notificaciones(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_audio(g_gfx, x, y, ancho_contenido) + PADDING;
     g_contenido_alto = y + g_scroll;

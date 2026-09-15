@@ -138,6 +138,7 @@ void cargar(const std::wstring& carpeta_exe) {
     a.letra_lista = (float)j["letra_lista"].num(15);
     a.letra_chat = (float)j["letra_chat"].num(14.5);
     a.notificaciones = j["notificaciones"].bul(true);
+    a.mensajes_por_chat = (int)j["mensajes_por_chat"].num(200);
     a.entrada = ancho(j["entrada"].str());
     a.salida = ancho(j["salida"].str());
     g_ajustes = a;
@@ -167,6 +168,7 @@ void guardar() {
     b.tipo = Json::Booleano;
     b.b = g_ajustes.notificaciones;
     j.objeto["notificaciones"] = b;
+    numero("mensajes_por_chat", g_ajustes.mensajes_por_chat);
     texto("entrada", angosto(g_ajustes.entrada));
     texto("salida", angosto(g_ajustes.salida));
     std::string s = serializar(j);

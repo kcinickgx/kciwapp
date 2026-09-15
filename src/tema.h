@@ -30,6 +30,7 @@ struct Ajustes {
     float letra_lista = 15.0f, letra_chat = 14.5f;
     bool notificaciones = true;
     std::wstring entrada, salida;     // ids WASAPI ("" = el del sistema)
+    int mensajes_por_chat = 200;      // cuantos se cargan al abrir un chat (0 = todos)
 };
 
 namespace ajustes {
