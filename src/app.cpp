@@ -908,8 +908,11 @@ bool App::aplicar_evento(const Json& e) {
         if (!chat.empty()) {
             en_memoria.erase(chat);
             en_memoria_orden.erase(std::remove(en_memoria_orden.begin(), en_memoria_orden.end(), chat), en_memoria_orden.end());
-            if (chat == chat_actual) refrescar_chat_del_server(chat);
-            else chats_para_refrescar.insert(chat);
+            if (chat == chat_actual) {
+                // Una importacion manda muchos seguidos: se junta todo en una recarga.
+                refresco_pendiente = true;
+                SetTimer(hwnd, 7, 3000, nullptr);
+            } else chats_para_refrescar.insert(chat);
         }
         return true;
     } else if (tipo == "chat" || tipo == "chats" || tipo == "contactos" || tipo == "contacto") {
@@ -2468,13 +2471,14 @@ void App::refrescar_chat_del_server(const std::string& jid) {
     std::string mio = jid;
     red::en_fondo([this, mio, cuantos] {
         Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(cuantos), 600000);
-        std::vector<Mensaje> nuevos;
+        auto nuevos = std::make_shared<std::vector<Mensaje>>();
         Json j = Json::parsear(r.cuerpo);
-        for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
+        nuevos->reserve(j.largo());
+        for (size_t i = 0; i < j.largo(); i++) nuevos->push_back(Mensaje::de_json(j[i]));
         bool ok = r.ok();
         if (ok)
-            for (size_t i = 0; i < nuevos.size(); i += 500)
-                cache::guardar_mensajes(std::vector<Mensaje>(nuevos.begin() + i, nuevos.begin() + std::min(nuevos.size(), i + 500)));
+            for (size_t i = 0; i < nuevos->size(); i += 500)
+                cache::guardar_mensajes(std::vector<Mensaje>(nuevos->begin() + i, nuevos->begin() + std::min(nuevos->size(), i + 500)));
         red::en_ui([this, mio, nuevos, ok, cuantos] {
             aviso_estado.clear();
             if (mio != chat_actual) return;
@@ -2485,8 +2489,8 @@ void App::refrescar_chat_del_server(const std::string& jid) {
                 return;
             }
             bool abajo = mensajes.empty() || al_final();
-            mensajes = nuevos;
-            hay_mas_viejos = (int)nuevos.size() >= cuantos;
+            mensajes = std::move(*nuevos);
+            hay_mas_viejos = (int)mensajes.size() >= cuantos;
             armar_vistas();
             if (abajo) bajar_al_final(true);
             else {

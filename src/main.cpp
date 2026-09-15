@@ -184,6 +184,18 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 KillTimer(h, 5);
                 app->buscar_en_chat();
             }
+            if (wp == 7 && app) {
+                KillTimer(h, 7);
+                // Recarga del chat abierto tras "historia": una sola, y recien
+                // cuando no hay otra carga en curso.
+                if (app->refresco_pendiente && !app->chat_actual.empty()) {
+                    if (app->cargando_mensajes) SetTimer(h, 7, 3000, nullptr);
+                    else {
+                        app->refresco_pendiente = false;
+                        app->refrescar_chat_del_server(app->chat_actual);
+                    }
+                }
+            }
             if (wp == 6 && app) {
                 KillTimer(h, 6);
                 // Dejamos de teclear: paused (salvo que estemos grabando).

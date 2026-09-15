@@ -188,6 +188,8 @@ struct App {
     // Chats que el server reescribio (importacion / historia): al abrirlos
     // se vuelven a traer enteros, la cache no vale.
     std::set<std::string> chats_para_refrescar;
+    // "historia" del chat abierto: se recarga una sola vez, 3 s despues del ultimo evento (timer 7).
+    bool refresco_pendiente = false;
     void refrescar_chat_del_server(const std::string& jid);
     std::vector<std::string> en_memoria_orden;  // del mas viejo al mas reciente
     void recordar_chat();
