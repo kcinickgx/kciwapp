@@ -268,6 +268,8 @@ void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
 
 // Click dentro de la tarjeta (coordenadas relativas a ella).
 void App::click_audio(int i, float rx, float ry, float w, float h) {
+    // (rx, ry) son relativas a la tarjeta; para el arrastre guardamos la
+    // onda en coordenadas absolutas.
     const Mensaje& m = mensajes[i];
     bool suena = reproduciendo_id == m.id;
     if (suena) {
@@ -285,6 +287,9 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
                 reproductor.ir_a(d * (rx - ox) / ow);
                 if (reproductor.pausado()) reproductor.reproducir();
             }
+            seek_msg = i;
+            seek_x = mouse_x - rx + ox;
+            seek_w = ow;
             pedir_dibujo();
             return;
         }

@@ -1351,6 +1351,12 @@ void App::raton_mueve(float x, float y) {
         arrastrar_barra(lista, y, top, H, lista.max + H);
         pedir_dibujo();
     }
+    if (seek_msg >= 0 && seek_w > 0) {
+        // Arrastrando sobre la onda: se sigue el mouse.
+        double d = reproductor.duracion();
+        if (d > 0) reproductor.ir_a(d * std::clamp((x - seek_x) / seek_w, 0.0f, 1.0f));
+        pedir_dibujo();
+    }
     if (campo.arrastrando) {
         campo.arrastrar(g, x, y);
         pedir_dibujo();
@@ -1519,6 +1525,7 @@ void App::raton_arriba(float, float) {
     ReleaseCapture();
     arrastrando_barra = false;
     arrastrando_lista = false;
+    seek_msg = -1;
     campo.arrastrando = false;
     buscador.arrastrando = false;
     if (sel_arrastrando) {

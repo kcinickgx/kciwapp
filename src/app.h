@@ -200,6 +200,8 @@ struct App {
     std::string reproduciendo_id;   // mensaje que suena (vacio si ninguno)
     bool bajando_audio = false;
     double velocidad_audio = 1.0;   // 1x / 1.5x / 2x, global
+    int seek_msg = -1;              // arrastrando la onda de este mensaje
+    float seek_x = 0, seek_w = 0;   // la onda en coordenadas de ventana
     enum class Grab { Nada, Grabando, Lista } grab = Grab::Nada;
     unsigned long long grab_desde = 0;
     double grab_segundos = 0;
