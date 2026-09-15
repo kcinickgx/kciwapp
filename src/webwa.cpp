@@ -211,11 +211,21 @@ void crear_vista_llamada(std::function<void()> listo) {
             // El boton "Return to WhatsApp" de la ventanita no tiene sentido
             // aca (no hay a donde volver): se esconde apenas aparezca.
             g_llamada.web->AddScriptToExecuteOnDocumentCreated(
-                L"(function(){function tapar(){document.querySelectorAll('button,[role=button],a').forEach(function(b){"
-                L"var t=((b.getAttribute('aria-label')||'')+' '+(b.innerText||'')).toLowerCase();"
-                L"if(t.indexOf('return to whatsapp')>=0||t.indexOf('volver a whatsapp')>=0||t.indexOf('back to whatsapp')>=0){"
-                L"b.style.display='none'}})}"
-                L"new MutationObserver(tapar).observe(document.documentElement,{childList:true,subtree:true});tapar()})()",
+                L"(function(){function tapar(){"
+                // Por etiqueta o icono (return / compartir pantalla).
+                L"document.querySelectorAll('button,[role=button],a').forEach(function(b){"
+                L"var t=((b.getAttribute('aria-label')||'')+' '+(b.getAttribute('title')||'')+' '+(b.innerText||'')).toLowerCase();"
+                L"var ic=b.querySelector('[data-icon]');var di=(b.getAttribute('data-icon')||(ic?ic.getAttribute('data-icon'):'')||'').toLowerCase();"
+                L"if(t.indexOf('return to whatsapp')>=0||t.indexOf('back to whatsapp')>=0||t.indexOf('share screen')>=0||t.indexOf('screen share')>=0||"
+                L"di.indexOf('share')>=0||di.indexOf('screen')>=0||di.indexOf('return')>=0)b.style.display='none'});"
+                // Por posicion: el que esta justo a la izquierda del de cortar es el de volver.
+                L"var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
+                L"if(e){var er=e.getBoundingClientRect();var fila=e;for(var i=0;i<4&&fila.parentElement;i++)fila=fila.parentElement;"
+                L"var bs=Array.prototype.filter.call(fila.querySelectorAll('button,[role=button]'),function(x){var r=x.getBoundingClientRect();"
+                L"return r.width>0&&x!==e&&!x.contains(e)&&!e.contains(x)&&Math.abs((r.top+r.height/2)-(er.top+er.height/2))<er.height&&r.right<=er.left+2});"
+                L"if(bs.length){bs.sort(function(a,c){return a.getBoundingClientRect().left-c.getBoundingClientRect().left});"
+                L"var u=bs[bs.length-1];if(er.left-u.getBoundingClientRect().right<40)u.style.display='none';}}}"
+                L"new MutationObserver(tapar).observe(document.documentElement,{childList:true,subtree:true});setInterval(tapar,500);tapar()})()",
                 nullptr);
             EventRegistrationToken t;
             // WhatsApp Web cierra la ventanita al cortar.
