@@ -567,7 +567,8 @@ float seccion_audio(Gfx& g, float x, float y, float ancho_contenido) {
         g.rect_redondo(cx, cy, cw, ch, 6, Color(BG_CAMPO()));
         g.borde_redondo(cx, cy, cw, ch, 6, Color(BORDE()), 1.0f);
         g.renglon(nombre, cx + 10, cy + (ch - 13.5f) / 2.0f, 13.5f, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, cw - 40);
-        centrado(g, L"▾", cx + cw - 14, cy + 6, 13, Color(TXT_DIM()));
+        bool abierto = g_desplegable.abierto && g_desplegable.entrada == entrada;
+        centrado(g, abierto ? L"▴" : L"▾", cx + cw - 14, cy + 6, 13, Color(TXT_DIM()));
         agregar_clic(g_clics, cx, cy, cw, ch, [entrada, lista, cx, cy, ch]() { desplegar_audio(entrada, lista, cx, cy + ch); });
         y += FILA;
     };
