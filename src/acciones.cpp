@@ -381,7 +381,11 @@ void App::agregar_mensaje(const Mensaje& m) {
     bool abajo = al_final();
     mensajes.push_back(m);
     vistas.emplace_back();
-    armar_vista(mensajes.size() - 1);
+    // Puede cerrar (o alargar) un album con las fotos anteriores.
+    size_t n = mensajes.size();
+    marcar_albumes(n > 40 ? n - 40 : 0);
+    for (size_t k = n > 40 ? n - 40 : 0; k < n; k++)
+        if (k + 1 == n || mensajes[k].album != 0) armar_vista(k);
     recalcular_inicios();
     conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
     if (abajo || m.propio) bajar_al_final(false);

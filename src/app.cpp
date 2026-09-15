@@ -666,6 +666,7 @@ void App::anteponer(const std::vector<Mensaje>& viejos, bool armar) {
     mensajes.insert(mensajes.begin(), limpios.begin(), limpios.end());
     vistas.insert(vistas.begin(), limpios.size(), VistaMensaje());
     layout_pendiente += limpios.size();
+    marcar_albumes();
     if (sel_msg >= 0) sel_msg += (int)limpios.size();
     if (!armar) {
         // Los layouts se arman una sola vez al final (lanzar_armado copia todo
@@ -1010,6 +1011,7 @@ bool App::aplicar_evento(const Json& e) {
 // ---- layout de mensajes ---------------------------------------------------
 
 void App::armar_vistas() {
+    marcar_albumes();
     vistas.assign(mensajes.size(), VistaMensaje());
     layout_pendiente = mensajes.size();
     // Lo ultimo (lo que se ve) se arma ya; el resto, en hilos de fondo.
@@ -1140,6 +1142,59 @@ void App::rearmar_si_liviana(size_t i) {
     }
 }
 
+// Agrupa en albumes: 3 o mas fotos seguidas del mismo remitente, sin texto,
+// con menos de 60 s entre una y otra. Se recalcula desde `desde` (0 = todo).
+void App::marcar_albumes(size_t desde) {
+    if (desde > 0) {
+        // Arrancar en la cabeza del album que contiene `desde`, si esta adentro de uno.
+        while (desde > 0 && mensajes[desde].album == -1) desde--;
+        if (desde > 0) desde--;
+    }
+    size_t n = mensajes.size(), i = desde;
+    auto foto = [](const Mensaje& m) { return m.tipo == "imagen" && m.media && m.texto.empty() && !m.borrado; };
+    while (i < n) {
+        if (!foto(mensajes[i])) {
+            mensajes[i].album = 0;
+            i++;
+            continue;
+        }
+        size_t j = i + 1;
+        while (j < n && foto(mensajes[j]) && mensajes[j].remitente == mensajes[i].remitente &&
+               mensajes[j].ts - mensajes[j - 1].ts <= 60000)
+            j++;
+        size_t cuantos = j - i;
+        if (cuantos >= 3) {
+            mensajes[i].album = (int)cuantos;
+            for (size_t k = i + 1; k < j; k++) mensajes[k].album = -1;
+        } else {
+            for (size_t k = i; k < j; k++) mensajes[k].album = 0;
+        }
+        i = j;
+    }
+}
+
+// Una foto cubriendo el rectangulo (la completa si esta bajada, si no la miniatura).
+void App::dibujar_foto(const Mensaje& m, float x, float y, float w, float h, float radio) {
+    if (!m.media) return;
+    std::string clave_media = "media:" + std::to_string(m.media->id);
+    Imagen& im = imagen(clave_media, L"/media/" + std::to_wstring(m.media->id), false);
+    ID2D1Bitmap1* b = im.cuadro_actual(g, ahora);
+    if (!b && m.media->miniatura) {
+        Imagen& mini = imagen("mini:" + std::to_string(m.media->id), L"/miniatura/" + std::to_wstring(m.media->id), false);
+        b = mini.bmp.Get();
+    }
+    g.recortar_redondo(x, y, w, h, radio);
+    if (b) {
+        D2D1_SIZE_F t = b->GetSize();
+        float esc = std::max(w / t.width, h / t.height);
+        float dw = t.width * esc, dh = t.height * esc;
+        g.bitmap(b, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    } else {
+        g.rect(x, y, w, h, Color(0x000000, 0.2f));
+    }
+    g.destapar_redondo();
+}
+
 void App::armar_vista(size_t i) {
     const Chat* c = chat_de(mensajes[i].chat);
     armar_vista_core(mensajes[i], i > 0 ? &mensajes[i - 1] : nullptr, c && c->es_grupo,
@@ -1149,6 +1204,12 @@ void App::armar_vista(size_t i) {
 void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_grupo,
                            const std::function<std::wstring(const std::string&)>& nombre_de, float W, VistaMensaje& v) {
     v = VistaMensaje();
+    if (m.album == -1) {
+        // Miembro de un album: lo dibuja la cabeza. Sin alto, no ocupa lugar.
+        v.ancho_para = W;
+        v.alto = 0;
+        return;
+    }
     v.ancho_para = W;
     float tope = std::round(W * (W < 760 ? 0.84f : 0.68f) / 10) * 10;
     tope = std::min(tope, 720.0f);
@@ -1195,7 +1256,14 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
     }
     bool media_visual = m.media && con_imagen(m.tipo) && !m.borrado;
     if (media_visual) {
-        if (m.tipo == "figurita") {
+        if (m.album > 0) {
+            // Grilla: 2 columnas hasta 4 fotos, 3 de ahi en mas; casilleros cuadrados.
+            int cols = m.album <= 4 ? 2 : 3, filas = (m.album + cols - 1) / cols;
+            v.mw = std::min(interior, 340.0f);
+            float gap = 3, lado = (v.mw - gap * (cols - 1)) / cols;
+            v.mh = filas * lado + gap * (filas - 1);
+            v.album_cols = cols;
+        } else if (m.tipo == "figurita") {
             v.mw = v.mh = 160;
         } else {
             v.mw = std::min(interior, 340.0f);
@@ -2088,7 +2156,14 @@ void App::dibujar_mensaje(size_t i, float y) {
     if (v.mw > 0) {
         cx = bx + v.mx;
         cy = by + v.my;
-        if (con_imagen(m.tipo) && m.media) {
+        if (m.album > 0 && v.album_cols > 0) {
+            int cols = v.album_cols;
+            float gap = 3, lado = (v.mw - gap * (cols - 1)) / cols;
+            for (int k = 0; k < m.album && i + k < mensajes.size(); k++) {
+                float fx = cx + (k % cols) * (lado + gap), fy = cy + (k / cols) * (lado + gap);
+                dibujar_foto(mensajes[i + k], fx, fy, lado, lado, 4);
+            }
+        } else if (con_imagen(m.tipo) && m.media) {
             std::string clave_mini = "mini:" + std::to_string(m.media->id);
             std::string clave_media = "media:" + std::to_string(m.media->id);
             bool animado = m.tipo == "figurita" || m.tipo == "gif";
@@ -2448,7 +2523,13 @@ void App::raton_abajo(float x, float y, bool shift) {
             if (v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh) {
                 if ((mensajes[i].tipo == "audio" || mensajes[i].tipo == "nota") && reproductor_ok)
                     click_audio(i, x - mx, y - my, v.mw, v.mh);
-                else
+                else if (mensajes[i].album > 0 && v.album_cols > 0) {
+                    int cols = v.album_cols;
+                    float gap = 3, lado = (v.mw - gap * (cols - 1)) / cols;
+                    int col = (int)((x - mx) / (lado + gap)), fila = (int)((y - my) / (lado + gap));
+                    int k = fila * cols + col;
+                    if (k >= 0 && k < mensajes[i].album && i + k < (int)mensajes.size()) abrir_media(i + k);
+                } else
                     abrir_media(i);
             }
         }

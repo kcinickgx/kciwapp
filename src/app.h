@@ -39,6 +39,10 @@ struct Mensaje {
     std::string tipo;
     std::wstring texto;
     std::wstring texto_oculto;  // transcripcion escondida con el toggle (solo en memoria)
+    // Album: varias fotos seguidas del mismo remitente se muestran en una
+    // grilla. > 0 = cabeza con N fotos (esta y las N-1 siguientes); -1 = miembro
+    // (no se dibuja); 0 = suelta. Lo calcula marcar_albumes().
+    int album = 0;
     std::string cita_id, cita_remitente;
     std::wstring cita_texto;
     bool editado = false, borrado = false, reenviado = false;
@@ -122,6 +126,7 @@ struct VistaMensaje {
     // mensaje queda lejos de la vista (son lo que mas RAM come); el alto y
     // las medidas quedan, y se rearman al volver a verse.
     bool liviana = false;
+    int album_cols = 0;     // columnas de la grilla (cabeza de album)
     // Links dentro del texto: rango en el layout y la URL.
     struct Enlace {
         size_t inicio, largo;
@@ -327,6 +332,8 @@ struct App {
     void dibujar_progreso_carga();
     // Suelta los layouts de los mensajes lejos de lo visible (cada tanto).
     void aliviar_vistas(size_t visible_desde, size_t visible_hasta);
+    void marcar_albumes(size_t desde = 0);
+    void dibujar_foto(const Mensaje& m, float x, float y, float w, float h, float radio);
     void rearmar_si_liviana(size_t i);
     // Transcripcion de notas de voz con whisper.cpp (portable\whisper\), a pedido.
     std::set<std::string> transcribiendo;  // ids en curso
