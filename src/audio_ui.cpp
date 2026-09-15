@@ -272,14 +272,18 @@ void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
         swprintf(buf, 8, velocidad_audio == 1.5 ? L"1.5x" : (velocidad_audio == 2.0 ? L"2x" : L"1x"));
         float tw = g.medir(buf, 12, DWRITE_FONT_WEIGHT_SEMI_BOLD);
         g.renglon(buf, vx + (AUDIO_VEL_W - tw) / 2, vy + 4, 12, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
-        // Transcribir (whisper), debajo: solo si no hay texto todavia.
-        if (m.texto.empty() && whisper_disponible()) {
+        // Transcripcion (whisper), debajo: sin texto = transcribir; con texto =
+        // prendida (se puede esconder); escondida = apagada.
+        if (whisper_disponible() || !m.texto.empty() || !m.texto_oculto.empty()) {
             bool en_curso = transcribiendo.count(m.id) > 0;
+            bool visible = !m.texto.empty(), escondida = !visible && !m.texto_oculto.empty();
             float ty = cy + h - 22;
-            g.rect_redondo(vx, ty, AUDIO_VEL_W, 18, 9, Color(TXT_DIM(), en_curso ? 0.2f : 0.35f));
+            Color fondo = visible ? Color(ACCENT(), 0.85f) : Color(TXT_DIM(), en_curso ? 0.2f : (escondida ? 0.25f : 0.35f));
+            g.rect_redondo(vx, ty, AUDIO_VEL_W, 18, 9, fondo);
             const wchar_t* ic = en_curso ? L"\uE895" : L"\uED1E";  // Sync / Subtitles
             float iw = g.medir_fuente(L"Segoe MDL2 Assets", ic, 12);
-            g.renglon_fuente(L"Segoe MDL2 Assets", ic, vx + (AUDIO_VEL_W - iw) / 2, ty + 3, 12, Color(TXT(), en_curso ? 0.6f : 1.0f));
+            g.renglon_fuente(L"Segoe MDL2 Assets", ic, vx + (AUDIO_VEL_W - iw) / 2, ty + 3, 12,
+                             Color(visible ? 0xffffff : TXT(), en_curso ? 0.6f : (escondida ? 0.7f : 1.0f)));
         }
     }
 }
@@ -292,8 +296,9 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
     bool suena = reproduciendo_id == m.id;
     {
         float vx = w - AUDIO_ONDA_DER - AUDIO_VEL_W;
-        if (rx >= vx && ry >= h - 24 && m.texto.empty() && whisper_disponible()) {
-            transcribir(i);
+        if (rx >= vx && ry >= h - 24) {
+            if (!m.texto.empty() || !m.texto_oculto.empty()) alternar_transcripcion(i);
+            else if (whisper_disponible()) transcribir(i);
             return;
         }
         if (rx >= vx && ry >= 8 && ry <= 40) {
@@ -405,4 +410,29 @@ void App::transcribir(int i) {
             pedir_dibujo();
         });
     });
+}
+
+// Esconde o vuelve a mostrar la transcripcion de un audio (solo en memoria:
+// al recargar el chat vuelve a verse).
+void App::alternar_transcripcion(int i) {
+    if (i < 0 || i >= (int)mensajes.size()) return;
+    Mensaje& m = mensajes[i];
+    if (!m.texto.empty()) {
+        m.texto_oculto = m.texto;
+        m.texto.clear();
+    } else if (!m.texto_oculto.empty()) {
+        m.texto = m.texto_oculto;
+        m.texto_oculto.clear();
+    } else return;
+    float antes = vistas[i].alto;
+    armar_vista(i);
+    double d = vistas[i].alto - antes;
+    recalcular_inicios();
+    conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
+    // Si el mensaje esta arriba de lo que se ve, la vista no se mueve.
+    if (y_de((size_t)i) < alto_cabecera()) {
+        conv.pos += d;
+        conv.objetivo += d;
+    }
+    pedir_dibujo();
 }

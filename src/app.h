@@ -38,6 +38,7 @@ struct Mensaje {
     long long ts = 0;
     std::string tipo;
     std::wstring texto;
+    std::wstring texto_oculto;  // transcripcion escondida con el toggle (solo en memoria)
     std::string cita_id, cita_remitente;
     std::wstring cita_texto;
     bool editado = false, borrado = false, reenviado = false;
@@ -331,6 +332,7 @@ struct App {
     std::set<std::string> transcribiendo;  // ids en curso
     bool whisper_disponible() const;
     void transcribir(int i);
+    void alternar_transcripcion(int i);
     void dibujar_vinculacion();
     void terminar_llamada_ui();
     void colgar_llamada();
