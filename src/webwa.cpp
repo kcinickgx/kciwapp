@@ -214,7 +214,7 @@ void crear_vista_llamada(std::function<void()> listo) {
                 L"(function(){function tapar(){document.querySelectorAll('button,[role=button],a').forEach(function(b){"
                 L"var t=((b.getAttribute('aria-label')||'')+' '+(b.innerText||'')).toLowerCase();"
                 L"if(t.indexOf('return to whatsapp')>=0||t.indexOf('volver a whatsapp')>=0||t.indexOf('back to whatsapp')>=0){"
-                L"var p=b.closest('[role=dialog]')||b;p.style.display='none'}})}"
+                L"b.style.display='none'}})}"
                 L"new MutationObserver(tapar).observe(document.documentElement,{childList:true,subtree:true});tapar()})()",
                 nullptr);
             EventRegistrationToken t;
