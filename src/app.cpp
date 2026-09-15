@@ -1727,20 +1727,25 @@ void App::cargar_todo_el_chat() {
             if (mio == chat_actual) todo_total = std::max(total, todo_cargado);
             pedir_dibujo();
         });
-        // Primero lo que ya tiene la cache, de a 5000 para que la barra avance.
-        while (viejo > 0) {
-            std::vector<Mensaje> resto = cache::leer_mensajes(mio, viejo, 5000);
-            if (resto.empty()) break;
-            viejo = resto.front().ts;
-            bool ultimo = resto.size() < 5000;
-            red::en_ui([this, mio, resto] {
-                if (mio != chat_actual) return;
-                anteponer(resto, false);
-                todo_cargado += (long long)resto.size();
+        // Las tandas (cada una mas vieja que la anterior) se juntan aca y se
+        // meten en la conversacion de una sola vez al final: la barra solo
+        // cuenta. Insertar y rearmar por tanda era lo que lo hacia lento.
+        std::vector<std::vector<Mensaje>> tandas;
+        auto avisar = [this, mio](long long n) {
+            red::en_ui([this, mio, n] {
+                if (mio == chat_actual) todo_cargado += n;
                 pedir_dibujo();
             });
+        };
+        // Primero lo que ya tiene la cache.
+        while (viejo > 0) {
+            std::vector<Mensaje> resto = cache::leer_mensajes(mio, viejo, 20000);
+            if (resto.empty()) break;
+            viejo = resto.front().ts;
+            bool ultimo = resto.size() < 20000;
+            avisar((long long)resto.size());
+            tandas.push_back(std::move(resto));
             if (ultimo) break;
-            Sleep(15);  // que se vea
         }
         bool agotado = false, fallo = false;
         for (;;) {
@@ -1759,23 +1764,23 @@ void App::cargar_todo_el_chat() {
             agotado = viejos.size() < 20000;
             if (viejos.empty()) break;
             viejo = viejos.front().ts;
-            bool seguir = true;
-            red::en_ui([this, mio, viejos] {
-                if (mio != chat_actual) return;
-                anteponer(viejos, false);
-                todo_cargado += (long long)viejos.size();
-                pedir_dibujo();
-            });
-            (void)seguir;
+            avisar((long long)viejos.size());
+            tandas.push_back(std::move(viejos));
             if (agotado) break;
         }
-        red::en_ui([this, mio, agotado, fallo] {
+        // De la mas vieja a la mas nueva, en un solo vector.
+        auto todo = std::make_shared<std::vector<Mensaje>>();
+        size_t n = 0;
+        for (auto& t : tandas) n += t.size();
+        todo->reserve(n);
+        for (size_t k = tandas.size(); k-- > 0;) todo->insert(todo->end(), tandas[k].begin(), tandas[k].end());
+        red::en_ui([this, mio, todo, agotado, fallo] {
             if (mio == chat_actual) {
+                anteponer(*todo);
                 cargando_mensajes = false;
                 hay_mas_viejos = fallo ? true : !agotado;
                 if (fallo) aviso_estado = L"Cannot reach the server";
                 if (!fallo) todo_total = todo_cargado;  // 100%
-                lanzar_armado();
             }
             cargando_todo = false;
             todo_fin = GetTickCount64();
