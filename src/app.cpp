@@ -540,24 +540,27 @@ void App::abrir_chat(const std::string& jid) {
             });
         }
         bool agotado = false;
-        if (cuantos > total) {
-            int faltan = std::min(cuantos - total, 100000);
+        // Del server, de a paginas de 20k, hasta completar lo pedido o agotar el chat.
+        while (cuantos > total) {
+            int faltan = std::min(cuantos - total, 20000);
             std::wstring url = L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(faltan);
             if (mas_viejo > 0) url += L"&antes=" + std::to_wstring(mas_viejo);
             Respuesta r = red::obtener(url, 300000);
+            if (!r.ok()) break;
             std::vector<Mensaje> viejos;
-            if (r.ok()) {
-                Json j = Json::parsear(r.cuerpo);
-                for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
-                for (size_t i = 0; i < viejos.size(); i += 500)
-                    cache::guardar_mensajes(std::vector<Mensaje>(viejos.begin() + i, viejos.begin() + std::min(viejos.size(), i + 500)));
-                agotado = (int)viejos.size() < faltan;
-            }
-            if (!viejos.empty())
-                red::en_ui([this, mio, viejos] {
-                    if (mio != chat_actual) return;
-                    anteponer(viejos);
-                });
+            Json j = Json::parsear(r.cuerpo);
+            for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
+            for (size_t i = 0; i < viejos.size(); i += 500)
+                cache::guardar_mensajes(std::vector<Mensaje>(viejos.begin() + i, viejos.begin() + std::min(viejos.size(), i + 500)));
+            agotado = (int)viejos.size() < faltan;
+            if (viejos.empty()) break;
+            total += (int)viejos.size();
+            mas_viejo = viejos.front().ts;
+            red::en_ui([this, mio, viejos] {
+                if (mio != chat_actual) return;
+                anteponer(viejos);
+            });
+            if (agotado) break;
         }
         red::en_ui([this, mio, agotado] {
             if (mio != chat_actual) return;
@@ -611,7 +614,8 @@ void App::cargar_mas_viejos() {
     cargando_mensajes = true;
     std::string mio = chat_actual;
     long long antes = mensajes.front().ts;
-    int cuantos = std::max(60, std::min(ajustes::actual().mensajes_por_chat, 2000));
+    int pref = ajustes::actual().mensajes_por_chat;
+    int cuantos = pref <= 0 ? 5000 : std::max(60, std::min(pref, 2000));
     red::en_fondo([this, mio, antes, cuantos] {
         // Si la cache tiene una pagina entera anterior, va esa; si no, el server.
         std::vector<Mensaje> viejos = cache::leer_mensajes(mio, antes, cuantos);
