@@ -4,6 +4,7 @@
 #include <cmath>
 #include <map>
 #include <memory>
+#include <set>
 #include <optional>
 #include <string>
 #include <vector>
@@ -171,6 +172,10 @@ struct App {
         bool hay_mas_viejos = true;
     };
     std::map<std::string, ChatEnMemoria> en_memoria;
+    // Chats que el server reescribio (importacion / historia): al abrirlos
+    // se vuelven a traer enteros, la cache no vale.
+    std::set<std::string> chats_para_refrescar;
+    void refrescar_chat_del_server(const std::string& jid);
     std::vector<std::string> en_memoria_orden;  // del mas viejo al mas reciente
     void recordar_chat();
     // Agrega mensajes viejos arriba sin mover la vista (layouts lazy).

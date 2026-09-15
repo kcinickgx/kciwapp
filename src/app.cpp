@@ -449,6 +449,11 @@ void App::abrir_chat(const std::string& jid) {
     for (auto& c : chats)
         if (c.jid == jid) ultimo_lista = c.ultimo_ts;
 
+    // Si el server lo reescribio, se trae de nuevo entero.
+    if (chats_para_refrescar.count(jid)) {
+        refrescar_chat_del_server(jid);
+        return;
+    }
     // Si ya lo tuvimos abierto, esta en memoria: se muestra ya.
     auto em = en_memoria.find(jid);
     if (em != en_memoria.end()) {
@@ -818,7 +823,16 @@ bool App::aplicar_evento(const Json& e) {
             imagenes.erase("media:" + std::to_string(id));
             imagenes.erase("mini:" + std::to_string(id));
         }
-    } else if (tipo == "chat" || tipo == "chats" || tipo == "contactos" || tipo == "contacto" || tipo == "historia") {
+    } else if (tipo == "historia") {
+        // El server cambio la historia de ese chat: lo cacheado no alcanza.
+        if (!chat.empty()) {
+            en_memoria.erase(chat);
+            en_memoria_orden.erase(std::remove(en_memoria_orden.begin(), en_memoria_orden.end(), chat), en_memoria_orden.end());
+            if (chat == chat_actual) refrescar_chat_del_server(chat);
+            else chats_para_refrescar.insert(chat);
+        }
+        return true;
+    } else if (tipo == "chat" || tipo == "chats" || tipo == "contactos" || tipo == "contacto") {
         return true;
     } else if (tipo == "leido") {
         for (auto& c : chats)
@@ -2047,4 +2061,47 @@ bool App::sobre_clickeable(float x, float y) {
     const VistaMensaje& v = vistas[i];
     float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
     return v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh;  // foto, video, audio, documento
+}
+
+// Trae del server los ultimos N del chat (segun Preload), pisa la cache y
+// lo muestra. Para cuando la historia cambio del lado del server.
+void App::refrescar_chat_del_server(const std::string& jid) {
+    chats_para_refrescar.erase(jid);
+    int cuantos = ajustes::actual().mensajes_por_chat;
+    if (cuantos <= 0) cuantos = 1000000;
+    cargando_mensajes = true;
+    aviso_estado = L"Refreshing chat...";
+    pedir_dibujo();
+    std::string mio = jid;
+    red::en_fondo([this, mio, cuantos] {
+        Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(cuantos), 600000);
+        std::vector<Mensaje> nuevos;
+        Json j = Json::parsear(r.cuerpo);
+        for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
+        bool ok = r.ok();
+        if (ok)
+            for (size_t i = 0; i < nuevos.size(); i += 500)
+                cache::guardar_mensajes(std::vector<Mensaje>(nuevos.begin() + i, nuevos.begin() + std::min(nuevos.size(), i + 500)));
+        red::en_ui([this, mio, nuevos, ok, cuantos] {
+            aviso_estado.clear();
+            if (mio != chat_actual) return;
+            cargando_mensajes = false;
+            if (!ok) {
+                aviso_estado = L"Cannot reach the server";
+                pedir_dibujo();
+                return;
+            }
+            bool abajo = mensajes.empty() || al_final();
+            mensajes = nuevos;
+            hay_mas_viejos = (int)nuevos.size() >= cuantos;
+            armar_vistas();
+            if (abajo) bajar_al_final(true);
+            else {
+                recalcular_inicios();
+                conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
+                conv.limitar();
+            }
+            pedir_dibujo();
+        });
+    });
 }
