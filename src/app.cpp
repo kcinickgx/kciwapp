@@ -380,6 +380,25 @@ void App::cargar_chats() {
                 escuchar_eventos();
             }
             aviso_estado = conectado ? L"" : L"Server not connected to WhatsApp";
+            // Hubo una importacion masiva en el server: la cache de mensajes
+            // ya no refleja lo que hay (mensajes nuevos en el medio, media
+            // pegada a mensajes viejos). Se tira y se vuelve a pedir de a
+            // paginas, como la primera vez. Los archivos locales de media
+            // quedan (van por id de media, que no cambia).
+            std::string importacion = je["importacion"].str();
+            if (!importacion.empty() && importacion != cache::valor("importacion")) {
+                cache::guardar_valor("importacion", importacion);
+                std::string abierto = chat_actual;
+                cache::borrar_mensajes();  // sincrono: abrir_chat lee la cache enseguida
+                en_memoria.clear();
+                en_memoria_orden.clear();
+                if (!abierto.empty()) {
+                    chat_actual.clear();
+                    mensajes.clear();
+                    vistas.clear();
+                    abrir_chat(abierto);
+                }
+            }
             for (size_t i = 0; i < jc.largo(); i++) {
                 const Json& c = jc[i];
                 Contacto k;

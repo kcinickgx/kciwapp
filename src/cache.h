@@ -31,6 +31,8 @@ void guardar_mensajes(const std::vector<Mensaje>& mensajes);
 // sea los ultimos `limite`), devueltos en orden cronologico ascendente.
 std::vector<Mensaje> leer_mensajes(const std::string& chat, long long antes_ts, int limite);
 bool hay_mensaje(const std::string& chat, const std::string& id);
+// Tira todos los mensajes guardados (tras una importacion masiva en el server).
+void borrar_mensajes();
 void marcar_borrado(const std::string& chat, const std::string& id);
 void editar_texto(const std::string& chat, const std::string& id, const std::wstring& texto);
 // El estado solo sube (nunca pisa un estado mas alto con uno mas bajo).

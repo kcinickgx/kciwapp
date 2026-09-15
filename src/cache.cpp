@@ -664,6 +664,12 @@ bool hay_mensaje(const std::string& chat, const std::string& id) {
     return st.fila();
 }
 
+void borrar_mensajes() {
+    std::lock_guard<std::mutex> l(g_mu);
+    if (!g_db) return;
+    ejecutar("DELETE FROM mensajes;");
+}
+
 void marcar_borrado(const std::string& chat, const std::string& id) {
     std::lock_guard<std::mutex> l(g_mu);
     if (!g_db) return;
