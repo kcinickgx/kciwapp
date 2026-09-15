@@ -157,8 +157,7 @@ void registrar(const std::string& linea) {
     if (f) {
         SYSTEMTIME t;
         GetLocalTime(&t);
-        fprintf(f, "%02d:%02d:%02d.%03d %s
-", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, linea.c_str());
+        fprintf(f, "%02d:%02d:%02d.%03d %s\n", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, linea.c_str());
         fclose(f);
     }
 }
