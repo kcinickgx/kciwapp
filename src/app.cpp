@@ -904,6 +904,8 @@ void App::dibujar_lista() {
     // Cabecera de la lista: titulo, aviso y buscador.
     g.rect(0, 0, W, top, Color(BG_PANEL()));
     g.renglon(reenviando ? L"Forward to..." : L"Chats", 16, 17, 20, Color(reenviando ? ACCENT() : TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    // El engranaje de settings, arriba a la derecha de la lista.
+    g.renglon(L"⚙", W - 42, 16, 22, Color(TXT_DIM()));
     if (!aviso_estado.empty()) g.renglon(aviso_estado, 90, 22, 12, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
     g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO()));
     g.renglon(L"\U0001F50D", 22, 67, 14, Color(TXT_DIM()));
@@ -1055,7 +1057,6 @@ void App::dibujar_cabecera() {
     g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
     std::wstring sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
     g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
-    g.renglon(L"\u2699", x + W - 40, 16, 22, Color(TXT_DIM()));
 }
 
 void App::dibujar_pie() {
@@ -1389,6 +1390,10 @@ void App::raton_abajo(float x, float y, bool shift) {
     buscador.foco = false;
     emoji_buscador.foco = false;
     if (x < ancho_lista) {
+        if (y < 60 && x > ancho_lista - 56) {
+            ventana_ajustes::abrir(hwnd);
+            return;
+        }
         if (y > top_lista() && lista.max > 0 && x > ancho_lista - 24) {
             float top = top_lista(), H = g.alto - top;
             arrastrando_lista = true;
@@ -1417,8 +1422,7 @@ void App::raton_abajo(float x, float y, bool shift) {
     float top = alto_cabecera(), bottom = g.alto - alto_pie;
     float W = w_conv();
     if (y < top && !chat_actual.empty()) {
-        if (x > x_conv() + W - 50) ventana_ajustes::abrir(hwnd);
-        else abrir_info(chat_actual);
+        abrir_info(chat_actual);
         return;
     }
     // El boton de ir al final.
