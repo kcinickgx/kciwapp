@@ -260,6 +260,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
 
     App app;
     g_app = nullptr;
+    // Una sola instancia: si ya hay una, se la trae al frente y listo (dos
+    // procesos se pisarian la cache y el cursor de eventos).
+    HANDLE unica = CreateMutexW(nullptr, TRUE, L"Local\kciwapp2-instancia");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        if (HWND otra = FindWindowW(L"kciwapp2", nullptr)) {
+            if (IsIconic(otra)) ShowWindow(otra, SW_RESTORE);
+            SetForegroundWindow(otra);
+        }
+        return 0;
+    }
+    (void)unica;
     ajustes::cargar(carpeta_exe());
     HWND h = CreateWindowExW(0, L"kciwapp2", L"kciwapp", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                              (int)(1100 * 1.0f), (int)(760 * 1.0f), nullptr, nullptr, inst, nullptr);
