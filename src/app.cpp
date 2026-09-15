@@ -1437,7 +1437,6 @@ void App::dibujar_pie() {
             g.renglon(ancho(adjunto->nombre), x + 72, yy + 14, 14, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 160);
             g.renglon(std::to_wstring(adjunto->datos.size() / 1024) + L" KB", x + 72, yy + 36, 12, Color(TXT_DIM()));
         }
-        g.renglon(L"Enter to send, Esc to discard", x + 24, yy + ADJUNTO_H - 30, 12, Color(TXT_DIM()));
         if (adjunto->vista) {
             // Mandar como sticker en vez de foto.
             bool sticker = adjunto->tipo == "figurita";
