@@ -246,6 +246,14 @@ bool Campo::tecla(Gfx& g, WPARAM vk, bool shift, bool ctrl) {
             if (al_cambiar) al_cambiar();
             return true;
         case VK_DELETE:
+            // Shift+Delete corta.
+            if (shift && hay_seleccion()) {
+                copiar();
+                borrar_seleccion();
+                ultimo_movimiento = GetTickCount64();
+                if (al_cambiar) al_cambiar();
+                return true;
+            }
             if (hay_seleccion()) borrar_seleccion();
             else if (cursor < texto.size()) texto.erase(cursor, cluster_adelante(texto, cursor) - cursor);
             ultimo_movimiento = GetTickCount64();
@@ -269,6 +277,11 @@ bool Campo::tecla(Gfx& g, WPARAM vk, bool shift, bool ctrl) {
             return false;
         case 'V':
             if (ctrl) { pegar(); return true; }
+            return false;
+        case VK_INSERT:
+            // Shift+Insert pega, Ctrl+Insert copia (los atajos viejos de Windows).
+            if (shift) { pegar(); return true; }
+            if (ctrl) { copiar(); return true; }
             return false;
     }
     return false;

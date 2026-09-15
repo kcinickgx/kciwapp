@@ -2028,8 +2028,14 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
         pedir_dibujo();
         return;
     }
-    if (ctrl && vk == 'V' && campo.foco) {
-        pegar();
+    if ((ctrl && vk == 'V') || (shift && vk == VK_INSERT)) {
+        if (campo.foco) {
+            pegar();
+            return;
+        }
+    }
+    if (ctrl && vk == VK_INSERT && sel_msg >= 0 && sel_a != sel_b && !campo.hay_seleccion()) {
+        copiar_seleccion();
         return;
     }
     if (ctrl && vk == 'C' && sel_msg >= 0 && sel_a != sel_b && !campo.hay_seleccion()) {
