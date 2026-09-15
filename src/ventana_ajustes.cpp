@@ -328,28 +328,70 @@ std::vector<grabador::Dispositivo> construir_lista_audio(bool entrada) {
     return r;
 }
 
-// Menu con los dispositivos; el elegido se aplica en el acto.
+// El desplegable de dispositivos, dibujado por nosotros con los colores del
+// tema (el menu nativo no se puede pintar). Un click en la caja lo abre; otro
+// click en la caja, o afuera, lo cierra.
+struct Desplegable {
+    bool abierto = false;
+    bool entrada = false;
+    std::vector<grabador::Dispositivo>* lista = nullptr;
+    float x = 0, y = 0, w = 0;       // la caja que lo abrio
+    float lx = 0, ly = 0, lw = 0, lh = 0;  // la lista desplegada
+};
+Desplegable g_desplegable;
+const float ITEM_DESP = 32.0f;
+
 void desplegar_audio(bool entrada, std::vector<grabador::Dispositivo>* lista, float x, float y) {
-    HMENU menu = CreatePopupMenu();
-    std::wstring actual_id = entrada ? ajustes::actual().entrada : ajustes::actual().salida;
-    AppendMenuW(menu, MF_STRING | (actual_id.empty() ? MF_CHECKED : 0), 1, L"System default");
-    for (size_t i = 0; i < lista->size(); i++) {
-        const auto& d = (*lista)[i];
-        if (d.id.empty()) continue;
-        AppendMenuW(menu, MF_STRING | (d.id == actual_id ? MF_CHECKED : 0), (UINT_PTR)(i + 2), d.nombre.c_str());
+    if (g_desplegable.abierto && g_desplegable.entrada == entrada) {
+        g_desplegable.abierto = false;
+        return;
     }
-    float e = GetDpiForWindow(g_hwnd) / 96.0f;
-    POINT p = {(LONG)(x * e), (LONG)(y * e)};
-    ClientToScreen(g_hwnd, &p);
-    int id = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN, p.x, p.y, 0, g_hwnd, nullptr);
-    DestroyMenu(menu);
-    if (id <= 0) return;
-    std::wstring nuevo = id == 1 ? L"" : (*lista)[id - 2].id;
-    ajustes::cambiar([entrada, nuevo](Ajustes& a) {
-        if (entrada) a.entrada = nuevo;
-        else a.salida = nuevo;
+    g_desplegable.abierto = true;
+    g_desplegable.entrada = entrada;
+    g_desplegable.lista = lista;
+    g_desplegable.x = x;
+    g_desplegable.y = y;
+}
+
+void elegir_audio(bool entrada, const std::wstring& id) {
+    ajustes::cambiar([entrada, id](Ajustes& a) {
+        if (entrada) a.entrada = id;
+        else a.salida = id;
     });
-    InvalidateRect(g_hwnd, nullptr, FALSE);
+}
+
+void dibujar_desplegable(Gfx& g) {
+    Desplegable& d = g_desplegable;
+    int n = 1;
+    for (auto& x : *d.lista)
+        if (!x.id.empty()) n++;
+    d.lw = 300.0f;
+    d.lh = n * ITEM_DESP + 8;
+    d.lx = d.x;
+    d.ly = d.y;
+    if (d.ly + d.lh > g.alto - 8) d.ly = std::max(8.0f, g.alto - 8 - d.lh);
+    // Sombra y caja.
+    g.rect_redondo(d.lx + 2, d.ly + 3, d.lw, d.lh, 8, Color(0x000000, 0.35f));
+    g.rect_redondo(d.lx, d.ly, d.lw, d.lh, 8, Color(BG_PANEL()));
+    g.borde_redondo(d.lx, d.ly, d.lw, d.lh, 8, Color(BORDE()), 1.0f);
+    std::wstring actual_id = d.entrada ? ajustes::actual().entrada : ajustes::actual().salida;
+    float y = d.ly + 4;
+    auto item = [&](const std::wstring& id, const std::wstring& nombre) {
+        bool elegido = id == actual_id;
+        if (adentro(g_mouse_x, g_mouse_y, d.lx, y, d.lw, ITEM_DESP)) g.rect(d.lx + 4, y, d.lw - 8, ITEM_DESP, Color(BG_CAMPO()));
+        if (elegido) g.renglon(L"\u2713", d.lx + 12, y + 7, 13, Color(ACCENT()));
+        g.renglon(nombre, d.lx + 34, y + (ITEM_DESP - 17) / 2.0f, 13.5f, Color(elegido ? ACCENT() : TXT()),
+                  DWRITE_FONT_WEIGHT_NORMAL, d.lw - 46);
+        bool ent = d.entrada;
+        agregar_clic(g_clics_popup, d.lx, y, d.lw, ITEM_DESP, [ent, id]() {
+            elegir_audio(ent, id);
+            g_desplegable.abierto = false;
+        });
+        y += ITEM_DESP;
+    };
+    item(L"", L"System default");
+    for (auto& x : *d.lista)
+        if (!x.id.empty()) item(x.id, x.nombre);
 }
 
 void ciclar_audio(bool entrada, std::vector<grabador::Dispositivo>* lista, int dir) {
@@ -636,6 +678,9 @@ void dibujar_todo() {
     if (g_picker.abierto) {
         g_clics_popup.clear();
         dibujar_selector_color(g_gfx);
+    } else if (g_desplegable.abierto) {
+        g_clics_popup.clear();
+        dibujar_desplegable(g_gfx);
     }
 
     g_gfx.terminar_frame();
@@ -703,6 +748,12 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                     for (auto& r : g_clics_popup)
                         if (adentro(mx, my, r.x, r.y, r.w, r.h)) { r.accion(); break; }
                 }
+            } else if (g_desplegable.abierto) {
+                bool tomado = false;
+                for (auto& r : g_clics_popup)
+                    if (adentro(mx, my, r.x, r.y, r.w, r.h)) { r.accion(); tomado = true; break; }
+                // Afuera de la lista: se cierra (y el click no hace otra cosa).
+                if (!tomado) g_desplegable.abierto = false;
             } else {
                 for (auto& r : g_clics)
                     if (adentro(mx, my, r.x, r.y, r.w, r.h)) { r.accion(); break; }
@@ -718,7 +769,7 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         case WM_MOUSEWHEEL: {
-            if (g_picker.abierto) return 0;
+            if (g_picker.abierto || g_desplegable.abierto) return 0;
             float delta = (float)GET_WHEEL_DELTA_WPARAM(wp);
             float max_scroll = std::max(0.0f, g_contenido_alto - g_gfx.alto);
             g_scroll = std::clamp(g_scroll - delta / 120.0f * 54.0f, 0.0f, max_scroll);
@@ -728,6 +779,7 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_KEYDOWN:
             if (wp == VK_ESCAPE) {
                 if (g_picker.abierto) cancelar_picker();
+                else if (g_desplegable.abierto) g_desplegable.abierto = false;
                 else PostMessageW(h, WM_CLOSE, 0, 0);
                 InvalidateRect(h, nullptr, FALSE);
             }
