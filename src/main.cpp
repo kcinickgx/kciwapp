@@ -132,7 +132,7 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             }
             break;
         case WM_TIMER:
-            if (wp == TIMER_CURSOR && app && app->campo.foco) app->pedir_dibujo();
+            if (wp == TIMER_CURSOR && app && (app->campo.foco || app->buscador_chat.foco)) app->pedir_dibujo();
             if (wp == 2 && app) {
                 KillTimer(h, 2);
                 app->cargar_chats();
@@ -140,6 +140,10 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == 3 && app) {
                 KillTimer(h, 3);
                 app->buscar_ahora();
+            }
+            if (wp == 5 && app) {
+                KillTimer(h, 5);
+                app->buscar_en_chat();
             }
             if (wp == 4 && app) {
                 KillTimer(h, 4);

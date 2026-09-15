@@ -24,6 +24,7 @@ add_executable(kciwapp2 WIN32
     src/ventana_ajustes.cpp
     src/reenviar_ui.cpp
     src/menu_ui.cpp
+    src/buscar_chat.cpp
     src/toast.cpp
     src/app.rc
 )

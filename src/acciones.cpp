@@ -387,6 +387,7 @@ void App::agregar_mensaje(const Mensaje& m) {
 
 void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long ts) {
     if (chat != chat_actual) {
+        if (busca_chat_abierta) cerrar_busqueda_chat();
         // Se abre el chat con una ventana de mensajes alrededor del pedido.
         borradores[chat_actual] = campo.texto;
         recordar_chat();
@@ -463,9 +464,23 @@ void App::buscar_ahora() {
         return;
     }
     buscando = true;
+    busqueda_completa = false;
+    resultados.clear();
+    lista.ir(0, true);
+    buscar_mas();
+}
+
+// Pide la siguiente pagina de la busqueda actual (mas viejos que el ultimo
+// resultado que ya tenemos). Se llama desde buscar_ahora y al scrollear al
+// fondo de la lista.
+void App::buscar_mas() {
+    std::wstring q = ultima_busqueda;
+    if (q.size() < 2 || busqueda_completa) return;
+    buscando = true;
+    const int PAGINA = 200;
     std::string qq = angosto(q);
     // Escapado minimo para la URL.
-    std::wstring url = L"/buscar?limite=40&q=";
+    std::wstring url = L"/buscar?limite=" + std::to_wstring(PAGINA) + L"&q=";
     for (unsigned char c : qq) {
         if (isalnum(c)) url += (wchar_t)c;
         else {
@@ -474,15 +489,15 @@ void App::buscar_ahora() {
             url += buf;
         }
     }
-    red::en_fondo([this, url, q] {
+    if (!resultados.empty()) url += L"&antes=" + std::to_wstring(resultados.back().ts);
+    red::en_fondo([this, url, q, PAGINA] {
         Respuesta r = red::obtener(url);
         Json j = Json::parsear(r.cuerpo);
-        red::en_ui([this, j, q] {
+        red::en_ui([this, j, q, PAGINA] {
             if (q != ultima_busqueda) return;
             buscando = false;
-            resultados.clear();
             for (size_t i = 0; i < j.largo(); i++) resultados.push_back(Mensaje::de_json(j[i]));
-            lista.ir(0, true);
+            if ((int)j.largo() < PAGINA) busqueda_completa = true;
             pedir_dibujo();
         });
     });
@@ -862,6 +877,8 @@ void App::escapar() {
         terminar_seleccion();
     } else if (info_abierto) {
         cerrar_info();
+    } else if (busca_chat_abierta) {
+        cerrar_busqueda_chat();
     } else if (grab != Grab::Nada) {
         grabar_cancelar();
     } else if (reenviando) {

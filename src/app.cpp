@@ -102,13 +102,13 @@ int solo_emojis(const std::wstring& t) {
     return n;
 }
 
+}  // namespace
+
 std::wstring una_linea(std::wstring s) {
     for (auto& ch : s)
         if (ch == L'\n') ch = L' ';
     return s;
 }
-
-}  // namespace
 
 std::wstring nombre_tipo(const std::string& tipo) {
     if (tipo == "imagen") return L"\U0001F4F7 Photo";
@@ -419,6 +419,7 @@ std::wstring App::nombre_de(const std::string& jid) {
 void App::abrir_chat(const std::string& jid) {
     if (jid == chat_actual) return;
     if (seleccionando) terminar_seleccion();
+    if (busca_chat_abierta) cerrar_busqueda_chat();
     // El borrador del chat que se deja queda guardado.
     if (!chat_actual.empty()) {
         borradores[chat_actual] = campo.texto;
@@ -1199,6 +1200,7 @@ void App::dibujar() {
     ultimo_frame = ahora;
     lista.animar(dt);
     conv.animar(dt);
+    scroll_res_chat.animar(dt);
     necesita_dibujar = false;
 
     g.empezar_frame();
@@ -1233,7 +1235,7 @@ void App::armar_items() {
     items.push_back({ItemLista::Titulo, 0, L"Contacts"});
     for (size_t i = 0; i < chats.size(); i++)
         if (plano(chats[i].nombre).find(q) != std::wstring::npos) items.push_back({ItemLista::ChatItem, (int)i, L""});
-    items.push_back({ItemLista::Titulo, 0, buscando ? L"Messages (searching...)" : L"Messages"});
+    items.push_back({ItemLista::Titulo, 0, buscando ? L"Messages (searching...)" : busqueda_completa ? L"Messages" : L"Messages (scroll for more)"});
     for (size_t i = 0; i < resultados.size(); i++) items.push_back({ItemLista::Resultado, (int)i, L""});
 }
 
@@ -1266,6 +1268,7 @@ void App::dibujar_lista() {
     for (auto& it : items) total += it.tipo == ItemLista::Titulo ? TITULO_H : fila_h();
     lista.max = std::max(0.0, (double)total - H);
     lista.limitar();
+    if (!resultados.empty() && !buscando && !busqueda_completa && lista.pos > lista.max - H) buscar_mas();
     g.recortar(0, top, W, H);
     float y = (float)(top - lista.pos);
     for (size_t k = 0; k < items.size(); k++) {
@@ -1403,9 +1406,15 @@ void App::dibujar_cabecera() {
         foto = &imagen("foto:" + c->jid, L"/foto/" + ancho(c->jid), false);
     if (foto && foto->bmp) g.bitmap_circular(foto->bmp.Get(), cx, cy, r);
     else g.circulo(cx, cy, r, Color(0x6b7c85));
-    g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
+    if (busca_chat_abierta) {
+        dibujar_busqueda_cabecera(cx + r + 14, x, W, H);
+        return;
+    }
+    g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
     std::wstring sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
-    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
+    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
+    // La lupa para buscar en este chat.
+    if (!seleccionando) g.renglon(L"\U0001F50D", x + W - 44, 19, 18, Color(TXT_DIM()));
 }
 
 void App::dibujar_pie() {
@@ -1473,6 +1482,10 @@ void App::dibujar_conversacion() {
         std::wstring t = L"Select a chat";
         float tw = g.medir(t, 18);
         g.renglon(t, x + (W - tw) / 2, top + H / 2 - 12, 18, Color(TXT_DIM()));
+        return;
+    }
+    if (panel_resultados_chat()) {
+        dibujar_resultados_chat();
         return;
     }
     if (cargando_mensajes && mensajes.empty()) {
@@ -1795,6 +1808,16 @@ void App::raton_mueve(float x, float y) {
         buscador.arrastrar(g, x, y);
         pedir_dibujo();
     }
+    if (buscador_chat.arrastrando) {
+        buscador_chat.arrastrar(g, x, y);
+        pedir_dibujo();
+    }
+    if (arrastrando_res_chat) {
+        float top = alto_cabecera(), H = g.alto - alto_pie - top;
+        arrastrar_barra(scroll_res_chat, y, top, H, res_chat.size() * fila_h());
+        pedir_dibujo();
+    }
+    if (panel_resultados_chat() && x >= ancho_lista) pedir_dibujo();  // hover de las filas
     if (sel_arrastrando && sel_msg >= 0 && sel_msg < (int)mensajes.size()) {
         float ym = 0;
         // El mensaje de la seleccion, este donde este ahora.
@@ -1830,6 +1853,11 @@ void App::raton_abajo(float x, float y, bool shift) {
     }
     buscador.foco = false;
     emoji_buscador.foco = false;
+    buscador_chat.foco = false;
+    if (click_busqueda_chat(x, y, shift)) {
+        pedir_dibujo();
+        return;
+    }
     if (x < ancho_lista) {
         if (y < 60 && x > ancho_lista - 56) {
             ventana_ajustes::abrir(hwnd);
@@ -1966,6 +1994,8 @@ void App::raton_arriba(float, float) {
     visor_arrastrando = false;
     campo.arrastrando = false;
     buscador.arrastrando = false;
+    buscador_chat.arrastrando = false;
+    arrastrando_res_chat = false;
     if (sel_arrastrando) {
         sel_arrastrando = false;
         if (sel_a == sel_b) {
@@ -1989,6 +2019,7 @@ void App::rueda(float x, float y, float delta) {
     float px = -delta / 120.0f * lineas * 40.0f;
     if (rueda_modal_reenvio(x, y, delta) || rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
     if (x < ancho_lista) lista.rodar(px);
+    else if (panel_resultados_chat() && y > alto_cabecera() && y < g.alto - alto_pie) scroll_res_chat.rodar(px);
     else if (y > alto_cabecera() && y < g.alto - alto_pie) conv.rodar(px);
     pedir_dibujo();
 }
@@ -2030,9 +2061,27 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
         return;
     }
     if (ctrl && vk == 'F') {
-        buscador.foco = true;
-        campo.foco = false;
-        buscador.seleccionar_todo();
+        // Con un chat abierto se busca ahi; sin chat, en la lista.
+        if (!chat_actual.empty() && !info_abierto) abrir_busqueda_chat();
+        else {
+            buscador.foco = true;
+            campo.foco = false;
+            buscador.seleccionar_todo();
+        }
+        pedir_dibujo();
+        return;
+    }
+    if (busca_chat_abierta && !res_chat.empty()) {
+        // Arriba/F3 = mas viejo, abajo/Shift+F3 = mas nuevo; Enter en el campo
+        // con resultados ya elegidos tambien avanza.
+        if (vk == VK_UP || (vk == VK_F3 && !shift)) { mover_coincidencia(+1); return; }
+        if (vk == VK_DOWN || (vk == VK_F3 && shift)) { mover_coincidencia(-1); return; }
+        if (vk == VK_RETURN && buscador_chat.foco && elegido_chat >= 0 && buscador_chat.texto == ultima_busqueda_chat) {
+            mover_coincidencia(+1);
+            return;
+        }
+    }
+    if (buscador_chat.foco && buscador_chat.tecla(g, vk, shift, ctrl)) {
         pedir_dibujo();
         return;
     }
@@ -2083,6 +2132,10 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
 }
 
 void App::caracter(wchar_t c) {
+    if (buscador_chat.foco) {
+        if (buscador_chat.caracter(c)) pedir_dibujo();
+        return;
+    }
     if (buscador.foco) {
         if (buscador.caracter(c)) pedir_dibujo();
         return;
@@ -2191,7 +2244,9 @@ bool App::sobre_clickeable(float x, float y) {
     if (emojis_abierto) return true;
     if (info_abierto) return y < alto_cabecera() + 60 || y > alto_cabecera();
     float top = alto_cabecera(), bottom = g.alto - alto_pie, W = w_conv();
-    if (y < top) return !chat_actual.empty();                  // cabecera -> info
+    if (clickeable_busqueda_chat(x, y)) return true;
+    if (panel_resultados_chat() && y >= top && y < bottom) return false;
+    if (y < top) return !chat_actual.empty() && !busca_chat_abierta;  // cabecera -> info
     if (y >= bottom) {
         if (chat_actual.empty()) return false;
         float yy = bottom + 8;

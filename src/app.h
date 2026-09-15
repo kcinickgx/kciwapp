@@ -256,6 +256,18 @@ struct App {
     std::vector<Mensaje> resultados;
     std::wstring ultima_busqueda;
     bool buscando = false;
+    // La busqueda trae de a paginas (las mas nuevas primero); al llegar al
+    // fondo de la lista se pide la siguiente hasta que no haya mas.
+    bool busqueda_completa = false;
+    // Busqueda dentro del chat abierto (buscar_chat.cpp).
+    Campo buscador_chat;
+    bool busca_chat_abierta = false;
+    std::vector<Mensaje> res_chat;
+    Desplazable scroll_res_chat;
+    bool arrastrando_res_chat = false;
+    int elegido_chat = -1;  // coincidencia elegida (-1 = se ve el panel)
+    bool res_chat_completa = false, res_chat_buscando = false;
+    std::wstring ultima_busqueda_chat;
     // Audio: un reproductor para notas de voz y audios, y la grabacion.
     Reproductor reproductor;
     bool reproductor_ok = false;
@@ -357,6 +369,18 @@ struct App {
     void enviar_reenvio();
     void ir_a_mensaje(const std::string& chat, const std::string& id, long long ts);
     void buscar_ahora();
+    void buscar_mas();
+    void abrir_busqueda_chat();
+    void cerrar_busqueda_chat();
+    void buscar_en_chat();
+    void buscar_mas_chat();
+    void ir_a_coincidencia(int i);
+    void mover_coincidencia(int dir);
+    void dibujar_busqueda_cabecera(float tx, float x, float W, float H);
+    void dibujar_resultados_chat();
+    bool panel_resultados_chat() const;
+    bool click_busqueda_chat(float x, float y, bool shift);
+    bool clickeable_busqueda_chat(float x, float y) const;
     void adjuntar_archivo(const std::wstring& ruta);
     void adjuntar_datos(std::string datos, std::string mime, std::string nombre);
     void enviar_adjunto();
@@ -454,6 +478,8 @@ std::wstring formatear_hora(long long ts);
 std::wstring formatear_dia(long long ts);
 std::wstring formatear_telefono(const std::string& jid);
 std::wstring nombre_tipo(const std::string& tipo);
+// Un solo renglon (saltos -> espacios), para vistas previas.
+std::wstring una_linea(std::wstring s);
 std::wstring plano(const std::wstring& s);
 std::wstring carpeta_exe();
 Color color_de_nombre(const std::wstring& nombre);
