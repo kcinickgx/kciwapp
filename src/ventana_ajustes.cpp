@@ -215,9 +215,8 @@ float titulo_seccion(Gfx& g, float x, float y, const wchar_t* txt) {
     return y + 24;
 }
 
-void hover_si(Gfx& g, float x, float y, float w, float h) {
-    if (!g_picker.abierto && adentro(g_mouse_x, g_mouse_y, x, y, w, h)) g.rect(x, y, w, h, Color(BG_HOVER()));
-}
+// Sin resaltado al pasar el mouse: el usuario no lo quiere.
+void hover_si(Gfx&, float, float, float, float) {}
 
 // Anillo circular: un rect redondo con radio = mitad del lado dibuja un
 // circulo perfecto de borde (truco para no tocar gfx.h/gfx.cpp).
