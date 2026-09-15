@@ -141,8 +141,8 @@ void App::dibujar_busqueda_cabecera(float tx, float x, float W, float H) {
         bool hay_viejo = actual + 1 < (int)res_chat.size() || !res_chat_completa;
         bool hay_nuevo = actual > 0;
         // Arriba = mas viejo (como en la lista, que va del mas nuevo al mas viejo).
-        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE70E", nx + 112, cy + 11, 13, Color(hay_viejo ? TXT() : BORDE()));
-        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE70D", nx + 138, cy + 11, 13, Color(hay_nuevo ? TXT() : BORDE()));
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE70E", nx + 112, cy + 11, 13, Color(hay_viejo ? TXT() : TXT_DIM(), hay_viejo ? 1.0f : 0.45f));
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE70D", nx + 138, cy + 11, 13, Color(hay_nuevo ? TXT() : TXT_DIM(), hay_nuevo ? 1.0f : 0.45f));
     }
     // La cruz para cerrar, donde estaba la lupa.
     g.renglon(L"✕", x + W - 42, 20, 18, Color(TXT_DIM()));
