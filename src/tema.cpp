@@ -142,6 +142,11 @@ void cargar(const std::wstring& carpeta_exe) {
     a.monitor_avisos = (int)j["monitor_avisos"].num(-1);
     a.esquina_avisos = (int)j["esquina_avisos"].num(0);
     a.segundos_aviso = (int)j["segundos_aviso"].num(6);
+    a.ventana_x = (int)j["ventana_x"].num(0);
+    a.ventana_y = (int)j["ventana_y"].num(0);
+    a.ventana_w = (int)j["ventana_w"].num(0);
+    a.ventana_h = (int)j["ventana_h"].num(0);
+    a.ventana_max = j["ventana_max"].bul(false);
     a.entrada = ancho(j["entrada"].str());
     a.salida = ancho(j["salida"].str());
     g_ajustes = a;
@@ -175,6 +180,14 @@ void guardar() {
     numero("monitor_avisos", g_ajustes.monitor_avisos);
     numero("esquina_avisos", g_ajustes.esquina_avisos);
     numero("segundos_aviso", g_ajustes.segundos_aviso);
+    numero("ventana_x", g_ajustes.ventana_x);
+    numero("ventana_y", g_ajustes.ventana_y);
+    numero("ventana_w", g_ajustes.ventana_w);
+    numero("ventana_h", g_ajustes.ventana_h);
+    Json bm;
+    bm.tipo = Json::Booleano;
+    bm.b = g_ajustes.ventana_max;
+    j.objeto["ventana_max"] = bm;
     texto("entrada", angosto(g_ajustes.entrada));
     texto("salida", angosto(g_ajustes.salida));
     std::string s = serializar(j);

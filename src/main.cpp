@@ -45,6 +45,38 @@ bool leer_config() {
 
 float escala(HWND h) { return GetDpiForWindow(h) / 96.0f; }
 
+// Posicion y tamano de la ventana en ajustes.json, para que vuelva a abrir
+// donde quedo (y maximizada si lo estaba).
+void guardar_ventana(HWND h) {
+    WINDOWPLACEMENT wp{sizeof wp};
+    if (!GetWindowPlacement(h, &wp) || IsIconic(h)) return;
+    RECT r = wp.rcNormalPosition;
+    if (r.right - r.left < 200 || r.bottom - r.top < 200) return;
+    const Ajustes& a = ajustes::actual();
+    bool max = wp.showCmd == SW_SHOWMAXIMIZED;
+    if (a.ventana_x == r.left && a.ventana_y == r.top && a.ventana_w == r.right - r.left && a.ventana_h == r.bottom - r.top && a.ventana_max == max) return;
+    ajustes::cambiar([&](Ajustes& x) {
+        x.ventana_x = r.left;
+        x.ventana_y = r.top;
+        x.ventana_w = r.right - r.left;
+        x.ventana_h = r.bottom - r.top;
+        x.ventana_max = max;
+    });
+}
+
+void restaurar_ventana(HWND h) {
+    const Ajustes& a = ajustes::actual();
+    if (a.ventana_w <= 0 || a.ventana_h <= 0) return;
+    RECT r{a.ventana_x, a.ventana_y, a.ventana_x + a.ventana_w, a.ventana_y + a.ventana_h};
+    // Si el monitor donde estaba ya no existe, se deja donde Windows la ponga.
+    if (!MonitorFromRect(&r, MONITOR_DEFAULTTONULL)) return;
+    WINDOWPLACEMENT wp{sizeof wp};
+    GetWindowPlacement(h, &wp);
+    wp.rcNormalPosition = r;
+    wp.showCmd = SW_HIDE;  // la muestra ShowWindow despues (normal o maximizada)
+    SetWindowPlacement(h, &wp);
+}
+
 LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     App* app = g_app;
     switch (msg) {
@@ -54,6 +86,8 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_SIZE:
+            // Maximizar/restaurar no pasa por EXITSIZEMOVE.
+            if (wp == SIZE_MAXIMIZED || wp == SIZE_RESTORED) guardar_ventana(h);
             if (app && wp != SIZE_MINIMIZED) {
                 app->redimensionado();
                 app->dibujar();
@@ -167,7 +201,11 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         case red::WM_TRABAJO:
             red::atender_trabajo(lp);
             return 0;
+        case WM_EXITSIZEMOVE:
+            guardar_ventana(h);
+            return 0;
         case WM_DESTROY:
+            guardar_ventana(h);
             PostQuitMessage(0);
             return 0;
     }
@@ -217,13 +255,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
 
     App app;
     g_app = nullptr;
+    ajustes::cargar(carpeta_exe());
     HWND h = CreateWindowExW(0, L"kciwapp2", L"kciwapp", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                              (int)(1100 * 1.0f), (int)(760 * 1.0f), nullptr, nullptr, inst, nullptr);
     if (!h) return 1;
+    restaurar_ventana(h);
     red::anotar_ventana(h);
     DragAcceptFiles(h, TRUE);
     cache::abrir(carpeta_datos() + L"\\cache.sqlite3");
-    ajustes::cargar(carpeta_exe());
     emoji::cargar(carpeta_exe());
     app.iniciar(h);
     g_app = &app;
@@ -256,7 +295,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         });
     });
     SetTimer(h, TIMER_CURSOR, 250, nullptr);
-    ShowWindow(h, SW_SHOW);
+    ShowWindow(h, ajustes::actual().ventana_max ? SW_SHOWMAXIMIZED : SW_SHOW);
 
     MSG msg;
     for (;;) {
