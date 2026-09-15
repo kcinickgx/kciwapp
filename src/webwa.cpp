@@ -354,9 +354,8 @@ const wchar_t* JS_BOTONES =
 
 const wchar_t* JS_EN_LLAMADA =
     L"(function(){var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
-    L"if(!e)return 'no';var c=e;for(var i=0;i<8&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;"
-    L"var t=(c.innerText||'');if(/calling|ringing|connecting|llamando|conectando/i.test(t))return 'si';"
-    L"return /(^|\s)\d{1,2}:\d\d(\s|$)/.test(t)?'conectada':'si'})()";
+    L"if(!e)return 'no';var t=(document.body&&document.body.innerText)||'';"
+    L"if(/(^|\s)\d{1,2}:\d\d(\s|$)/.test(t))return 'conectada';return 'si'})()";
 
 const wchar_t* JS_POPOUT =
     L"(function(){var b=document.querySelector('[aria-label=\"Move to new window\"],[title=\"Move to new window\"],[aria-label=\"Pop out\"],[aria-label=\"Pop-out\"],[aria-label=\"Open in new window\"],[aria-label=\"Expand\"],"
