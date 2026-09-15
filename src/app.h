@@ -281,6 +281,7 @@ struct App {
     bool alguien_escribe(const std::string& chat) const;
     static constexpr float ESCRIBIENDO_H = 46.0f;  // la burbuja de "..." al final del chat
     void dibujar_burbuja_escribiendo(float y);
+    void dibujar_pantalla_vacia();
     // Lo nuestro: que estado mandamos por ultima vez y cuando.
     std::string presencia_mandada;
     unsigned long long presencia_ts = 0;

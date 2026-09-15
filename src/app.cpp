@@ -1504,6 +1504,7 @@ void App::tildes(float x, float y, bool doble, Color c) {
 
 void App::dibujar_cabecera() {
     float x = x_conv(), W = w_conv(), H = alto_cabecera();
+    if (chat_actual.empty()) return;
     g.rect(x, 0, W, H, Color(BG_PANEL()));
     const Chat* c = chat_de(chat_actual);
     if (!c) return;
@@ -1528,8 +1529,8 @@ void App::dibujar_cabecera() {
 
 void App::dibujar_pie() {
     float x = x_conv(), W = w_conv(), H = alto_pie, y = g.alto - H;
-    g.rect(x, y, W, H, Color(BG_PANEL()));
     if (chat_actual.empty()) return;
+    g.rect(x, y, W, H, Color(BG_PANEL()));
     float yy = y + 8;
     // Barra de respuesta / edicion.
     if (respondiendo || editando) {
@@ -1584,13 +1585,46 @@ void App::dibujar_pie() {
     g.renglon(hay_texto ? L"➤" : L"\U0001F3A4", x + W - 44, yy + ch / 2 - 12, 22, Color(hay_texto ? ACCENT() : TXT_DIM()));
 }
 
+// Lo que se ve sin ningun chat abierto (toda la columna derecha).
+void App::dibujar_pantalla_vacia() {
+    float x = x_conv(), W = w_conv(), H = g.alto;
+    g.rect(x, 0, W, H, Color(BG_SEL()));
+    // La franja de arriba, marca registrada del panel vacio de WhatsApp.
+    g.rect(x, 0, W, 6, Color(ACCENT()));
+    float cx = x + W / 2;
+    // Bloque centrado: circulo (190) + titulo + dos renglones.
+    float bloque = 190 + 22 + 10 + 40 + 10 + 40;
+    float y = std::max(30.0f, (H - 60 - bloque) / 2);
+    g.circulo(cx, y + 95, 95, Color(0x2d3a42));
+    std::wstring ic = L"\uE8BD";  // Segoe MDL2 "Message"
+    float iw = g.medir_fuente(L"Segoe MDL2 Assets", ic, 88);
+    g.renglon_fuente(L"Segoe MDL2 Assets", ic, cx - iw / 2, y + 95 - 44, 88, Color(0x3c4c55));
+    y += 190 + 22;
+    std::wstring t = L"kciwapp for Windows";
+    float tw = g.medir(t, 30);
+    g.renglon(t, cx - tw / 2, y, 30, Color(0xe9edef, 0.85f));
+    y += 50;
+    t = L"Pick a chat from the list to start messaging.";
+    tw = g.medir(t, 14);
+    g.renglon(t, cx - tw / 2, y, 14, Color(TXT_DIM()));
+    y += 22;
+    t = L"Your messages stay in sync with your phone.";
+    tw = g.medir(t, 14);
+    g.renglon(t, cx - tw / 2, y, 14, Color(TXT_DIM()));
+    // Abajo: candadito + texto.
+    t = L"End-to-end encrypted";
+    tw = g.medir(t, 13);
+    float lw = g.medir_fuente(L"Segoe MDL2 Assets", L"\uE72E", 13);
+    float x0 = cx - (lw + 6 + tw) / 2, yb = H - 30 - 9;
+    g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE72E", x0, yb + 1, 13, Color(TXT_DIM()));
+    g.renglon(t, x0 + lw + 6, yb, 13, Color(TXT_DIM()));
+}
+
 void App::dibujar_conversacion() {
     float x = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie, H = bottom - top;
     dibujar_fondo_chat(x, top, W, H);
     if (chat_actual.empty()) {
-        std::wstring t = L"Select a chat";
-        float tw = g.medir(t, 18);
-        g.renglon(t, x + (W - tw) / 2, top + H / 2 - 12, 18, Color(TXT_DIM()));
+        dibujar_pantalla_vacia();
         return;
     }
     if (panel_resultados_chat()) {

@@ -158,6 +158,15 @@ float Gfx::renglon_mono(const std::wstring& s, float x, float y, float tamano, C
     return m.widthIncludingTrailingWhitespace;
 }
 
+float Gfx::medir_fuente(const wchar_t* fuente, const std::wstring& s, float tamano) {
+    ComPtr<IDWriteTextLayout> l;
+    dwrite->CreateTextLayout(s.c_str(), (UINT32)s.size(), formato(tamano, DWRITE_FONT_WEIGHT_NORMAL, fuente), 100000.0f, 100000.0f, &l);
+    if (!l) return 0;
+    DWRITE_TEXT_METRICS m;
+    l->GetMetrics(&m);
+    return m.widthIncludingTrailingWhitespace;
+}
+
 float Gfx::renglon_fuente(const wchar_t* fuente, const std::wstring& s, float x, float y, float tamano, Color c) {
     ComPtr<IDWriteTextLayout> l;
     dwrite->CreateTextLayout(s.c_str(), (UINT32)s.size(), formato(tamano, DWRITE_FONT_WEIGHT_NORMAL, fuente), 100000.0f, 100000.0f, &l);

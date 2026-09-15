@@ -78,6 +78,7 @@ struct Gfx {
     // Lo mismo pero en fuente monoespaciada (codigos, hex).
     float renglon_mono(const std::wstring& s, float x, float y, float tamano, Color c);
     float renglon_fuente(const wchar_t* fuente, const std::wstring& s, float x, float y, float tamano, Color c);
+    float medir_fuente(const wchar_t* fuente, const std::wstring& s, float tamano);
     float medir_mono(const std::wstring& s, float tamano);
 
     void rect(float x, float y, float w, float h, Color c);
