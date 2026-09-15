@@ -633,11 +633,14 @@ void App::recordar_chat() {
     mensajes.clear();
 }
 
-void App::anteponer(const std::vector<Mensaje>& viejos) {
+void App::anteponer(const std::vector<Mensaje>& viejos, bool armar) {
     if (viejos.empty()) return;
-    // Sin repetidos con lo que ya esta.
+    // Sin repetidos con lo que ya esta. En las tandas de "cargar todo"
+    // (armar = false) vienen por rango de fecha, asi que alcanza con mirar
+    // el borde: los primeros 200 de lo que hay.
     std::unordered_set<std::string> ids;
-    for (auto& m : mensajes) ids.insert(m.id);
+    size_t hasta = armar ? mensajes.size() : std::min(mensajes.size(), (size_t)200);
+    for (size_t i = 0; i < hasta; i++) ids.insert(mensajes[i].id);
     std::vector<Mensaje> limpios;
     for (auto& m : viejos)
         if (!ids.count(m.id)) limpios.push_back(m);
@@ -646,6 +649,13 @@ void App::anteponer(const std::vector<Mensaje>& viejos) {
     vistas.insert(vistas.begin(), limpios.size(), VistaMensaje());
     layout_pendiente += limpios.size();
     if (sel_msg >= 0) sel_msg += (int)limpios.size();
+    if (!armar) {
+        // Los layouts se arman una sola vez al final (lanzar_armado copia todo
+        // lo pendiente y relanza los hilos: hacerlo por tanda era cuadratico).
+        recalcular_inicios();
+        conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
+        return;
+    }
     lanzar_armado();
     // El que era el primero ahora tiene un anterior: su divisor puede cambiar.
     if (layout_pendiente < vistas.size()) {
@@ -1725,7 +1735,7 @@ void App::cargar_todo_el_chat() {
             bool ultimo = resto.size() < 5000;
             red::en_ui([this, mio, resto] {
                 if (mio != chat_actual) return;
-                anteponer(resto);
+                anteponer(resto, false);
                 todo_cargado += (long long)resto.size();
                 pedir_dibujo();
             });
@@ -1752,7 +1762,7 @@ void App::cargar_todo_el_chat() {
             bool seguir = true;
             red::en_ui([this, mio, viejos] {
                 if (mio != chat_actual) return;
-                anteponer(viejos);
+                anteponer(viejos, false);
                 todo_cargado += (long long)viejos.size();
                 pedir_dibujo();
             });
@@ -1765,6 +1775,7 @@ void App::cargar_todo_el_chat() {
                 hay_mas_viejos = fallo ? true : !agotado;
                 if (fallo) aviso_estado = L"Cannot reach the server";
                 if (!fallo) todo_total = todo_cargado;  // 100%
+                lanzar_armado();
             }
             cargando_todo = false;
             todo_fin = GetTickCount64();

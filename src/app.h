@@ -194,7 +194,7 @@ struct App {
     std::vector<std::string> en_memoria_orden;  // del mas viejo al mas reciente
     void recordar_chat();
     // Agrega mensajes viejos arriba sin mover la vista (layouts lazy).
-    void anteponer(const std::vector<Mensaje>& viejos);
+    void anteponer(const std::vector<Mensaje>& viejos, bool armar = true);
     bool hay_mas_viejos = true;
     long long seq_eventos = 0;
     bool conectado = false;
