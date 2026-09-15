@@ -154,9 +154,18 @@ HWND crear_hija(Vista& v) {
     return h;
 }
 
+// Silencia (o no) todo el audio de una vista: sonidos de mensajes, ring de
+// WhatsApp Web, etc. La principal vive muda salvo durante una llamada.
+void silenciar_vista(Vista& v, bool si) {
+    if (!v.web) return;
+    ComPtr<ICoreWebView2_8> w8;
+    if (SUCCEEDED(v.web.As(&w8)) && w8) w8->put_IsMuted(si ? TRUE : FALSE);
+}
+
 void avisar_llamada(bool en) {
     if (en == g_en_llamada) return;
     g_en_llamada = en;
+    silenciar_vista(g_principal, !en);
     if (!en) {
         g_silenciado = false;
         g_video_fluye = false;
@@ -274,9 +283,12 @@ void crear_vista_principal() {
             c->put_Bounds(r);
             c->put_IsVisible(TRUE);
             configurar_permisos(g_principal);
+            silenciar_vista(g_principal, true);
             EventRegistrationToken t;
             // window.open (la llamada) va a nuestra segunda vista, no a una
             // ventana suelta del navegador.
+            g_principal.web->AddScriptToExecuteOnDocumentCreated(
+                L"(function(){try{Object.defineProperty(window,'Notification',{value:undefined,configurable:true});}catch(e){}})()", nullptr);
             g_principal.web->add_NewWindowRequested(
                 Callback<ICoreWebView2NewWindowRequestedEventHandler>([](ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs* args) -> HRESULT {
                     ComPtr<ICoreWebView2Deferral> def;
