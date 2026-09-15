@@ -208,6 +208,15 @@ void crear_vista_llamada(std::function<void()> listo) {
             c->put_Bounds(r);
             c->put_IsVisible(TRUE);
             configurar_permisos(g_llamada);
+            // El boton "Return to WhatsApp" de la ventanita no tiene sentido
+            // aca (no hay a donde volver): se esconde apenas aparezca.
+            g_llamada.web->AddScriptToExecuteOnDocumentCreated(
+                L"(function(){function tapar(){document.querySelectorAll('button,[role=button],a').forEach(function(b){"
+                L"var t=((b.getAttribute('aria-label')||'')+' '+(b.innerText||'')).toLowerCase();"
+                L"if(t.indexOf('return to whatsapp')>=0||t.indexOf('volver a whatsapp')>=0||t.indexOf('back to whatsapp')>=0){"
+                L"var p=b.closest('[role=dialog]')||b;p.style.display='none'}})}"
+                L"new MutationObserver(tapar).observe(document.documentElement,{childList:true,subtree:true});tapar()})()",
+                nullptr);
             EventRegistrationToken t;
             // WhatsApp Web cierra la ventanita al cortar.
             g_llamada.web->add_WindowCloseRequested(
