@@ -400,6 +400,7 @@ void App::abrir_chat(const std::string& jid) {
     if (!chat_actual.empty()) {
         borradores[chat_actual] = campo.texto;
         borradores_adjunto[chat_actual] = adjunto;
+        recordar_chat();
     }
     chat_actual = jid;
     mensajes.clear();
@@ -417,8 +418,6 @@ void App::abrir_chat(const std::string& jid) {
     campo.poner(borradores[jid]);
     adjunto = borradores_adjunto[jid];
     campo.foco = true;
-    // Lo que hay en la cache se ve ya; el server manda los ultimos 60 (que
-    // pisan lo cacheado: estados, ediciones, reacciones).
     int cuantos = ajustes::actual().mensajes_por_chat;
     if (cuantos <= 0) cuantos = 1000000;
     pedir_dibujo();
@@ -426,11 +425,44 @@ void App::abrir_chat(const std::string& jid) {
     long long ultimo_lista = 0;
     for (auto& c : chats)
         if (c.jid == jid) ultimo_lista = c.ultimo_ts;
+
+    // Si ya lo tuvimos abierto, esta en memoria: se muestra ya.
+    auto em = en_memoria.find(jid);
+    if (em != en_memoria.end()) {
+        mensajes = std::move(em->second.mensajes);
+        hay_mas_viejos = em->second.hay_mas_viejos;
+        en_memoria.erase(em);
+        en_memoria_orden.erase(std::remove(en_memoria_orden.begin(), en_memoria_orden.end(), jid), en_memoria_orden.end());
+        cargando_mensajes = false;
+        armar_vistas();
+        bajar_al_final(true);
+        marcar_leido(jid);
+        // Solo si la lista dice que hay algo mas nuevo, se pide eso.
+        long long mas_nuevo = mensajes.empty() ? 0 : mensajes.back().ts;
+        if (ultimo_lista > mas_nuevo) {
+            red::en_fondo([this, mio, mas_nuevo] {
+                Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&limite=100000&desde=" + std::to_wstring(mas_nuevo + 1), 120000);
+                Json j = Json::parsear(r.cuerpo);
+                std::vector<Mensaje> nuevos;
+                for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
+                if (r.ok()) cache::guardar_mensajes(nuevos);
+                red::en_ui([this, mio, nuevos] {
+                    if (mio != chat_actual) return;
+                    for (auto& m : nuevos) agregar_mensaje(m);
+                    pedir_dibujo();
+                });
+            });
+        }
+        return;
+    }
+
     red::en_fondo([this, mio, cuantos, ultimo_lista] {
-        // La cache manda: se lee en este hilo (con "All" son miles de filas)
-        // y se muestra. Al server solo se le pide lo que falta: mas viejos
-        // que no estan cacheados, o mas nuevos si la lista dice que hay.
-        std::vector<Mensaje> de_cache = cache::leer_mensajes(mio, 0, cuantos);
+        // La cache manda. Primero los ultimos 200 (se ven al toque), despues
+        // el resto se lee y se agrega arriba sin mover la vista. Al server
+        // solo se le pide lo que falta: mas viejos que no estan cacheados,
+        // o mas nuevos si la lista dice que hay.
+        int primera = std::min(cuantos, 200);
+        std::vector<Mensaje> de_cache = cache::leer_mensajes(mio, 0, primera);
         long long mas_nuevo = de_cache.empty() ? 0 : de_cache.back().ts;
         long long mas_viejo = de_cache.empty() ? 0 : de_cache.front().ts;
         bool ok = true;
@@ -442,53 +474,108 @@ void App::abrir_chat(const std::string& jid) {
             ok = r.ok();
             Json j = Json::parsear(r.cuerpo);
             for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
+            if (ok) cache::guardar_mensajes(nuevos);
         }
-        // Lo mas viejo que la cache no tiene, si se pidieron mas de los que hay.
-        std::vector<Mensaje> viejos;
-        bool servidor_agotado = false;
-        if ((int)de_cache.size() < cuantos && ok) {
-            int faltan = std::min(cuantos - (int)de_cache.size(), 100000);
-            std::wstring url = L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(faltan);
-            if (mas_viejo > 0) url += L"&antes=" + std::to_wstring(mas_viejo);
-            Respuesta r = red::obtener(url, 300000);
-            ok = r.ok();
-            Json j = Json::parsear(r.cuerpo);
-            for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
-            servidor_agotado = ok && (int)viejos.size() < faltan;
-        }
-        // A la cache de a tandas, para no tener el candado tomado segundos.
-        auto guardar = [](const std::vector<Mensaje>& v) {
-            for (size_t i = 0; i < v.size(); i += 500)
-                cache::guardar_mensajes(std::vector<Mensaje>(v.begin() + i, v.begin() + std::min(v.size(), i + 500)));
-        };
-        if (ok) {
-            guardar(nuevos);
-            guardar(viejos);
-        }
-        std::vector<Mensaje> todo;
-        todo.reserve(viejos.size() + de_cache.size() + nuevos.size());
-        // Sin repetidos (el "desde" incluye el limite y la cache puede tener alguno).
+        std::vector<Mensaje> primeros;
         std::unordered_set<std::string> vistos;
-        for (auto* lista : {&viejos, &de_cache, &nuevos})
+        for (auto* lista : {&de_cache, &nuevos})
             for (auto& m : *lista)
-                if (vistos.insert(m.id).second) todo.push_back(m);
-        bool agotado = servidor_agotado;
-        red::en_ui([this, mio, todo, ok, agotado, cuantos] {
+                if (vistos.insert(m.id).second) primeros.push_back(m);
+        int total = (int)primeros.size();
+        red::en_ui([this, mio, primeros, ok] {
             if (mio != chat_actual) return;
-            cargando_mensajes = false;
-            if (!ok && todo.empty()) {
+            if (!ok && primeros.empty()) {
+                cargando_mensajes = false;
                 aviso_estado = L"Cannot reach the server";
                 pedir_dibujo();
                 return;
             }
-            mensajes = todo;
-            hay_mas_viejos = !agotado;
+            mensajes = primeros;
             armar_vistas();
             bajar_al_final(true);
             marcar_leido(mio);
             pedir_dibujo();
         });
+        if (!ok) {
+            red::en_ui([this] { cargando_mensajes = false; });
+            return;
+        }
+        // Segunda tanda: el resto de la cache, y despues el server si falta.
+        std::vector<Mensaje> resto;
+        if (cuantos > total && mas_viejo > 0) resto = cache::leer_mensajes(mio, mas_viejo, cuantos - total);
+        if (!resto.empty()) {
+            total += (int)resto.size();
+            mas_viejo = resto.front().ts;
+            red::en_ui([this, mio, resto] {
+                if (mio != chat_actual) return;
+                anteponer(resto);
+            });
+        }
+        bool agotado = false;
+        if (cuantos > total) {
+            int faltan = std::min(cuantos - total, 100000);
+            std::wstring url = L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(faltan);
+            if (mas_viejo > 0) url += L"&antes=" + std::to_wstring(mas_viejo);
+            Respuesta r = red::obtener(url, 300000);
+            std::vector<Mensaje> viejos;
+            if (r.ok()) {
+                Json j = Json::parsear(r.cuerpo);
+                for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
+                for (size_t i = 0; i < viejos.size(); i += 500)
+                    cache::guardar_mensajes(std::vector<Mensaje>(viejos.begin() + i, viejos.begin() + std::min(viejos.size(), i + 500)));
+                agotado = (int)viejos.size() < faltan;
+            }
+            if (!viejos.empty())
+                red::en_ui([this, mio, viejos] {
+                    if (mio != chat_actual) return;
+                    anteponer(viejos);
+                });
+        }
+        red::en_ui([this, mio, agotado] {
+            if (mio != chat_actual) return;
+            cargando_mensajes = false;
+            hay_mas_viejos = !agotado;
+            pedir_dibujo();
+        });
     });
+}
+
+// Los mensajes del chat que se deja quedan en memoria (hasta 6 chats).
+void App::recordar_chat() {
+    if (chat_actual.empty() || mensajes.empty()) return;
+    en_memoria[chat_actual] = {std::move(mensajes), hay_mas_viejos};
+    en_memoria_orden.erase(std::remove(en_memoria_orden.begin(), en_memoria_orden.end(), chat_actual), en_memoria_orden.end());
+    en_memoria_orden.push_back(chat_actual);
+    while (en_memoria_orden.size() > 6) {
+        en_memoria.erase(en_memoria_orden.front());
+        en_memoria_orden.erase(en_memoria_orden.begin());
+    }
+    mensajes.clear();
+}
+
+void App::anteponer(const std::vector<Mensaje>& viejos) {
+    if (viejos.empty()) return;
+    // Sin repetidos con lo que ya esta.
+    std::unordered_set<std::string> ids;
+    for (auto& m : mensajes) ids.insert(m.id);
+    std::vector<Mensaje> limpios;
+    for (auto& m : viejos)
+        if (!ids.count(m.id)) limpios.push_back(m);
+    if (limpios.empty()) return;
+    mensajes.insert(mensajes.begin(), limpios.begin(), limpios.end());
+    vistas.insert(vistas.begin(), limpios.size(), VistaMensaje());
+    layout_pendiente += limpios.size();
+    if (sel_msg >= 0) sel_msg += (int)limpios.size();
+    // El que era el primero ahora tiene un anterior: su divisor puede cambiar.
+    if (layout_pendiente < vistas.size()) {
+        float antes = vistas[layout_pendiente].alto;
+        armar_vista(layout_pendiente);
+        double d = vistas[layout_pendiente].alto - antes;
+        conv.pos += d;
+        conv.objetivo += d;
+        conv.max += d;
+    }
+    pedir_dibujo();
 }
 
 void App::cargar_mas_viejos() {
@@ -519,13 +606,7 @@ void App::cargar_mas_viejos() {
                 hay_mas_viejos = false;
                 return;
             }
-            mensajes.insert(mensajes.begin(), viejos.begin(), viejos.end());
-            vistas.insert(vistas.begin(), viejos.size(), VistaMensaje());
-            layout_pendiente += viejos.size();
-            if (sel_msg >= 0) sel_msg += (int)viejos.size();
-            // El que era el primero ahora tiene un anterior: su divisor puede cambiar.
-            if (layout_pendiente < vistas.size()) armar_vista(layout_pendiente);
-            pedir_dibujo();
+            anteponer(viejos);
         });
     });
 }

@@ -366,6 +366,7 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
     if (chat != chat_actual) {
         // Se abre el chat con una ventana de mensajes alrededor del pedido.
         borradores[chat_actual] = campo.texto;
+        recordar_chat();
         chat_actual = chat;
         mensajes.clear();
         vistas.clear();

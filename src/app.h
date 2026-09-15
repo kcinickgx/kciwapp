@@ -164,6 +164,17 @@ struct App {
     bool cargando_mensajes = false;
     bool cargando_chats = false, recarga_pendiente = false, escuchando = false;
     bool resync_pendiente = false;   // el log de eventos se perdio: completar cada chat al abrirlo
+    // Los ultimos chats visitados quedan en memoria (mensajes ya parseados),
+    // asi volver a uno es instantaneo. Los layouts se rearman (son lazy).
+    struct ChatEnMemoria {
+        std::vector<Mensaje> mensajes;
+        bool hay_mas_viejos = true;
+    };
+    std::map<std::string, ChatEnMemoria> en_memoria;
+    std::vector<std::string> en_memoria_orden;  // del mas viejo al mas reciente
+    void recordar_chat();
+    // Agrega mensajes viejos arriba sin mover la vista (layouts lazy).
+    void anteponer(const std::vector<Mensaje>& viejos);
     bool hay_mas_viejos = true;
     long long seq_eventos = 0;
     bool conectado = false;
