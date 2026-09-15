@@ -100,6 +100,8 @@ bool Reproductor::iniciar(const std::wstring& carpeta_exe) {
     opt(mpv, "idle", "yes");
     opt(mpv, "input-default-bindings", "no");
     opt(mpv, "osc", "no");
+    opt(mpv, "osd-bar", "no");     // sin la barra de mpv al seekear: la dibujamos nosotros
+    opt(mpv, "osd-level", "0");
     opt(mpv, "terminal", "no");
 
     // Hay que registrar el wakeup callback antes de mpv_initialize(): mpv
