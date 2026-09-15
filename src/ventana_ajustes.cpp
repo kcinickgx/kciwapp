@@ -841,6 +841,26 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                          SWP_NOZORDER | SWP_NOACTIVATE);
             return 0;
         }
+        case WM_SETCURSOR:
+            if (LOWORD(lp) == HTCLIENT) {
+                // Manito sobre lo clickeable (botones, desplegables, tildes, colores).
+                bool mano = false;
+                if (g_picker.abierto) {
+                    mano = adentro(g_mouse_x, g_mouse_y, g_rect_cuadrado) || adentro(g_mouse_x, g_mouse_y, g_rect_hue) ||
+                           adentro(g_mouse_x, g_mouse_y, g_rect_luz);
+                    for (auto& r : g_clics_popup)
+                        if (adentro(g_mouse_x, g_mouse_y, r.x, r.y, r.w, r.h)) mano = true;
+                } else if (g_desplegable.abierto) {
+                    for (auto& r : g_clics_popup)
+                        if (adentro(g_mouse_x, g_mouse_y, r.x, r.y, r.w, r.h)) mano = true;
+                } else {
+                    for (auto& r : g_clics)
+                        if (adentro(g_mouse_x, g_mouse_y, r.x, r.y, r.w, r.h)) mano = true;
+                }
+                SetCursor(LoadCursorW(nullptr, mano ? IDC_HAND : IDC_ARROW));
+                return 1;
+            }
+            break;
         case WM_MOUSEMOVE: {
             float e = escala(h);
             g_mouse_x = GET_X_LPARAM(lp) / e;
