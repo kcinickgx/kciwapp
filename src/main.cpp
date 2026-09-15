@@ -15,6 +15,7 @@
 #include "red.h"
 #include "tema.h"
 #include "toast.h"
+#include "webwa.h"
 
 namespace {
 
@@ -196,6 +197,12 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                     }
                 }
             }
+            if (wp == 8 && app) {
+                // Cada segundo: el reloj de la llamada; cada dos, el sondeo de WhatsApp Web.
+                static int tic = 0;
+                if ((++tic & 1) == 0 && webwa::activo()) webwa::sondear();
+                if (app->llamada_activa) app->pedir_dibujo();
+            }
             if (wp == 6 && app) {
                 KillTimer(h, 6);
                 // Dejamos de teclear: paused (salvo que estemos grabando).
@@ -296,6 +303,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     app.iniciar(h);
     g_app = &app;
     // Bandeja y globos de notificacion; el click en un globo abre ese mensaje.
+    toast::al_atender([](const std::string& id) {
+        if (!g_app) return;
+        auto it = g_app->llamadas_entrantes.find(id);
+        if (it == g_app->llamadas_entrantes.end()) return;
+        HWND h = g_app->hwnd;
+        if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+        SetForegroundWindow(h);
+        g_app->atender_llamada(it->second.first, it->second.second);
+    });
+    webwa::al_cambiar_llamada([](bool en) {
+        if (g_app) g_app->llamada_cambio(en);
+    });
+    SetTimer(h, 8, 1000, nullptr);
     toast::al_rechazar([](const std::string& id) {
         std::string cuerpo = "{\"id\":" + json_texto(id) + "}";
         red::en_fondo([cuerpo] { red::mandar_json(L"/llamada/rechazar", cuerpo); });

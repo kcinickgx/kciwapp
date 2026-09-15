@@ -205,7 +205,7 @@ bool App::click_busqueda_chat(float x, float y, bool shift) {
             return true;
         }
         if (!busca_chat_abierta) return false;
-        float tx = xc + 16 + 40 + 14, cw = xc + W - 56 - tx, cy = (top - ALTO_CAMPO) / 2;
+        float tx = xc + 16 + 40 + 14, cw = xc + W - 56 - tx, cy = (CABECERA_H - ALTO_CAMPO) / 2;
         bool nav = elegido_chat >= 0 && !res_chat.empty();
         if (nav && x >= tx + cw - NAVEGADOR_W + 106 && x < tx + cw) {
             if (x < tx + cw - NAVEGADOR_W + 132) mover_coincidencia(+1);

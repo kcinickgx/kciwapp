@@ -21,6 +21,10 @@ void llamada(const std::wstring& titulo, const std::wstring& texto, const std::s
              const std::string& id_llamada, const std::wstring& ruta_foto_http);
 void llamada_terminada(const std::string& id_llamada);
 void al_rechazar(std::function<void(const std::string& id_llamada)> f);
+// Si hay con que atender desde la PC (WhatsApp Web escondido), el aviso
+// tiene tambien "Answer".
+void puede_atender(bool si);
+void al_atender(std::function<void(const std::string& id_llamada)> f);
 // Nombres de los monitores conectados (indice = el que se guarda en settings).
 std::vector<std::wstring> monitores();
 void cerrar_todos();

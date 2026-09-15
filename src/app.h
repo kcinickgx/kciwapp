@@ -289,6 +289,24 @@ struct App {
     unsigned long long presencia_ts = 0;
     void mandar_presencia(const std::string& estado);  // "typing" | "recording" | ""
     void teclear_presencia();  // al cambiar el texto del campo
+    // Llamadas (llamadas_ui.cpp): via WhatsApp Web escondido.
+    bool llamada_activa = false, llamada_video = false, llamada_saliente = false;
+    unsigned long long llamada_desde = 0;
+    std::wstring llamada_con;
+    std::string llamada_chat;
+    std::map<std::string, std::pair<std::string, bool>> llamadas_entrantes;  // id -> (chat, video)
+    bool llamadas_disponibles() const;
+    void iniciar_llamada(bool video);
+    void atender_llamada(const std::string& chat, bool video);
+    void llamada_cambio(bool en_curso);
+    void terminar_llamada_ui();
+    void colgar_llamada();
+    void ubicar_video_llamada();
+    float alto_barra_llamada() const;
+    void dibujar_barra_llamada();
+    void dibujar_botones_llamada();
+    bool click_llamada(float x, float y);
+    bool clickeable_llamada(float x, float y) const;
     // Audio: un reproductor para notas de voz y audios, y la grabacion.
     Reproductor reproductor;
     bool reproductor_ok = false;
@@ -453,7 +471,9 @@ struct App {
     // Regiones (DIPs)
     float x_conv() const { return ancho_lista; }
     float w_conv() const { return g.ancho - ancho_lista; }
-    float alto_cabecera() const { return 60.0f; }
+    static constexpr float CABECERA_H = 60.0f;
+    // La cabecera mas la barra de llamada en curso (si hay).
+    float alto_cabecera() const { return CABECERA_H + alto_barra_llamada(); }
     float top_lista() const { return 104.0f; }
     // Alto de una fila de la lista: acompana al tamano de letra.
     float fila_h() const { return std::round(letra_lista * 3.2f + 20.0f); }

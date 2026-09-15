@@ -29,7 +29,8 @@ struct Aviso {
 
 constexpr float BOTONES_H = 36.0f;
 float alto_de(const Aviso& a) { return ALTO_AVISO + (a.id_llamada.empty() ? 0 : BOTONES_H); }
-std::function<void(const std::string&)> g_al_rechazar;
+std::function<void(const std::string&)> g_al_rechazar, g_al_atender;
+bool g_puede_atender = false;
 bool g_sonando = false;
 
 void sonar(bool si) {
@@ -139,14 +140,20 @@ void dibujar() {
         g.borde_redondo(x, y, ANCHO, alto, 12, Color(BORDE()), 1.0f);
         g.rect_redondo(x, y + 12, 4, ALTO_AVISO - 24, 2, Color(av.id_llamada.empty() ? ACCENT() : 0xf15c6d));
         if (!av.id_llamada.empty()) {
-            // Reject (rojo) y "Answer on phone" (solo cierra el aviso).
-            float by = y + ALTO_AVISO - 4, bw = 120, bh = 28;
+            // Reject (rojo), "On phone" (solo cierra el aviso) y, si se puede, Answer.
+            float by = y + ALTO_AVISO - 4, bw = g_puede_atender ? 108 : 120, bh = 28;
             g.rect_redondo(x + ANCHO - bw - 14, by, bw, bh, 6, Color(0xf15c6d));
             float tw = g.medir(L"Reject", 13);
             g.renglon(L"Reject", x + ANCHO - bw - 14 + (bw - tw) / 2, by + 6, 13, Color(0xffffff), DWRITE_FONT_WEIGHT_SEMI_BOLD);
             g.rect_redondo(x + ANCHO - 2 * bw - 24, by, bw, bh, 6, Color(BG_CAMPO()));
-            tw = g.medir(L"Answer on phone", 13);
-            g.renglon(L"Answer on phone", x + ANCHO - 2 * bw - 24 + (bw - tw) / 2, by + 6, 13, Color(TXT()));
+            const wchar_t* tel = g_puede_atender ? L"On phone" : L"Answer on phone";
+            tw = g.medir(tel, 13);
+            g.renglon(tel, x + ANCHO - 2 * bw - 24 + (bw - tw) / 2, by + 6, 13, Color(TXT()));
+            if (g_puede_atender) {
+                g.rect_redondo(x + ANCHO - 3 * bw - 34, by, bw, bh, 6, Color(ACCENT()));
+                tw = g.medir(L"Answer", 13);
+                g.renglon(L"Answer", x + ANCHO - 3 * bw - 34 + (bw - tw) / 2, by + 6, 13, Color(0xffffff), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            }
         }
         float r = 26, cx = x + 20 + r, cy = y + ALTO_AVISO / 2;
         auto it = g_fotos.find(av.clave_foto);
@@ -209,12 +216,14 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 Aviso av = g_avisos[i];
                 bool cerrar = x >= MARGEN + ANCHO - 40 && y < yy + 34;
                 if (!av.id_llamada.empty()) {
-                    float by = yy + ALTO_AVISO - 4, bw = 120;
+                    float by = yy + ALTO_AVISO - 4, bw = g_puede_atender ? 108 : 120;
                     bool en_botones = y >= by && y < by + 28;
                     bool rechazar = en_botones && x >= MARGEN + ANCHO - bw - 14 && x < MARGEN + ANCHO - 14;
                     bool atender = en_botones && x >= MARGEN + ANCHO - 2 * bw - 24 && x < MARGEN + ANCHO - bw - 24;
-                    if (!rechazar && !atender && !cerrar) break;  // el resto del aviso no hace nada
+                    bool aca = g_puede_atender && en_botones && x >= MARGEN + ANCHO - 3 * bw - 34 && x < MARGEN + ANCHO - 2 * bw - 34;
+                    if (!rechazar && !atender && !aca && !cerrar) break;  // el resto del aviso no hace nada
                     if (rechazar && g_al_rechazar) g_al_rechazar(av.id_llamada);
+                    if (aca && g_al_atender) g_al_atender(av.id_llamada);
                     cerrar = true;
                 }
                 g_avisos.erase(g_avisos.begin() + i);
@@ -341,5 +350,7 @@ void llamada_terminada(const std::string& id_llamada) {
 }
 
 void al_rechazar(std::function<void(const std::string&)> f) { g_al_rechazar = std::move(f); }
+void al_atender(std::function<void(const std::string&)> f) { g_al_atender = std::move(f); }
+void puede_atender(bool si) { g_puede_atender = si; }
 
 }  // namespace toast

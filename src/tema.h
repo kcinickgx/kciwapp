@@ -29,6 +29,7 @@ struct Ajustes {
     std::wstring fondo = L"whatsapp"; // "" sin fondo, "whatsapp" los garabatos, o un archivo de la carpeta fondos
     float letra_lista = 15.0f, letra_chat = 14.5f;
     bool notificaciones = true;
+    bool llamadas_web = false;        // WhatsApp Web escondido para llamadas
     std::wstring entrada, salida;     // ids WASAPI ("" = el del sistema)
     int mensajes_por_chat = 200;      // cuantos se cargan al abrir un chat (0 = todos)
     int monitor_avisos = -1;          // indice del monitor para los avisos (-1 = el principal)

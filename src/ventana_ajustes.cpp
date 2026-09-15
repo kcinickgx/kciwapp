@@ -16,6 +16,7 @@
 
 #include "gfx.h"
 #include "grabador.h"
+#include "webwa.h"
 #include "tema.h"
 #include "toast.h"
 
@@ -673,6 +674,58 @@ float seccion_notificaciones(Gfx& g, float x, float y, float ancho_contenido) {
     return y;
 }
 
+// El QR de WhatsApp Web, decodificado una vez por cada QR distinto (cambia
+// cada tanto) y por cada contexto D2D (se recrea con el tema).
+std::string g_qr_datos;
+ComPtr<ID2D1Bitmap1> g_qr_bmp;
+ID2D1DeviceContext* g_qr_ctx = nullptr;
+
+float seccion_llamadas(Gfx& g, float x, float y, float ancho_contenido) {
+    y = titulo_seccion(g, x, y, L"CALLS");
+    y += 6;
+    g.renglon(L"Calls via WhatsApp Web (hidden)", x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
+    bool on = ajustes::actual().llamadas_web;
+    float pw = 42, ph = 22, px = x + ancho_contenido - pw, py = y + (FILA - ph) / 2.0f;
+    g.rect_redondo(px, py, pw, ph, ph / 2.0f, Color(on ? ACCENT() : BG_CAMPO()));
+    float cx = on ? px + pw - ph / 2.0f : px + ph / 2.0f;
+    g.circulo(cx, py + ph / 2.0f, ph / 2.0f - 3, Color(0xffffff));
+    agregar_clic(g_clics, x, y, ancho_contenido, FILA,
+                 []() { ajustes::cambiar([](Ajustes& a) { a.llamadas_web = !a.llamadas_web; }); });
+    y += FILA;
+    g.renglon(L"whatsmeow has no call audio/video. This runs WhatsApp Web in the background as another linked device, only for calls.",
+              x, y + 4, 12, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, ancho_contenido);
+    y += 40;
+    if (!on) return y;
+    std::wstring estado;
+    if (!webwa::activo()) estado = L"WebView2 runtime not available";
+    else if (webwa::logueado()) estado = L"Linked ✓  (to unlink: phone → Linked devices)";
+    else if (webwa::cargando()) estado = L"Loading WhatsApp Web...";
+    else estado = L"Not linked: scan this QR with the phone (Linked devices → Link a device)";
+    g.renglon(estado, x, y + 4, 13, Color(webwa::logueado() ? ACCENT() : TXT()), DWRITE_FONT_WEIGHT_NORMAL, ancho_contenido);
+    y += 30;
+    if (webwa::activo() && !webwa::logueado()) {
+        std::string qr = webwa::qr_png();
+        if (!qr.empty()) {
+            if (qr != g_qr_datos || g_qr_ctx != g.ctx.Get()) {
+                g_qr_datos = qr;
+                g_qr_ctx = g.ctx.Get();
+                Pixeles p = g.decodificar(qr, false);
+                g_qr_bmp = p.vacio() ? nullptr : g.subir(p);
+            }
+            if (g_qr_bmp) {
+                float lado = 264;
+                g.rect_redondo(x, y, lado + 16, lado + 16, 8, Color(0xffffff));
+                g.bitmap(g_qr_bmp.Get(), x + 8, y + 8, lado, lado);
+                y += lado + 16;
+            }
+        } else {
+            g_qr_bmp.Reset();
+            g_qr_datos.clear();
+        }
+    }
+    return y;
+}
+
 float seccion_audio(Gfx& g, float x, float y, float ancho_contenido) {
     y = titulo_seccion(g, x, y, L"AUDIO");
     y += 6;
@@ -797,6 +850,7 @@ void dibujar_todo() {
     y = seccion_letras(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_chat(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_notificaciones(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
+    y = seccion_llamadas(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_audio(g_gfx, x, y, ancho_contenido) + PADDING;
     g_contenido_alto = y + g_scroll;
 
@@ -821,8 +875,13 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_CREATE: {
             BOOL oscuro = TRUE;
             DwmSetWindowAttribute(h, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &oscuro, sizeof oscuro);
+            SetTimer(h, 9, 1000, nullptr);
             return 0;
         }
+        case WM_TIMER:
+            // El QR de WhatsApp Web cambia solo; mientras no haya sesion se redibuja.
+            if (wp == 9 && ajustes::actual().llamadas_web && !webwa::logueado()) InvalidateRect(h, nullptr, FALSE);
+            return 0;
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:

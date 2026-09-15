@@ -8,6 +8,7 @@
 
 #include "aviso.h"
 #include "toast.h"
+#include "webwa.h"
 #include "cache.h"
 #include "red.h"
 #include "tema.h"
@@ -311,6 +312,7 @@ void App::iniciar(HWND h) {
 
 void App::redimensionado() {
     g.redimensionar();
+    ubicar_video_llamada();
     pedir_dibujo();
 }
 
@@ -930,9 +932,12 @@ bool App::aplicar_evento(const Json& e) {
             std::wstring texto = d["video"].bul() ? L"Incoming video call" : L"Incoming voice call";
             if (c && c->es_grupo) texto += L" from " + nombre_de(de);
             bool con_foto = (c && c->tiene_foto) || (contactos.count(chat) && contactos[chat].tiene_foto);
+            llamadas_entrantes[id] = {chat, d["video"].bul()};
+            toast::puede_atender(llamadas_disponibles());
             toast::llamada(titulo, texto, chat, id, con_foto ? L"/foto/" + ancho(chat) : L"");
         } else if (estado != "entrante") {
             toast::llamada_terminada(id);
+            llamadas_entrantes.erase(id);
         }
     } else if (tipo == "escribiendo") {
         // Efimero: si el evento es viejo (reconexion, arranque) no vale.
@@ -1336,6 +1341,7 @@ void App::dibujar() {
     dibujar_lista();
     dibujar_conversacion();
     dibujar_cabecera();
+    dibujar_barra_llamada();
     dibujar_pie();
     dibujar_seleccion_barra();
     dibujar_info();
@@ -1525,7 +1531,7 @@ void App::tildes(float x, float y, bool doble, Color c) {
 }
 
 void App::dibujar_cabecera() {
-    float x = x_conv(), W = w_conv(), H = alto_cabecera();
+    float x = x_conv(), W = w_conv(), H = CABECERA_H;
     if (chat_actual.empty()) return;
     g.rect(x, 0, W, H, Color(BG_PANEL()));
     const Chat* c = chat_de(chat_actual);
@@ -1545,8 +1551,9 @@ void App::dibujar_cabecera() {
     bool escribe = !sub.empty();
     if (!escribe) sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
     g.renglon(sub, cx + r + 14, 34, 12.5f, Color(escribe ? ACCENT() : TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
-    // La lupa para buscar en este chat.
+    // La lupa para buscar en este chat, y los botones de llamar.
     if (!seleccionando) g.lupa(x + W - 36, 27, 8, Color(TXT_DIM()));
+    dibujar_botones_llamada();
 }
 
 void App::dibujar_pie() {
@@ -2030,6 +2037,10 @@ void App::raton_abajo(float x, float y, bool shift) {
     buscador.foco = false;
     emoji_buscador.foco = false;
     buscador_chat.foco = false;
+    if (click_llamada(x, y)) {
+        pedir_dibujo();
+        return;
+    }
     if (click_busqueda_chat(x, y, shift)) {
         pedir_dibujo();
         return;
@@ -2206,6 +2217,10 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
         toast::mostrar(L"kciwapp test", L"If you see this, notifications work", chat_actual, "", L"");
         return;
     }
+    if (vk == VK_F10) {
+        webwa::volcar_dom();
+        return;
+    }
     if (vk == VK_F11) {
         traza_frames = 300;
         red::registrar("F11: traza de 300 frames");
@@ -2350,6 +2365,11 @@ void App::aplicar_ajustes() {
         if (abajo) bajar_al_final(true);
     }
     if (reproductor_ok) reproductor.salida(a.salida);
+    if (a.llamadas_web && !webwa::activo()) webwa::iniciar(hwnd, carpeta_exe());
+    else if (!a.llamadas_web && webwa::activo()) {
+        webwa::cerrar();
+        terminar_llamada_ui();
+    }
     if (fondo_cargado != a.fondo) {
         fondo_cargado = a.fondo;
         fondo_bmp.Reset();
@@ -2434,6 +2454,8 @@ bool App::sobre_clickeable(float x, float y) {
     if (emojis_abierto) return true;
     if (info_abierto) return y < alto_cabecera() + 60 || y > alto_cabecera();
     float top = alto_cabecera(), bottom = g.alto - alto_pie, W = w_conv();
+    if (clickeable_llamada(x, y)) return true;
+    if (llamada_activa && y >= CABECERA_H && y < top) return false;  // la barra de la llamada
     if (clickeable_busqueda_chat(x, y)) return true;
     if (panel_resultados_chat() && y >= top && y < bottom) return false;
     if (y < top) return !chat_actual.empty() && !busca_chat_abierta;  // cabecera -> info
