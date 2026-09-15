@@ -498,7 +498,7 @@ void sondear() {
             ejecutar(g_llamada, JS_VIDEO, [](const std::wstring& r2) {
                 g_video_fluye = resultado_str(r2) == "si";
                 static int cada = 0;
-                if (!g_video_fluye && (cada++ % 5) == 0)
+                if (!g_video_fluye && (cada++ % 2) == 0)
                     ejecutar(g_llamada, JS_DIAG_VIDEO, [](const std::wstring& r3) { registrar("diag ventanita crudo: " + angosto(r3).substr(0, 600)); });
             });
         } else {
