@@ -233,7 +233,7 @@ void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
         g.triangulo(pcx - 5, pcy - 7.5f, pcx + 8, pcy, pcx - 5, pcy + 7.5f, Color(0x111b21));
     }
     // La onda: 64 barras de WhatsApp, o una plana si no hay (audio comun).
-    float ox = cx + AUDIO_ONDA_X, ow = w - AUDIO_ONDA_X - AUDIO_ONDA_DER - (suena ? AUDIO_VEL_W + 8 : 0);
+    float ox = cx + AUDIO_ONDA_X, ow = w - AUDIO_ONDA_X - AUDIO_ONDA_DER - AUDIO_VEL_W - 8;
     float oy = cy + 12, oh = 24;
     double d = suena ? reproductor.duracion() : (double)m.media->segundos;
     double pos = suena ? reproductor.posicion() : 0;
@@ -254,8 +254,8 @@ void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
     int seg = (int)(suena ? pos : (double)m.media->segundos);
     std::wstring t = std::to_wstring(seg / 60) + L":" + (seg % 60 < 10 ? L"0" : L"") + std::to_wstring(seg % 60);
     g.renglon(t, ox, cy + h - 17, 11, Color(TXT_DIM()));
-    // Velocidad, solo mientras suena.
-    if (suena) {
+    // Velocidad, siempre visible (es global).
+    {
         float vx = cx + w - AUDIO_ONDA_DER - AUDIO_VEL_W, vy = cy + 12;
         g.rect_redondo(vx, vy, AUDIO_VEL_W, 24, 12, Color(TXT_DIM(), 0.35f));
         wchar_t buf[8];
@@ -271,7 +271,7 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
     // onda en coordenadas absolutas.
     const Mensaje& m = mensajes[i];
     bool suena = reproduciendo_id == m.id;
-    if (suena) {
+    {
         float vx = w - AUDIO_ONDA_DER - AUDIO_VEL_W;
         if (rx >= vx && ry >= 8 && ry <= 40) {
             velocidad_audio = velocidad_audio == 1.0 ? 1.5 : (velocidad_audio == 1.5 ? 2.0 : 1.0);
@@ -279,6 +279,8 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
             pedir_dibujo();
             return;
         }
+    }
+    if (suena) {
         float ox = AUDIO_ONDA_X, ow = w - AUDIO_ONDA_X - AUDIO_ONDA_DER - AUDIO_VEL_W - 8;
         if (rx >= ox && rx <= ox + ow && ry >= 6 && ry <= 42) {
             double d = reproductor.duracion();
