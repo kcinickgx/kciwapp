@@ -1259,7 +1259,7 @@ void App::dibujar_lista() {
     g.renglon(L"⚙", W - 42, 16, 22, Color(TXT_DIM()));
     if (!aviso_estado.empty()) g.renglon(aviso_estado, 90, 22, 12, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
     g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO()));
-    g.renglon(L"\U0001F50D", 22, 67, 14, Color(TXT_DIM()));
+    g.lupa(29, 76, 6, Color(TXT_DIM()));
     buscador.dibujar(g, 40, 61, W - 54, 32, ahora);
 
     armar_items();
@@ -1414,7 +1414,7 @@ void App::dibujar_cabecera() {
     std::wstring sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
     g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 120);
     // La lupa para buscar en este chat.
-    if (!seleccionando) g.renglon(L"\U0001F50D", x + W - 44, 19, 18, Color(TXT_DIM()));
+    if (!seleccionando) g.lupa(x + W - 36, 27, 8, Color(TXT_DIM()));
 }
 
 void App::dibujar_pie() {
@@ -1616,8 +1616,14 @@ void App::dibujar_mensaje(size_t i, float y) {
     if (!figurita) g.rect_redondo(bx, by, v.bw, v.bh, 8, fondo);
     // Resaltado al llegar desde una busqueda o notificacion: se apaga solo.
     if (m.id == resaltado_id) {
-        float t = (ahora - resaltado_desde) / 2000.0f;
-        if (t < 1) g.rect_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT(), 0.35f * (1 - t)));
+        if (busca_chat_abierta && elegido_chat >= 0) {
+            // Elegido desde el buscador del chat: queda marcado hasta cerrarlo.
+            g.rect_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT(), 0.30f));
+            g.borde_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT()), 2.0f);
+        } else {
+            float t = (ahora - resaltado_desde) / 2000.0f;
+            if (t < 1) g.rect_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT(), 0.35f * (1 - t)));
+        }
     }
     float cy = by + PAD_Y, cx = bx + PAD_X;
     if (v.nombre) {

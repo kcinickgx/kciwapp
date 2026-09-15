@@ -87,6 +87,8 @@ struct Gfx {
     // Triangulo relleno (para el play): tres vertices.
     void triangulo(float x1, float y1, float x2, float y2, float x3, float y3, Color c);
     void linea(float x1, float y1, float x2, float y2, Color c, float grosor = 1.0f);
+    // Lupa de trazo: aro de radio r centrado en (cx, cy) y el mango hacia abajo a la derecha.
+    void lupa(float cx, float cy, float r, Color c, float grosor = 1.6f);
     void recortar(float x, float y, float w, float h);
     void destapar();
     void recortar_redondo(float x, float y, float w, float h, float radio);

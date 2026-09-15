@@ -218,6 +218,11 @@ void Gfx::linea(float x1, float y1, float x2, float y2, Color c, float grosor) {
     ctx->DrawLine(D2D1::Point2F(x1, y1), D2D1::Point2F(x2, y2), pincel(c), grosor);
 }
 
+void Gfx::lupa(float cx, float cy, float r, Color c, float grosor) {
+    ctx->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), pincel(c), grosor);
+    ctx->DrawLine(D2D1::Point2F(cx + r * 0.72f, cy + r * 0.72f), D2D1::Point2F(cx + r * 1.7f, cy + r * 1.7f), pincel(c), grosor + 0.4f);
+}
+
 void Gfx::recortar(float x, float y, float w, float h) {
     ctx->PushAxisAlignedClip(D2D1::RectF(x, y, x + w, y + h), D2D1_ANTIALIAS_MODE_ALIASED);
 }

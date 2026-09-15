@@ -12,7 +12,7 @@ namespace {
 constexpr float ALTO_CAMPO = 36.0f;
 constexpr int PAGINA = 1000000;  // todas de una, sin paginar
 // Ancho reservado a la derecha del campo para "n/N" y las flechas.
-constexpr float NAVEGADOR_W = 110.0f;
+constexpr float NAVEGADOR_W = 160.0f;
 }  // namespace
 
 void App::abrir_busqueda_chat() {
@@ -49,6 +49,7 @@ void App::cerrar_busqueda_chat() {
     res_chat_completa = false;
     res_chat_buscando = false;
     scroll_res_chat = Desplazable();
+    resaltado_id.clear();
     campo.foco = true;
     pedir_dibujo();
 }
@@ -127,7 +128,7 @@ void App::mover_coincidencia(int dir) {
 void App::dibujar_busqueda_cabecera(float tx, float x, float W, float H) {
     float cx = tx, cy = (H - ALTO_CAMPO) / 2, cw = x + W - 56 - cx;
     g.rect_redondo(cx, cy, cw, ALTO_CAMPO, 8, Color(BG_CAMPO()));
-    g.renglon(L"\U0001F50D", cx + 10, cy + 8, 14, Color(TXT_DIM()));
+    g.lupa(cx + 17, cy + 17, 6, Color(TXT_DIM()));
     bool nav = elegido_chat >= 0 && !res_chat.empty();
     float fw = cw - 34 - (nav ? NAVEGADOR_W : 0);
     buscador_chat.dibujar(g, cx + 30, cy + 2, fw, ALTO_CAMPO - 4, ahora);
@@ -135,12 +136,13 @@ void App::dibujar_busqueda_cabecera(float tx, float x, float W, float H) {
         int actual = std::min(elegido_chat, (int)res_chat.size() - 1);
         std::wstring cuenta = std::to_wstring(actual + 1) + L"/" + std::to_wstring(res_chat.size()) + (res_chat_completa ? L"" : L"+");
         float nx = cx + cw - NAVEGADOR_W;
-        g.renglon(cuenta, nx, cy + 10, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, 56);
+        float cw2 = g.medir(cuenta, 12.5f);
+        g.renglon(cuenta, nx + 100 - cw2, cy + 10, 12.5f, Color(TXT_DIM()));
         bool hay_viejo = actual + 1 < (int)res_chat.size() || !res_chat_completa;
         bool hay_nuevo = actual > 0;
         // Arriba = mas viejo (como en la lista, que va del mas nuevo al mas viejo).
-        g.renglon(L"", nx + 62, cy + 10, 14, Color(hay_viejo ? TXT() : BORDE()));
-        g.renglon(L"", nx + 86, cy + 10, 14, Color(hay_nuevo ? TXT() : BORDE()));
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE70E", nx + 112, cy + 11, 13, Color(hay_viejo ? TXT() : BORDE()));
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE70D", nx + 138, cy + 11, 13, Color(hay_nuevo ? TXT() : BORDE()));
     }
     // La cruz para cerrar, donde estaba la lupa.
     g.renglon(L"✕", x + W - 42, 20, 18, Color(TXT_DIM()));
@@ -205,8 +207,8 @@ bool App::click_busqueda_chat(float x, float y, bool shift) {
         if (!busca_chat_abierta) return false;
         float tx = xc + 16 + 40 + 14, cw = xc + W - 56 - tx, cy = (top - ALTO_CAMPO) / 2;
         bool nav = elegido_chat >= 0 && !res_chat.empty();
-        if (nav && x >= tx + cw - NAVEGADOR_W + 56 && x < tx + cw) {
-            if (x < tx + cw - NAVEGADOR_W + 80) mover_coincidencia(+1);
+        if (nav && x >= tx + cw - NAVEGADOR_W + 106 && x < tx + cw) {
+            if (x < tx + cw - NAVEGADOR_W + 132) mover_coincidencia(+1);
             else mover_coincidencia(-1);
             return true;
         }
@@ -239,7 +241,7 @@ bool App::clickeable_busqueda_chat(float x, float y) const {
         if (x > xc + W - 56) return true;
         if (!busca_chat_abierta) return false;
         float tx = xc + 16 + 40 + 14, cw = xc + W - 56 - tx;
-        return elegido_chat >= 0 && !res_chat.empty() && x >= tx + cw - NAVEGADOR_W + 56 && x < tx + cw;
+        return elegido_chat >= 0 && !res_chat.empty() && x >= tx + cw - NAVEGADOR_W + 106 && x < tx + cw;
     }
     if (!panel_resultados_chat() || y >= bottom) return false;
     if (x > xc + W - 24) return scroll_res_chat.max > 0;
