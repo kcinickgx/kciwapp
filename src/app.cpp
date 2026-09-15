@@ -197,6 +197,11 @@ Mensaje Mensaje::de_json(const Json& j) {
     m.ts = j["ts"].entero();
     m.tipo = j["tipo"].str("texto");
     m.texto = ancho(j["texto"].str());
+    // Las transcripciones de audio arrancan escondidas (el toggle las muestra).
+    if ((m.tipo == "nota" || m.tipo == "audio") && !m.texto.empty()) {
+        m.texto_oculto = m.texto;
+        m.texto.clear();
+    }
     m.cita_id = j["cita_id"].str();
     m.cita_remitente = j["cita_remitente"].str();
     m.cita_texto = ancho(j["cita_texto"].str());

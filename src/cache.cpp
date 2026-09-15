@@ -390,6 +390,10 @@ Mensaje fila_a_mensaje(Stmt& st) {
     m.ts = st.col_int64(4);
     m.tipo = st.col_texto(5);
     m.texto = st.col_ancho(6);
+    if ((m.tipo == "nota" || m.tipo == "audio") && !m.texto.empty()) {
+        m.texto_oculto = m.texto;
+        m.texto.clear();
+    }
     m.cita_id = st.col_texto(7);
     m.cita_remitente = st.col_texto(8);
     m.cita_texto = st.col_ancho(9);
