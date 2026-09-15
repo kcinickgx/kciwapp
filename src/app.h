@@ -154,6 +154,7 @@ struct App {
     // Los layouts se arman de abajo para arriba, de a tandas por frame:
     // [layout_pendiente, n) ya estan armados; lo de arriba, todavia no.
     size_t layout_pendiente = 0;
+    int traza_frames = 0;  // F11: cuantos frames quedan por trazar
     // inicio[i] = alto acumulado hasta el mensaje i (desde el tope del
     // contenido), en double; inicio[n] es el total. Se rearma por frame.
     std::vector<double> inicio;
@@ -363,7 +364,7 @@ struct App {
     void armar_vista(size_t i);
     // Arma hasta `cuantos` layouts pendientes (o hasta agotar `ms_max`);
     // devuelve el alto agregado arriba de lo visible.
-    float avanzar_layouts(int cuantos, float ms_max);
+    double avanzar_layouts(int cuantos, float ms_max);
     double alto_contenido() const;
     void bajar_al_final(bool ya);
     bool al_final() const;

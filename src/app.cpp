@@ -735,7 +735,7 @@ void App::armar_vistas() {
     avanzar_layouts(120, 1000.0f);
 }
 
-float App::avanzar_layouts(int cuantos, float ms_max) {
+double App::avanzar_layouts(int cuantos, float ms_max) {
     if (layout_pendiente > vistas.size()) layout_pendiente = vistas.size();
     if (vistas.size() != mensajes.size()) {
         vistas.resize(mensajes.size());
@@ -744,7 +744,7 @@ float App::avanzar_layouts(int cuantos, float ms_max) {
     LARGE_INTEGER f, t0, t1;
     QueryPerformanceFrequency(&f);
     QueryPerformanceCounter(&t0);
-    float agregado = 0;
+    double agregado = 0;  // en double: en float el error se acumula frame a frame
     while (layout_pendiente > 0 && cuantos-- > 0) {
         layout_pendiente--;
         armar_vista(layout_pendiente);
@@ -1244,6 +1244,15 @@ void App::dibujar_conversacion() {
     conv.limitar();
     if (conv.pos < 600 && hay_mas_viejos && !cargando_mensajes && layout_pendiente == 0) cargar_mas_viejos();
 
+    if (traza_frames > 0) {
+        traza_frames--;
+        char buf[300];
+        snprintf(buf, sizeof buf, "frame pos=%.2f obj=%.2f max=%.2f contenido=%.2f H=%.2f pie=%.2f pendiente=%zu n=%zu ultimo_alto=%.1f",
+                 conv.pos, conv.objetivo, conv.max, alto_contenido(), (double)H, (double)alto_pie, layout_pendiente, vistas.size(),
+                 vistas.empty() ? 0.0 : (double)vistas.back().alto);
+        red::registrar(buf);
+        pedir_dibujo();
+    }
     g.recortar(x, top, W, H);
     // El primer mensaje que asoma, por busqueda binaria sobre los inicios.
     double desde = conv.pos - 12;
@@ -1663,6 +1672,12 @@ void App::rueda(float x, float y, float delta) {
 }
 
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
+    if (vk == VK_F11) {
+        traza_frames = 300;
+        red::registrar("F11: traza de 300 frames");
+        pedir_dibujo();
+        return;
+    }
     if (vk == VK_F12) {
         // Traza de depuracion del chat abierto.
         char buf[512];
