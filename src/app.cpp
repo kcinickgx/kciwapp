@@ -317,6 +317,7 @@ void App::redimensionado() {
 bool App::animando() {
     return !lista.quieto() || !conv.quieto() ||
            (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
+           alguien_escribe(chat_actual) ||
            grab == Grab::Grabando ||
            ((!reproduciendo_id.empty() || grab_escuchando) && !reproductor.pausado() && !reproductor.terminado());
 }
@@ -901,10 +902,15 @@ bool App::aplicar_evento(const Json& e) {
         // Efimero: si el evento es viejo (reconexion, arranque) no vale.
         long long ts = e["ts"].entero();
         std::string estado = d["estado"].str();
+        bool estaba_al_final = chat == chat_actual && al_final();
         if (estado == "nada" || ts < ahora_ms() - 20000) escribiendo.erase(chat);
         else {
             escribiendo[chat] = {d["quien"].str(), estado == "grabando", GetTickCount64() + 12000};
             SetTimer(hwnd, 4, 12500, nullptr);  // para que se apague solo
+        }
+        if (chat == chat_actual && inicio.size() == vistas.size() + 1) {
+            conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
+            if (estaba_al_final) conv.ir(conv.max, false);
         }
         pedir_dibujo();
     } else if (tipo == "sesion") {
@@ -1153,7 +1159,31 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
 }
 
 double App::alto_contenido() const {
-    return (inicio.size() == vistas.size() + 1 ? inicio.back() : 0.0) + 24;
+    return (inicio.size() == vistas.size() + 1 ? inicio.back() : 0.0) + 24 + (alguien_escribe(chat_actual) ? ESCRIBIENDO_H : 0);
+}
+
+bool App::alguien_escribe(const std::string& chat) const {
+    auto it = escribiendo.find(chat);
+    return it != escribiendo.end() && it->second.hasta > GetTickCount64();
+}
+
+// La burbuja del que escribe: tres puntos que laten, o el microfono si graba.
+void App::dibujar_burbuja_escribiendo(float y) {
+    float x = x_conv() + 14, bw = 62, bh = ESCRIBIENDO_H - 10;
+    auto it = escribiendo.find(chat_actual);
+    if (it != escribiendo.end() && it->second.grabando) {
+        // Como WhatsApp: una burbuja redonda con el microfono titilando.
+        float r = bh / 2, cx = x + r, cy = y + r;
+        g.circulo(cx, cy, r, Color(BUBBLE_OTRA()));
+        float f = 0.35f + 0.65f * (0.5f + 0.5f * std::sin(ahora / 250.0f));
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"", cx - 8, cy - 8, 16, Color(TXT(), f));
+        return;
+    }
+    g.rect_redondo(x, y, bw, bh, 8, Color(BUBBLE_OTRA()));
+    for (int k = 0; k < 3; k++) {
+        float f = 0.5f + 0.5f * std::sin((ahora / 180.0f) - k * 1.1f);
+        g.circulo(x + 16 + k * 15, y + bh / 2, 4.5f, Color(TXT_DIM(), 0.35f + 0.65f * f));
+    }
 }
 
 void App::recalcular_inicios() {
@@ -1627,6 +1657,10 @@ void App::dibujar_conversacion() {
         if (y + v.alto < top) continue;
         if (y > bottom) break;
         dibujar_mensaje(i, y);
+    }
+    if (alguien_escribe(chat_actual) && inicio.size() == vistas.size() + 1) {
+        float y = y_de(vistas.size());
+        if (y < bottom && y + ESCRIBIENDO_H > top) dibujar_burbuja_escribiendo(y);
     }
     if (!seleccionando && msg_bajo_mouse >= 0 && msg_bajo_mouse < (int)vistas.size()) dibujar_reacciones_de(msg_bajo_mouse, y_de((size_t)msg_bajo_mouse));
     if (reaccion_msg >= 0 && reaccion_msg != msg_bajo_mouse && reaccion_msg < (int)vistas.size())
