@@ -40,6 +40,7 @@ bool g_activo = false, g_logueado = false, g_cargando = true, g_en_llamada = fal
 std::string g_qr;
 std::function<void(bool)> g_al_cambiar;
 std::function<void()> g_al_cerrar_ventana;
+HWND g_ventana = nullptr;  // la ventana propia de la videollamada
 bool g_sondeando = false;
 
 // Llamada pedida y todavia no concretada: se intenta apretar el boton en
@@ -303,7 +304,6 @@ const wchar_t* JS_RECT_PANEL =
     L"if(!c)return '';var r=c.getBoundingClientRect(),d=window.devicePixelRatio;"
     L"return JSON.stringify({x:r.left*d,y:r.top*d,w:r.width*d,h:r.height*d,cw:r.width,ch:r.height})})()";
 
-HWND g_ventana = nullptr;  // la ventana propia de la videollamada
 constexpr UINT_PTR TIMER_ENCUADRE = 1;
 bool g_encuadrando = false;
 
