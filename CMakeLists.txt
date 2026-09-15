@@ -24,6 +24,7 @@ add_executable(kciwapp2 WIN32
     src/ventana_ajustes.cpp
     src/reenviar_ui.cpp
     src/menu_ui.cpp
+    src/toast.cpp
     src/app.rc
 )
 target_compile_definitions(kciwapp2 PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)

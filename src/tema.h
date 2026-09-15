@@ -31,6 +31,9 @@ struct Ajustes {
     bool notificaciones = true;
     std::wstring entrada, salida;     // ids WASAPI ("" = el del sistema)
     int mensajes_por_chat = 200;      // cuantos se cargan al abrir un chat (0 = todos)
+    int monitor_avisos = -1;          // indice del monitor para los avisos (-1 = el principal)
+    int esquina_avisos = 0;           // 0 abajo-der, 1 arriba-der, 2 abajo-izq, 3 arriba-izq
+    int segundos_aviso = 6;
 };
 
 namespace ajustes {

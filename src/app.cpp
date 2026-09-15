@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "aviso.h"
+#include "toast.h"
 #include "cache.h"
 #include "red.h"
 #include "tema.h"
@@ -771,7 +772,10 @@ bool App::aplicar_evento(const Json& e) {
             std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
             std::wstring texto = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
             if (c && c->es_grupo) texto = nombre_de(m.remitente) + L": " + texto;
-            if (ajustes::actual().notificaciones) aviso::mostrar(titulo, texto, m.chat, m.id);
+            if (ajustes::actual().notificaciones) {
+                bool con_foto = (c && c->tiene_foto) || (contactos.count(m.chat) && contactos[m.chat].tiene_foto);
+                toast::mostrar(titulo, texto, m.chat, m.id, con_foto ? L"/foto/" + ancho(m.chat) : L"");
+            }
         }
         if (hay && !m.propio && m.chat != chat_actual)
             for (auto& c : chats)
@@ -1990,6 +1994,11 @@ void App::rueda(float x, float y, float delta) {
 }
 
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
+    if (vk == VK_F9) {
+        // Prueba de notificacion.
+        toast::mostrar(L"kciwapp test", L"If you see this, notifications work", chat_actual, "", L"");
+        return;
+    }
     if (vk == VK_F11) {
         traza_frames = 300;
         red::registrar("F11: traza de 300 frames");

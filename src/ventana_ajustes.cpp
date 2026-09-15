@@ -17,6 +17,7 @@
 #include "gfx.h"
 #include "grabador.h"
 #include "tema.h"
+#include "toast.h"
 
 namespace {
 
@@ -337,6 +338,11 @@ struct Desplegable {
     std::vector<grabador::Dispositivo>* lista = nullptr;
     float x = 0, y = 0, w = 0;       // la caja que lo abrio
     float lx = 0, ly = 0, lw = 0, lh = 0;  // la lista desplegada
+    // Modo generico: opciones (texto, valor), el valor actual y que hacer al elegir.
+    int clave = -1;                  // identifica cual desplegable generico esta abierto
+    std::vector<std::pair<std::wstring, int>> opciones;
+    int actual = 0;
+    std::function<void(int)> elegir;
 };
 Desplegable g_desplegable;
 const float ITEM_DESP = 32.0f;
@@ -360,8 +366,72 @@ void elegir_audio(bool entrada, const std::wstring& id) {
     });
 }
 
+// Desplegable generico (monitor, esquina...): abre/cierra con la misma caja.
+void desplegar_opciones(int clave, const std::vector<std::pair<std::wstring, int>>& opciones, int actual,
+                        std::function<void(int)> elegir, float x, float y) {
+    if (g_desplegable.abierto && g_desplegable.clave == clave) {
+        g_desplegable.abierto = false;
+        return;
+    }
+    g_desplegable.abierto = true;
+    g_desplegable.lista = nullptr;
+    g_desplegable.clave = clave;
+    g_desplegable.opciones = opciones;
+    g_desplegable.actual = actual;
+    g_desplegable.elegir = std::move(elegir);
+    g_desplegable.x = x;
+    g_desplegable.y = y;
+}
+
+// Una fila con etiqueta y caja desplegable generica.
+void fila_desplegable(Gfx& g, float x, float y, float ancho_contenido, const wchar_t* etiqueta, int clave,
+                      const std::vector<std::pair<std::wstring, int>>& opciones, int actual, std::function<void(int)> elegir) {
+    g.renglon(etiqueta, x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
+    std::wstring nombre = L"-";
+    for (auto& [t, v] : opciones)
+        if (v == actual) nombre = t;
+    float R = x + ancho_contenido;
+    float cw = 260.0f, ch = 30.0f, cx = R - cw, cy = y + (FILA - ch) / 2.0f;
+    g.rect_redondo(cx, cy, cw, ch, 6, Color(BG_CAMPO()));
+    g.borde_redondo(cx, cy, cw, ch, 6, Color(BORDE()), 1.0f);
+    g.renglon(nombre, cx + 10, cy + (ch - 13.5f) / 2.0f, 13.5f, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, cw - 40);
+    bool abierto = g_desplegable.abierto && g_desplegable.clave == clave;
+    centrado(g, abierto ? L"\u25B4" : L"\u25BE", cx + cw - 14, cy + 6, 13, Color(TXT_DIM()));
+    agregar_clic(g_clics, cx, cy, cw, ch, [clave, opciones, actual, elegir, cx, cy, ch]() {
+        desplegar_opciones(clave, opciones, actual, elegir, cx, cy + ch);
+    });
+}
+
 void dibujar_desplegable(Gfx& g) {
     Desplegable& d = g_desplegable;
+    if (!d.lista) {
+        // Generico.
+        int n = (int)d.opciones.size();
+        d.lw = 300.0f;
+        d.lh = n * ITEM_DESP + 8;
+        d.lx = d.x;
+        d.ly = d.y;
+        if (d.ly + d.lh > g.alto - 8) d.ly = std::max(8.0f, g.alto - 8 - d.lh);
+        g.rect_redondo(d.lx + 2, d.ly + 3, d.lw, d.lh, 8, Color(0x000000, 0.35f));
+        g.rect_redondo(d.lx, d.ly, d.lw, d.lh, 8, Color(BG_PANEL()));
+        g.borde_redondo(d.lx, d.ly, d.lw, d.lh, 8, Color(BORDE()), 1.0f);
+        float y = d.ly + 4;
+        for (auto& [texto, valor] : d.opciones) {
+            bool elegido = valor == d.actual;
+            if (adentro(g_mouse_x, g_mouse_y, d.lx, y, d.lw, ITEM_DESP)) g.rect(d.lx + 4, y, d.lw - 8, ITEM_DESP, Color(BG_CAMPO()));
+            if (elegido) g.renglon(L"\u2713", d.lx + 12, y + 7, 13, Color(ACCENT()));
+            g.renglon(texto, d.lx + 34, y + (ITEM_DESP - 17) / 2.0f, 13.5f, Color(elegido ? ACCENT() : TXT()),
+                      DWRITE_FONT_WEIGHT_NORMAL, d.lw - 46);
+            int v = valor;
+            auto elegir = d.elegir;
+            agregar_clic(g_clics_popup, d.lx, y, d.lw, ITEM_DESP, [v, elegir]() {
+                if (elegir) elegir(v);
+                g_desplegable.abierto = false;
+            });
+            y += ITEM_DESP;
+        }
+        return;
+    }
     int n = 1;
     for (auto& x : *d.lista)
         if (!x.id.empty()) n++;
@@ -571,7 +641,36 @@ float seccion_notificaciones(Gfx& g, float x, float y, float ancho_contenido) {
     g.circulo(cx, py + ph / 2.0f, ph / 2.0f - 3, Color(0xffffff));
     agregar_clic(g_clics, x, y, ancho_contenido, FILA,
                  []() { ajustes::cambiar([](Ajustes& a) { a.notificaciones = !a.notificaciones; }); });
-    return y + FILA;
+    y += FILA;
+    if (ajustes::actual().notificaciones) {
+        // Donde salen los avisos.
+        std::vector<std::pair<std::wstring, int>> mons;
+        mons.push_back({L"Primary monitor", -1});
+        std::vector<std::wstring> lista = toast::monitores();
+        for (size_t i = 0; i < lista.size(); i++) mons.push_back({lista[i], (int)i});
+        fila_desplegable(g, x, y, ancho_contenido, L"Monitor", 100, mons, ajustes::actual().monitor_avisos,
+                         [](int v) { ajustes::cambiar([v](Ajustes& a) { a.monitor_avisos = v; }); });
+        y += FILA;
+        std::vector<std::pair<std::wstring, int>> esquinas = {
+            {L"Bottom right", 0}, {L"Top right", 1}, {L"Bottom left", 2}, {L"Top left", 3}};
+        fila_desplegable(g, x, y, ancho_contenido, L"Position", 101, esquinas, ajustes::actual().esquina_avisos,
+                         [](int v) { ajustes::cambiar([v](Ajustes& a) { a.esquina_avisos = v; }); });
+        y += FILA;
+        std::vector<std::pair<std::wstring, int>> segs = {{L"3 seconds", 3}, {L"6 seconds", 6}, {L"10 seconds", 10}, {L"20 seconds", 20}};
+        fila_desplegable(g, x, y, ancho_contenido, L"Duration", 102, segs, ajustes::actual().segundos_aviso,
+                         [](int v) { ajustes::cambiar([v](Ajustes& a) { a.segundos_aviso = v; }); });
+        y += FILA;
+        // Un aviso de prueba, para ver donde cae.
+        float bw = 140.0f, bh = 30.0f, bx = x + ancho_contenido - bw, by = y + (FILA - bh) / 2.0f;
+        g.rect_redondo(bx, by, bw, bh, 6, Color(BG_CAMPO()));
+        float tw = g.medir(L"Test notification", 13);
+        g.renglon(L"Test notification", bx + (bw - tw) / 2, by + 7, 13, Color(TXT()));
+        agregar_clic(g_clics, bx, by, bw, bh, []() {
+            toast::mostrar(L"kciwapp", L"This is how notifications look", "", "", L"");
+        });
+        y += FILA;
+    }
+    return y;
 }
 
 float seccion_audio(Gfx& g, float x, float y, float ancho_contenido) {

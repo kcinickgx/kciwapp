@@ -14,6 +14,7 @@
 #include "emoji.h"
 #include "red.h"
 #include "tema.h"
+#include "toast.h"
 
 namespace {
 
@@ -218,6 +219,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     app.iniciar(h);
     g_app = &app;
     // Bandeja y globos de notificacion; el click en un globo abre ese mensaje.
+    toast::iniciar(inst, [](const std::string& chat, const std::string& mensaje) {
+        if (!g_app) return;
+        HWND h = g_app->hwnd;
+        if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+        SetForegroundWindow(h);
+        long long ts = 0;
+        for (auto& c : g_app->chats)
+            if (c.jid == chat && c.ultimo && c.ultimo->id == mensaje) ts = c.ultimo->ts;
+        if (ts) g_app->ir_a_mensaje(chat, mensaje, ts);
+        else g_app->abrir_chat(chat);
+    });
     aviso::arrancar(wc.hIcon, L"kciwapp");
     aviso::anotar_principal(h);
     aviso::al_click([](aviso::Destino d) {
