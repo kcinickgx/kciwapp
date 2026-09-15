@@ -6,3 +6,5 @@ portable/debug.log
 portable/mpv/
 build/
 release/
+portable/core/*.exe
+portable/core/*.txt

@@ -11,6 +11,7 @@
 #include "app.h"
 #include "aviso.h"
 #include "cache.h"
+#include "core.h"
 #include "emoji.h"
 #include "red.h"
 #include "tema.h"
@@ -254,11 +255,30 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-    if (!leer_config()) {
-        std::wstring m = L"Missing or invalid " + ruta_config() +
-                         L"\n\n{\"host\": \"192.168.5.15\", \"puerto\": 8080, \"token\": \"...\"}";
-        MessageBoxW(nullptr, m.c_str(), L"kciwapp", MB_ICONERROR);
-        return 1;
+    // Una sola instancia (antes del core: dos clientes lanzarian dos cores).
+    HANDLE unica = CreateMutexW(nullptr, TRUE, L"Local\\kciwapp2-instancia");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        if (HWND otra = FindWindowW(L"kciwapp2", nullptr)) {
+            if (IsIconic(otra)) ShowWindow(otra, SW_RESTORE);
+            SetForegroundWindow(otra);
+        }
+        return 0;
+    }
+
+    // Con core\kciwapp-core.exe al lado, todo corre local (SQLite en datos\);
+    // si no, servidor.json apunta a un kciwapp-server.
+    {
+        std::wstring host;
+        int puerto = 0;
+        std::string token;
+        if (core::iniciar(carpeta_exe(), host, puerto, token)) {
+            red::configurar(host, puerto, token);
+        } else if (!leer_config()) {
+            std::wstring m = L"Missing core\\kciwapp-core.exe, and no " + ruta_config() +
+                             L"\n\n{\"host\": \"192.168.5.15\", \"puerto\": 8080, \"token\": \"...\"}";
+            MessageBoxW(nullptr, m.c_str(), L"kciwapp", MB_ICONERROR);
+            return 1;
+        }
     }
 
     // Menus contextuales oscuros: SetPreferredAppMode(ForceDark) de uxtheme
@@ -281,16 +301,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
 
     App app;
     g_app = nullptr;
-    // Una sola instancia: si ya hay una, se la trae al frente y listo (dos
-    // procesos se pisarian la cache y el cursor de eventos).
-    HANDLE unica = CreateMutexW(nullptr, TRUE, L"Local\\kciwapp2-instancia");
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        if (HWND otra = FindWindowW(L"kciwapp2", nullptr)) {
-            if (IsIconic(otra)) ShowWindow(otra, SW_RESTORE);
-            SetForegroundWindow(otra);
-        }
-        return 0;
-    }
     (void)unica;
     ajustes::cargar(carpeta_exe());
     HWND h = CreateWindowExW(0, L"kciwapp2", L"kciwapp", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -379,5 +389,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     g_app = nullptr;
     aviso::parar();
     cache::cerrar();
+    core::cerrar();
     return 0;
 }
