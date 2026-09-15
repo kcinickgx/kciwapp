@@ -254,6 +254,11 @@ void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
     int seg = (int)(suena ? pos : (double)m.media->segundos);
     std::wstring t = std::to_wstring(seg / 60) + L":" + (seg % 60 < 10 ? L"0" : L"") + std::to_wstring(seg % 60);
     g.renglon(t, ox, cy + h - 17, 11, Color(TXT_DIM()));
+    // Y el largo total a la derecha, debajo del boton de velocidad.
+    int total = (int)(suena && d > 0 ? d : (double)m.media->segundos);
+    std::wstring tt = std::to_wstring(total / 60) + L":" + (total % 60 < 10 ? L"0" : L"") + std::to_wstring(total % 60);
+    float ttw = g.medir(tt, 11);
+    g.renglon(tt, cx + w - AUDIO_ONDA_DER - ttw, cy + h - 17, 11, Color(TXT_DIM()));
     // Velocidad, siempre visible (es global).
     {
         float vx = cx + w - AUDIO_ONDA_DER - AUDIO_VEL_W, vy = cy + 12;
