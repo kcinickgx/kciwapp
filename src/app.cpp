@@ -767,7 +767,7 @@ bool App::aplicar_evento(const Json& e) {
         cache::guardar_mensajes({m});
         bool hay = chat_de(m.chat) != nullptr;
         // Aviso en la bandeja si no estoy mirando ese chat.
-        if (!m.propio && (m.chat != chat_actual || !aviso::esta_al_frente(hwnd))) {
+        if (!m.propio && !aviso::esta_al_frente(hwnd)) {
             const Chat* c = chat_de(m.chat);
             std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
             std::wstring texto = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
