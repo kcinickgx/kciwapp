@@ -140,6 +140,10 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 KillTimer(h, 3);
                 app->buscar_ahora();
             }
+            if (wp == 4 && app) {
+                KillTimer(h, 4);
+                app->pedir_dibujo();
+            }
             return 0;
         case WM_SETFOCUS:
             if (app) {

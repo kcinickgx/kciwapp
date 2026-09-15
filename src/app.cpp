@@ -416,11 +416,8 @@ std::wstring App::nombre_de(const std::string& jid) {
 }
 
 void App::abrir_chat(const std::string& jid) {
-    if (reenviando) {
-        reenviar_a(jid);
-        return;
-    }
     if (jid == chat_actual) return;
+    if (seleccionando) terminar_seleccion();
     // El borrador del chat que se deja queda guardado.
     if (!chat_actual.empty()) {
         borradores[chat_actual] = campo.texto;
@@ -938,7 +935,6 @@ void App::aplicar_tandas() {
     }
     if (layout_pendiente == 0 && abierto_en) {
         red::registrar("layouts listos: " + std::to_string(vistas.size()) + " en " + std::to_string(GetTickCount64() - abierto_en) + " ms desde abrir");
-        abierto_en = 0;
     }
 }
 
@@ -1211,9 +1207,11 @@ void App::dibujar() {
     dibujar_conversacion();
     dibujar_cabecera();
     dibujar_pie();
+    dibujar_seleccion_barra();
     dibujar_info();
     dibujar_emojis();
     dibujar_visor();
+    dibujar_modal_reenvio();
     g.terminar_frame();
 }
 
@@ -1486,15 +1484,25 @@ void App::dibujar_conversacion() {
         return;
     }
     // Las vistas armadas con otro ancho se rearman.
+    // Cambio de ancho: se rearma recien cuando el resize se aquieta (150 ms),
+    // mientras tanto se dibuja con los layouts viejos.
     bool rearmar = false;
     for (size_t k = layout_pendiente; k < vistas.size(); k++)
         if (vistas[k].ancho_para != W) { rearmar = true; break; }
     if (rearmar) {
-        bool abajo = al_final();
-        armar_vistas();
-        recalcular_inicios();
-        conv.max = std::max(0.0, alto_contenido() - H);
-        if (abajo) conv.ir(conv.max, true);
+        if (ancho_pendiente != W) {
+            ancho_pendiente = W;
+            ultimo_resize = ahora;
+            SetTimer(hwnd, 4, 170, nullptr);
+        }
+        if (ahora - ultimo_resize >= 150) {
+            ancho_pendiente = 0;
+            bool abajo = al_final();
+            armar_vistas();
+            recalcular_inicios();
+            conv.max = std::max(0.0, alto_contenido() - H);
+            if (abajo) conv.ir(conv.max, true);
+        }
     }
     recalcular_inicios();
     conv.max = std::max(0.0, alto_contenido() - H);
@@ -1523,7 +1531,7 @@ void App::dibujar_conversacion() {
         if (y > bottom) break;
         dibujar_mensaje(i, y);
     }
-    if (msg_bajo_mouse >= 0 && msg_bajo_mouse < (int)vistas.size()) dibujar_reacciones_de(msg_bajo_mouse, y_de((size_t)msg_bajo_mouse));
+    if (!seleccionando && msg_bajo_mouse >= 0 && msg_bajo_mouse < (int)vistas.size()) dibujar_reacciones_de(msg_bajo_mouse, y_de((size_t)msg_bajo_mouse));
     if (reaccion_msg >= 0 && reaccion_msg != msg_bajo_mouse && reaccion_msg < (int)vistas.size())
         dibujar_reacciones_de(reaccion_msg, y_de((size_t)reaccion_msg));
     barra_scroll(conv, x + W - 10, top, H, alto_contenido(),
@@ -1559,6 +1567,16 @@ void App::dibujar_mensaje(size_t i, float y) {
         g.renglon(v.divisor_texto, px + 10, y + 12, 12, Color(TXT_DIM()));
     }
     float bx = x + v.bx, by = y + v.by;
+    if (seleccionando) {
+        // Renglon resaltado si esta marcado, y el tilde a la izquierda.
+        bool marcado = seleccionados.count(m.id) > 0;
+        if (marcado) g.rect(x, y + v.by - 2, W, v.bh + 4, Color(ACCENT(), 0.12f));
+        float cx = x + 18, cy = by + v.bh / 2;
+        g.circulo(cx, cy, 10, Color(marcado ? ACCENT() : BG_CAMPO()));
+        if (!marcado) g.borde_redondo(cx - 10, cy - 10, 20, 20, 10, Color(TXT_DIM()), 1.0f);
+        else tildes(cx - 7, cy - 6, false, Color(0x111b21));
+        if (!m.propio) bx += 26;
+    }
     Color fondo(m.propio ? BUBBLE_MIA() : BUBBLE_OTRA());
     bool figurita = m.tipo == "figurita" && !m.borrado;
     if (!figurita) g.rect_redondo(bx, by, v.bw, v.bh, 8, fondo);
@@ -1775,10 +1793,15 @@ void App::raton_abajo(float x, float y, bool shift) {
         pedir_dibujo();
         return;
     }
+    if (click_modal_reenvio(x, y)) {
+        pedir_dibujo();
+        return;
+    }
     if (click_emojis(x, y)) {
         pedir_dibujo();
         return;
     }
+    if (click_seleccion(x, y)) return;
     if (click_info(x, y)) {
         pedir_dibujo();
         return;
@@ -1817,7 +1840,7 @@ void App::raton_abajo(float x, float y, bool shift) {
     }
     float top = alto_cabecera(), bottom = g.alto - alto_pie;
     float W = w_conv();
-    if (y < top && !chat_actual.empty()) {
+    if (y < top && !chat_actual.empty() && !seleccionando) {
         abrir_info(chat_actual);
         return;
     }
@@ -1942,7 +1965,7 @@ void App::rueda(float x, float y, float delta) {
     UINT lineas = 3;
     SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lineas, 0);
     float px = -delta / 120.0f * lineas * 40.0f;
-    if (rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
+    if (rueda_modal_reenvio(x, y, delta) || rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
     if (x < ancho_lista) lista.rodar(px);
     else if (y > alto_cabecera() && y < g.alto - alto_pie) conv.rodar(px);
     pedir_dibujo();
@@ -2003,6 +2026,11 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
         pedir_dibujo();
         return;
     }
+    if (modal_reenvio && buscador_reenvio.tecla(g, vk, shift, ctrl)) {
+        scroll_reenvio.ir(0, true);
+        pedir_dibujo();
+        return;
+    }
     if (emoji_buscador.foco && emoji_buscador.tecla(g, vk, shift, ctrl)) {
         emoji_scroll.ir(0, true);
         pedir_dibujo();
@@ -2024,6 +2052,13 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
 void App::caracter(wchar_t c) {
     if (buscador.foco) {
         if (buscador.caracter(c)) pedir_dibujo();
+        return;
+    }
+    if (modal_reenvio) {
+        if (buscador_reenvio.caracter(c)) {
+            scroll_reenvio.ir(0, true);
+            pedir_dibujo();
+        }
         return;
     }
     if (emoji_buscador.foco) {

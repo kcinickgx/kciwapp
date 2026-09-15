@@ -215,8 +215,18 @@ struct App {
     float sel_x0 = 0, sel_y0 = 0;
     std::wstring enlace_pendiente;  // link bajo el mouse al apretar; se abre al soltar sin arrastrar
     bool cursor_mano = false;
-    bool reenviando = false;   // eligiendo a que chat reenviar
+    bool reenviando = false;   // (viejo) eligiendo a que chat reenviar
     std::string reenviar_chat, reenviar_id;
+    // Modo seleccion (reenviar varios) y el modal de destinatarios.
+    bool seleccionando = false;
+    std::set<std::string> seleccionados;   // ids
+    bool modal_reenvio = false;
+    Campo buscador_reenvio;
+    std::set<std::string> destinos;        // jids elegidos en el modal
+    Desplazable scroll_reenvio;
+    // Rearmado de layouts por cambio de ancho, con debounce.
+    float ancho_pendiente = 0;
+    unsigned long long ultimo_resize = 0;
     std::map<std::string, std::wstring> borradores;
     std::map<std::string, std::optional<Adjunto>> borradores_adjunto;
     std::optional<Adjunto> adjunto;
@@ -315,6 +325,16 @@ struct App {
     void copiar_mensaje(int i);
     void reenviar(int i);
     void reenviar_a(const std::string& destino);
+    // Seleccion multiple y reenvio (reenviar_ui.cpp)
+    void empezar_seleccion(int i);
+    void terminar_seleccion();
+    void alternar_seleccion(int i);
+    void dibujar_seleccion_barra();
+    bool click_seleccion(float x, float y);
+    void dibujar_modal_reenvio();
+    bool click_modal_reenvio(float x, float y);
+    bool rueda_modal_reenvio(float x, float y, float delta);
+    void enviar_reenvio();
     void ir_a_mensaje(const std::string& chat, const std::string& id, long long ts);
     void buscar_ahora();
     void adjuntar_archivo(const std::wstring& ruta);

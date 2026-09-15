@@ -305,10 +305,7 @@ void App::copiar_seleccion() {
 }
 
 void App::reenviar(int i) {
-    reenviando = true;
-    reenviar_chat = mensajes[i].chat;
-    reenviar_id = mensajes[i].id;
-    pedir_dibujo();
+    empezar_seleccion(i);
 }
 
 void App::reenviar_a(const std::string& destino) {
@@ -820,6 +817,10 @@ void App::escapar() {
         campo.foco = true;
     } else if (reaccion_msg >= 0) {
         reaccion_msg = -1;
+    } else if (modal_reenvio) {
+        modal_reenvio = false;
+    } else if (seleccionando) {
+        terminar_seleccion();
     } else if (info_abierto) {
         cerrar_info();
     } else if (grab != Grab::Nada) {
