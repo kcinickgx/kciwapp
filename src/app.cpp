@@ -76,6 +76,29 @@ std::vector<VistaMensaje::Enlace> buscar_enlaces(const std::wstring& t) {
     return r;
 }
 
+// Cuantos emojis tiene un texto si es SOLO emojis (0 si hay otra cosa).
+// Los modificadores (tono de piel, VS16, ZWJ, keycaps) no cuentan.
+int solo_emojis(const std::wstring& t) {
+    int n = 0;
+    for (size_t i = 0; i < t.size(); i++) {
+        unsigned cp = t[i];
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < t.size()) {
+            cp = 0x10000 + ((cp - 0xD800) << 10) + (t[i + 1] - 0xDC00);
+            i++;
+        }
+        if (cp == 0xFE0F || cp == 0x200D || cp == 0x20E3 || (cp >= 0x1F3FB && cp <= 0x1F3FF) || (cp >= 0xE0020 && cp <= 0xE007F)) continue;
+        if (cp == ' ') continue;
+        bool emoji = (cp >= 0x1F000 && cp <= 0x1FAFF) || (cp >= 0x2600 && cp <= 0x27BF) || (cp >= 0x2B00 && cp <= 0x2BFF) ||
+                     cp == 0x2122 || cp == 0x2139 || (cp >= 0x2194 && cp <= 0x21AA) || cp == 0x231A || cp == 0x231B ||
+                     cp == 0x2328 || cp == 0x23CF || (cp >= 0x23E9 && cp <= 0x23FA) || cp == 0x24C2 || cp == 0x25AA ||
+                     cp == 0x25AB || cp == 0x25B6 || cp == 0x25C0 || (cp >= 0x25FB && cp <= 0x25FE) || cp == 0x3030 ||
+                     cp == 0x303D || cp == 0x3297 || cp == 0x3299 || cp == 0xA9 || cp == 0xAE;
+        if (!emoji) return 0;
+        n++;
+    }
+    return n;
+}
+
 std::wstring una_linea(std::wstring s) {
     for (auto& ch : s)
         if (ch == L'\n') ch = L' ';
@@ -915,7 +938,14 @@ void App::armar_vista(size_t i) {
     if (m.borrado) t = L"\U0001F6AB This message was deleted";
     else if (t.empty() && !m.media) t = nombre_tipo(m.tipo);
     if (!t.empty()) {
-        v.texto = g.texto(t, letra_chat, interior);
+        // Solo emojis: grandes (1 = 3x, 2 o 3 = 2x), como WhatsApp.
+        float tam = letra_chat;
+        if (!m.borrado && !m.media) {
+            int n = solo_emojis(t);
+            if (n == 1) tam = letra_chat * 3;
+            else if (n == 2 || n == 3) tam = letra_chat * 2;
+        }
+        v.texto = g.texto(t, tam, interior);
         // Links: subrayados y en celeste.
         if (!m.borrado) {
             v.enlaces = buscar_enlaces(t);
