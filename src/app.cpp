@@ -1502,6 +1502,23 @@ void App::dibujar_conversacion() {
             recalcular_inicios();
             conv.max = std::max(0.0, alto_contenido() - H);
             if (abajo) conv.ir(conv.max, true);
+        } else {
+            // Mientras se arrastra, solo lo que esta en pantalla se rearma al
+            // ancho nuevo (son ~20 layouts por frame); el resto espera.
+            bool abajo = al_final();
+            recalcular_inicios();
+            double desde = conv.pos - 12;
+            size_t i0 = std::upper_bound(inicio.begin(), inicio.end() - 1, desde) - inicio.begin();
+            if (i0 > 0) i0--;
+            double acum = 0;
+            for (size_t i = i0; i < vistas.size() && acum < H + 200; i++) {
+                if (vistas[i].ancho_para != W && vistas[i].alto > 0) armar_vista(i);
+                acum += vistas[i].alto;
+            }
+            recalcular_inicios();
+            conv.max = std::max(0.0, alto_contenido() - H);
+            if (abajo) conv.ir(conv.max, true);
+            pedir_dibujo();
         }
     }
     recalcular_inicios();
