@@ -1212,6 +1212,7 @@ void App::dibujar() {
     dibujar_emojis();
     dibujar_visor();
     dibujar_modal_reenvio();
+    dibujar_menu();
     g.terminar_frame();
 }
 
@@ -1736,7 +1737,7 @@ void App::raton_mueve(float x, float y) {
     mouse_y = y;
     int antes = chat_bajo_mouse;
     chat_bajo_mouse = x < ancho_lista && y > top_lista() ? item_en(y) : -1;
-    if (antes != chat_bajo_mouse || emojis_abierto || info_abierto) pedir_dibujo();
+    if (antes != chat_bajo_mouse || emojis_abierto || info_abierto || menu_abierto) pedir_dibujo();
     cursor_mano = sobre_clickeable(x, y);
     {
         int antes_msg = msg_bajo_mouse;
@@ -1805,6 +1806,7 @@ void App::raton_mueve(float x, float y) {
 
 void App::raton_abajo(float x, float y, bool shift) {
     SetCapture(hwnd);
+    if (click_menu(x, y)) return;
     if (visor) {
         click_visor(x, y);
         pedir_dibujo();

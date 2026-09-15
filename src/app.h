@@ -140,6 +140,16 @@ struct ItemLista {
     std::wstring titulo;
 };
 
+// Un renglon del menu contextual propio.
+struct ItemMenu {
+    std::wstring texto;
+    int id = 0;
+    const wchar_t* icono = nullptr;  // glifo de Segoe MDL2 Assets
+    bool separador = false;
+    bool habilitado = true;
+    bool peligroso = false;          // en rojo (borrar)
+};
+
 struct App {
     Gfx g;
     HWND hwnd = nullptr;
@@ -313,6 +323,16 @@ struct App {
     void marcar_leido(const std::string& jid, const std::vector<std::string>& ids = {});
     void ventana_activada();
 
+    // Menu contextual propio (menu_ui.cpp)
+    bool menu_abierto = false;
+    std::vector<ItemMenu> menu_items;
+    std::function<void(int)> menu_accion;
+    float menu_x = 0, menu_y = 0;
+    void abrir_menu(std::vector<ItemMenu> items, float x, float y, std::function<void(int)> accion);
+    void cerrar_menu();
+    void dibujar_menu();
+    bool click_menu(float x, float y);
+    void menu_campo(float x, float y);
     // Acciones (acciones.cpp)
     void menu_contextual(int i);
     void responder(int i);

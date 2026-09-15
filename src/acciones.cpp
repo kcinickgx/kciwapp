@@ -196,7 +196,16 @@ std::wstring App::enlace_en(int i, float y_msg, float x, float y) {
 // ---- menu contextual ------------------------------------------------------
 
 void App::raton_derecho(float x, float y) {
-    if (x < ancho_lista || visor) return;
+    if (menu_abierto) {
+        cerrar_menu();
+        return;
+    }
+    if (x < ancho_lista || visor || modal_reenvio) return;
+    // Sobre el campo de texto: cortar/copiar/pegar.
+    if (y >= g.alto - alto_pie && !chat_actual.empty() && grab == Grab::Nada) {
+        menu_campo(x, y);
+        return;
+    }
     float ym = 0;
     int i = mensaje_en(y, &ym);
     if (i < 0) return;
@@ -205,57 +214,86 @@ void App::raton_derecho(float x, float y) {
 
 void App::menu_contextual(int i) {
     const Mensaje& m = mensajes[i];
-    HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING, M_RESPONDER, L"Reply");
-    if (!m.texto.empty() || sel_msg == i) AppendMenuW(menu, MF_STRING, M_COPIAR, L"Copy");
-    if (!m.borrado) AppendMenuW(menu, MF_STRING, M_REENVIAR, L"Forward");
-    if (m.propio && !m.borrado && !m.media && !m.texto.empty()) AppendMenuW(menu, MF_STRING, M_EDITAR, L"Edit");
+    std::vector<ItemMenu> items;
+    items.push_back({L"Reply", M_RESPONDER, L"\uE97A"});
+    if (!m.texto.empty() || sel_msg == i) items.push_back({L"Copy", M_COPIAR, L"\uE8C8"});
+    if (!m.borrado) items.push_back({L"Forward", M_REENVIAR, L"\uE72A"});
+    if (m.propio && !m.borrado && !m.media && !m.texto.empty()) items.push_back({L"Edit", M_EDITAR, L"\uE70F"});
     if (m.media && !m.borrado) {
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, M_ABRIR, L"Open");
-        AppendMenuW(menu, MF_STRING, M_GUARDAR, L"Save as...");
-        AppendMenuW(menu, MF_STRING, M_MOSTRAR, L"Show in folder");
+        items.push_back({L"", 0, nullptr, true});
+        items.push_back({L"Open", M_ABRIR, L"\uE8E5"});
+        items.push_back({L"Save as...", M_GUARDAR, L"\uE74E"});
+        items.push_back({L"Show in folder", M_MOSTRAR, L"\uE838"});
     }
     if (!m.borrado) {
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, M_BORRAR, m.propio ? L"Delete for everyone" : L"Delete");
+        items.push_back({L"", 0, nullptr, true});
+        ItemMenu borrar{m.propio ? L"Delete for everyone" : L"Delete", M_BORRAR, L"\uE74D"};
+        borrar.peligroso = true;
+        items.push_back(borrar);
     }
-    POINT p;
-    GetCursorPos(&p);
-    SetForegroundWindow(hwnd);
-    int id = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_LEFTALIGN | TPM_TOPALIGN, p.x, p.y, 0, hwnd, nullptr);
-    DestroyMenu(menu);
-    campo.foco = true;
-    pedir_dibujo();
-    switch (id) {
-        case M_RESPONDER: responder(i); break;
-        case M_COPIAR: copiar_mensaje(i); break;
-        case M_REENVIAR: reenviar(i); break;
-        case M_EDITAR: editar(i); break;
-        case M_BORRAR: borrar(i); break;
-        case M_ABRIR: abrir_media(i); break;
-        case M_GUARDAR: {
-            std::wstring origen = bajar_media(mensajes[i]);
-            if (origen.empty()) break;
-            wchar_t nombre[MAX_PATH] = L"";
-            std::wstring sugerido = mensajes[i].media->nombre.empty()
-                                        ? L"whatsapp" + extension_de(mensajes[i].media->mime, "")
-                                        : ancho(mensajes[i].media->nombre);
-            wcsncpy_s(nombre, sugerido.c_str(), MAX_PATH - 1);
-            OPENFILENAMEW ofn = {sizeof ofn};
-            ofn.hwndOwner = hwnd;
-            ofn.lpstrFile = nombre;
-            ofn.nMaxFile = MAX_PATH;
-            ofn.Flags = OFN_OVERWRITEPROMPT;
-            if (GetSaveFileNameW(&ofn)) CopyFileW(origen.c_str(), nombre, FALSE);
-            break;
+    abrir_menu(std::move(items), mouse_x, mouse_y, [this, i](int id) {
+        if (i < 0 || i >= (int)mensajes.size()) return;
+        campo.foco = true;
+        switch (id) {
+            case M_RESPONDER: responder(i); break;
+            case M_COPIAR: copiar_mensaje(i); break;
+            case M_REENVIAR: reenviar(i); break;
+            case M_EDITAR: editar(i); break;
+            case M_BORRAR: borrar(i); break;
+            case M_ABRIR: abrir_media(i); break;
+            case M_GUARDAR: {
+                std::wstring origen = bajar_media(mensajes[i]);
+                if (origen.empty()) break;
+                wchar_t nombre[MAX_PATH] = L"";
+                std::wstring sugerido = mensajes[i].media->nombre.empty()
+                                            ? L"whatsapp" + extension_de(mensajes[i].media->mime, "")
+                                            : ancho(mensajes[i].media->nombre);
+                wcsncpy_s(nombre, sugerido.c_str(), MAX_PATH - 1);
+                OPENFILENAMEW ofn = {sizeof ofn};
+                ofn.hwndOwner = hwnd;
+                ofn.lpstrFile = nombre;
+                ofn.nMaxFile = MAX_PATH;
+                ofn.Flags = OFN_OVERWRITEPROMPT;
+                if (GetSaveFileNameW(&ofn)) CopyFileW(origen.c_str(), nombre, FALSE);
+                break;
+            }
+            case M_MOSTRAR: {
+                std::wstring ruta = bajar_media(mensajes[i]);
+                if (!ruta.empty()) ShellExecuteW(nullptr, nullptr, L"explorer.exe", (L"/select,\"" + ruta + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
+                break;
+            }
         }
-        case M_MOSTRAR: {
-            std::wstring ruta = bajar_media(mensajes[i]);
-            if (!ruta.empty()) ShellExecuteW(nullptr, nullptr, L"explorer.exe", (L"/select,\"" + ruta + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
-            break;
+        pedir_dibujo();
+    });
+}
+
+// Menu del campo de texto: cortar, copiar, pegar, seleccionar todo.
+void App::menu_campo(float x, float y) {
+    enum { C_CORTAR = 1, C_COPIAR, C_PEGAR, C_TODO };
+    std::vector<ItemMenu> items;
+    ItemMenu cortar{L"Cut", C_CORTAR, L"\uE8C6"};
+    cortar.habilitado = campo.hay_seleccion();
+    ItemMenu copiar{L"Copy", C_COPIAR, L"\uE8C8"};
+    copiar.habilitado = campo.hay_seleccion();
+    ItemMenu pegar_it{L"Paste", C_PEGAR, L"\uE77F"};
+    pegar_it.habilitado = IsClipboardFormatAvailable(CF_UNICODETEXT) || IsClipboardFormatAvailable(CF_BITMAP) || IsClipboardFormatAvailable(CF_HDROP);
+    ItemMenu todo{L"Select all", C_TODO, L"\uE8B3"};
+    todo.habilitado = !campo.texto.empty();
+    items.push_back(cortar);
+    items.push_back(copiar);
+    items.push_back(pegar_it);
+    items.push_back({L"", 0, nullptr, true});
+    items.push_back(todo);
+    abrir_menu(std::move(items), x, y, [this](int id) {
+        campo.foco = true;
+        switch (id) {
+            case C_CORTAR: campo.copiar(); campo.borrar_seleccion(); break;
+            case C_COPIAR: campo.copiar(); break;
+            case C_PEGAR: pegar(); break;
+            case C_TODO: campo.seleccionar_todo(); break;
         }
-    }
+        pedir_dibujo();
+    });
 }
 
 void App::responder(int i) {
@@ -808,7 +846,9 @@ void App::dibujar_visor() {
 
 // Escape: cierra lo que este abierto, en orden de "mas encima".
 void App::escapar() {
-    if (visor) {
+    if (menu_abierto) {
+        cerrar_menu();
+    } else if (visor) {
         cerrar_visor();
     } else if (emojis_abierto) {
         emojis_abierto = false;
