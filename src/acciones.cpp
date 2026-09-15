@@ -607,8 +607,42 @@ void App::abrir_visor(int i) {
     const Mensaje& m = mensajes[i];
     if (!m.media) return;
     visor = true;
+    visor_zoom = 1.0f;
+    visor_px = visor_py = 0;
+    visor_arrastrando = false;
     visor_clave = "media:" + std::to_string(m.media->id);
     imagen(visor_clave, L"/media/" + std::to_wstring(m.media->id), m.tipo == "figurita");
+    pedir_dibujo();
+}
+
+bool App::rect_visor(float& x, float& y, float& w, float& h) {
+    Imagen& im = imagenes[visor_clave];
+    ID2D1Bitmap1* b = im.cuadro_actual(g, ahora);
+    if (!b) return false;
+    D2D1_SIZE_F t = b->GetSize();
+    float esc = std::min((g.ancho - 80) / t.width, (g.alto - 80) / t.height);
+    esc = std::min(esc, 2.0f) * visor_zoom;
+    w = t.width * esc;
+    h = t.height * esc;
+    x = (g.ancho - w) / 2 + visor_px;
+    y = (g.alto - h) / 2 + visor_py;
+    return true;
+}
+
+// Rueda sobre el visor: zoom alrededor del punto del mouse.
+void App::rueda_visor(float x, float y, float delta) {
+    if (visor_video) return;
+    float ix, iy, iw, ih;
+    if (!rect_visor(ix, iy, iw, ih)) return;
+    float factor = delta > 0 ? 1.15f : 1 / 1.15f;
+    float nuevo = std::clamp(visor_zoom * factor, 1.0f, 12.0f);
+    factor = nuevo / visor_zoom;
+    // El punto bajo el mouse se queda quieto.
+    float cx = g.ancho / 2 + visor_px, cy = g.alto / 2 + visor_py;
+    visor_px += (cx - x) * (factor - 1);
+    visor_py += (cy - y) * (factor - 1);
+    visor_zoom = nuevo;
+    if (visor_zoom == 1.0f) visor_px = visor_py = 0;
     pedir_dibujo();
 }
 
@@ -690,6 +724,15 @@ bool App::click_visor(float x, float y) {
             else reproductor.pausar();
             return true;
         }
+    }
+    // Foto: apretar sobre ella empieza el paneo; afuera cierra.
+    float ix, iy, iw, ih;
+    if (rect_visor(ix, iy, iw, ih) && x >= ix && x <= ix + iw && y >= iy && y <= iy + ih) {
+        visor_arrastrando = true;
+        visor_ax = x;
+        visor_ay = y;
+        visor_mov = 0;
+        return true;
     }
     cerrar_visor();
     return true;

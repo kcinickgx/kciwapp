@@ -190,6 +190,10 @@ struct App {
     HWND ventana_video = nullptr;  // ventana hija donde mpv dibuja
     std::string visor_clave;
     std::wstring visor_ruta;
+    // Zoom y paneo del visor de fotos: 1 = entra en la ventana.
+    float visor_zoom = 1.0f, visor_px = 0, visor_py = 0;
+    bool visor_arrastrando = false;
+    float visor_ax = 0, visor_ay = 0, visor_mov = 0;
     // Busqueda
     std::vector<Mensaje> resultados;
     std::wstring ultima_busqueda;
@@ -281,6 +285,9 @@ struct App {
     void abrir_video(int i);
     void cerrar_visor();
     bool click_visor(float x, float y);
+    void rueda_visor(float x, float y, float delta);
+    // El rect donde se dibuja la foto del visor (con zoom y paneo).
+    bool rect_visor(float& x, float& y, float& w, float& h);
     std::wstring bajar_media(const Mensaje& m);
     void elegir_archivo();
     void copiar_seleccion();
