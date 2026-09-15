@@ -41,6 +41,9 @@ std::string g_qr;
 std::function<void(bool)> g_al_cambiar;
 std::function<void()> g_al_cerrar_ventana;
 HWND g_ventana = nullptr;  // la ventana propia de la videollamada
+double g_prop = 900.0 / 620.0;  // proporcion del panel (ancho/alto); la ventana la sigue
+int g_popout_intentos = 0;      // clicks al boton de "abrir en ventana" de la llamada
+bool g_quiero_popout = false;   // solo en las de video
 bool g_sondeando = false;
 
 // Llamada pedida y todavia no concretada: se intenta apretar el boton en
@@ -331,9 +334,6 @@ const wchar_t* JS_RECT_PANEL =
 
 constexpr UINT_PTR TIMER_ENCUADRE = 1;
 bool g_encuadrando = false;
-double g_prop = 900.0 / 620.0;  // proporcion del panel (ancho/alto); la ventana la sigue
-int g_popout_intentos = 0;      // clicks al boton de "abrir en ventana" de la llamada
-bool g_quiero_popout = false;   // solo en las de video
 
 // Acomoda el WebView2 adentro de la ventana de video para que se vea solo el
 // panel de la llamada: zoom para que el panel llene la ventana (manteniendo
