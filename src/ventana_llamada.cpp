@@ -222,7 +222,7 @@ void abrir(HINSTANCE inst, const std::wstring& nombre, const std::string& chat, 
         RECT rp{0, 0, 1200, 800};
         if (principal) GetWindowRect(principal, &rp);
         UINT dpi = principal ? GetDpiForWindow(principal) : 96;
-        int w = MulDiv(video ? 900 : 380, dpi, 96), h = MulDiv(video ? 620 : 520, dpi, 96);
+        int w = MulDiv(video ? 1000 : 380, dpi, 96), h = MulDiv(video ? 760 : 520, dpi, 96);
         int x = rp.left + ((rp.right - rp.left) - w) / 2, y = rp.top + ((rp.bottom - rp.top) - h) / 2;
         g_hwnd = CreateWindowExW(0, L"kciwapp2-llamada", video ? L"Video call" : L"Voice call", WS_OVERLAPPEDWINDOW, x, y, w, h,
                                  nullptr, nullptr, inst, nullptr);

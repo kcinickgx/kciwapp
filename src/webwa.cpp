@@ -29,7 +29,7 @@ struct Vista {
     bool visible = false;  // si esta puesta sobre la conversacion (video)
 };
 
-constexpr int ANCHO_PX = 1100, ALTO_PX = 760;
+constexpr int ANCHO_PX = 1920, ALTO_PX = 1200;
 constexpr int ESCONDIDO = -20000;
 
 HMODULE g_dll = nullptr;
@@ -347,6 +347,11 @@ const wchar_t* JS_DIAG_VIDEO =
     L"o.push('cortar='+(e?'si':'no'));var t2=(document.body?document.body.innerText:'')||'';o.push('texto: '+t2.replace(/\s+/g,' ').slice(0,300));"
     L"return o.join(' || ')}catch(e){return 'ERR '+e}})()";
 
+const wchar_t* JS_BOTONES =
+    L"(function(){var o=[];document.querySelectorAll('button,[role=button]').forEach(function(b){var r=b.getBoundingClientRect();if(r.width<=0)return;"
+    L"var ic=b.querySelector('[data-icon]');o.push((b.getAttribute('aria-label')||'')+'|'+(b.getAttribute('title')||'')+'|'+(ic?ic.getAttribute('data-icon'):(b.getAttribute('data-icon')||''))+'|'+(b.innerText||'').trim().slice(0,30))});"
+    L"return o.join(' ; ')})()";
+
 const wchar_t* JS_EN_LLAMADA =
     L"(function(){var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
     L"if(!e)return 'no';var c=e;for(var i=0;i<8&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;"
@@ -524,9 +529,13 @@ void querer_popout(bool si) {
 
 void atender() {
     if (!g_activo) return;
-    std::wstring js = js_click({L"Accept", L"Aceptar", L"accept-call"});
+    std::wstring js = js_click({L"Accept", L"Aceptar", L"Answer", L"accept-call", L"call-accept", L"answer", L"Accept call", L"Answer call"});
     if (g_llamada.web) ejecutar(g_llamada, js, [](const std::wstring& r) { registrar("atender (ventanita): " + resultado_str(r)); });
-    ejecutar(g_principal, js, [](const std::wstring& r) { registrar("atender (principal): " + resultado_str(r)); });
+    ejecutar(g_principal, js, [](const std::wstring& r) {
+        std::string res = resultado_str(r);
+        registrar("atender (principal): " + res);
+        if (res != "ok") ejecutar(g_principal, JS_BOTONES, [](const std::wstring& r2) { registrar("botones principal: " + resultado_str(r2)); });
+    });
 }
 
 void colgar() {
