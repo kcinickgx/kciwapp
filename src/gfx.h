@@ -11,6 +11,7 @@
 #include <wrl/client.h>
 
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,10 @@ struct Gfx {
     ComPtr<ID2D1Bitmap1> destino;
     ComPtr<IDWriteFactory3> dwrite;
     ComPtr<IWICImagingFactory> wic;
+    // Los layouts de texto se pueden armar desde otros hilos (DirectWrite lo
+    // permite); lo que NO se puede tocar desde otro hilo es el contexto D2D
+    // ni los pinceles. Este pincel se crea al inicio para los links.
+    ComPtr<ID2D1SolidColorBrush> pincel_enlace;
 
     bool iniciar(HWND h);
     void redimensionar();
@@ -97,6 +102,7 @@ struct Gfx {
    private:
     std::map<unsigned, ComPtr<ID2D1SolidColorBrush>> pinceles;
     std::map<std::wstring, ComPtr<IDWriteTextFormat>> formatos;
+    std::mutex formatos_mu;
     std::vector<ComPtr<ID2D1Layer>> capas;
     int capas_usadas = 0;
 };

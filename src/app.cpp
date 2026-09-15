@@ -1,7 +1,9 @@
 #include "app.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "aviso.h"
@@ -309,7 +311,7 @@ void App::redimensionado() {
 }
 
 bool App::animando() {
-    return !lista.quieto() || !conv.quieto() || layout_pendiente > 0 ||
+    return !lista.quieto() || !conv.quieto() ||
            (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
            grab == Grab::Grabando ||
            ((!reproduciendo_id.empty() || grab_escuchando) && !reproductor.pausado() && !reproductor.terminado());
@@ -429,6 +431,8 @@ void App::abrir_chat(const std::string& jid) {
     mensajes.clear();
     vistas.clear();
     layout_pendiente = 0;
+    layout_gen++;
+    tandas_listas.clear();
     cargando_mensajes = true;
     hay_mas_viejos = true;
     conv = Desplazable();
@@ -600,6 +604,7 @@ void App::anteponer(const std::vector<Mensaje>& viejos) {
     vistas.insert(vistas.begin(), limpios.size(), VistaMensaje());
     layout_pendiente += limpios.size();
     if (sel_msg >= 0) sel_msg += (int)limpios.size();
+    lanzar_armado();
     // El que era el primero ahora tiene un anterior: su divisor puede cambiar.
     if (layout_pendiente < vistas.size()) {
         float antes = vistas[layout_pendiente].alto;
@@ -856,8 +861,85 @@ bool App::aplicar_evento(const Json& e) {
 void App::armar_vistas() {
     vistas.assign(mensajes.size(), VistaMensaje());
     layout_pendiente = mensajes.size();
-    // Lo ultimo (lo que se ve) se arma ya; el resto, de a tandas por frame.
+    // Lo ultimo (lo que se ve) se arma ya; el resto, en hilos de fondo.
     avanzar_layouts(120, 1000.0f);
+    lanzar_armado();
+}
+
+// Copia los mensajes pendientes y los reparte en tandas entre un hilo por
+// nucleo. Cada tanda vuelve al hilo de UI y se aplica cuando es contigua a
+// lo ya armado (de abajo hacia arriba), asi la vista no se mueve.
+void App::lanzar_armado() {
+    layout_gen++;
+    tandas_listas.clear();
+    if (layout_pendiente == 0) return;
+    unsigned gen = layout_gen;
+    auto copia = std::make_shared<std::vector<Mensaje>>(mensajes.begin(), mensajes.begin() + layout_pendiente);
+    const Chat* c = chat_de(chat_actual);
+    bool es_grupo = c && c->es_grupo;
+    // Los nombres se resuelven aca, en el hilo de UI, para no leer los mapas desde otros hilos.
+    auto nombres = std::make_shared<std::unordered_map<std::string, std::wstring>>();
+    for (auto& m : *copia) {
+        if (!nombres->count(m.remitente)) (*nombres)[m.remitente] = nombre_de(m.remitente);
+        if (!m.cita_remitente.empty() && !nombres->count(m.cita_remitente)) (*nombres)[m.cita_remitente] = nombre_de(m.cita_remitente);
+    }
+    float W = w_conv();
+    size_t n = copia->size();
+    const size_t TANDA = 3000;
+    auto siguiente = std::make_shared<std::atomic<size_t>>(n);  // el final de la proxima tanda a tomar
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    int hilos = std::clamp((int)si.dwNumberOfProcessors, 2, 16);
+    for (int h = 0; h < hilos; h++) {
+        red::en_fondo([this, gen, copia, nombres, es_grupo, W, siguiente, TANDA] {
+            auto nombre = [nombres](const std::string& j) {
+                auto it = nombres->find(j);
+                return it != nombres->end() ? it->second : formatear_telefono(j);
+            };
+            for (;;) {
+                // Tomar la tanda que termina en `fin` (de atras para adelante).
+                size_t fin = siguiente->load();
+                if (fin == 0) return;
+                size_t inicio = fin > TANDA ? fin - TANDA : 0;
+                if (!siguiente->compare_exchange_strong(fin, inicio)) continue;
+                if (gen != layout_gen) return;
+                std::vector<VistaMensaje> tanda(fin - inicio);
+                for (size_t i = inicio; i < fin; i++)
+                    armar_vista_core((*copia)[i], i > 0 ? &(*copia)[i - 1] : nullptr, es_grupo, nombre, W, tanda[i - inicio]);
+                red::en_ui([this, gen, fin, tanda = std::move(tanda)]() mutable {
+                    if (gen != layout_gen) return;
+                    tandas_listas[fin] = std::move(tanda);
+                    aplicar_tandas();
+                });
+            }
+        });
+    }
+}
+
+void App::aplicar_tandas() {
+    double agregado = 0;
+    for (;;) {
+        auto it = tandas_listas.find(layout_pendiente);
+        if (it == tandas_listas.end()) break;
+        std::vector<VistaMensaje>& tanda = it->second;
+        size_t inicio = layout_pendiente - tanda.size();
+        for (size_t k = 0; k < tanda.size(); k++) {
+            vistas[inicio + k] = std::move(tanda[k]);
+            agregado += vistas[inicio + k].alto;
+        }
+        layout_pendiente = inicio;
+        tandas_listas.erase(it);
+    }
+    if (agregado > 0) {
+        conv.max += agregado;
+        conv.pos += agregado;
+        conv.objetivo += agregado;
+        pedir_dibujo();
+    }
+    if (layout_pendiente == 0 && abierto_en) {
+        red::registrar("layouts listos: " + std::to_string(vistas.size()) + " en " + std::to_string(GetTickCount64() - abierto_en) + " ms desde abrir");
+        abierto_en = 0;
+    }
 }
 
 double App::avanzar_layouts(int cuantos, float ms_max) {
@@ -881,25 +963,26 @@ double App::avanzar_layouts(int cuantos, float ms_max) {
 }
 
 void App::armar_vista(size_t i) {
-    const Mensaje& m = mensajes[i];
-    VistaMensaje& v = vistas[i];
+    const Chat* c = chat_de(mensajes[i].chat);
+    armar_vista_core(mensajes[i], i > 0 ? &mensajes[i - 1] : nullptr, c && c->es_grupo,
+                     [this](const std::string& j) { return nombre_de(j); }, w_conv(), vistas[i]);
+}
+
+void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_grupo,
+                           const std::function<std::wstring(const std::string&)>& nombre_de, float W, VistaMensaje& v) {
     v = VistaMensaje();
-    float W = w_conv();
     v.ancho_para = W;
     float tope = std::round(W * (W < 760 ? 0.84f : 0.68f) / 10) * 10;
     tope = std::min(tope, 720.0f);
     float interior = tope - 2 * PAD_X;
-    const Chat* c = chat_de(m.chat);
-    bool es_grupo = c && c->es_grupo;
 
     v.hora_texto = formatear_hora(m.ts);
     if (m.editado) v.hora_texto = L"Edited  " + v.hora_texto;
     float hora_w = g.medir(v.hora_texto, HORA_TAM) + (m.propio ? 20.0f : 0.0f);
 
-    v.divisor = i == 0 || dia_de(m.ts) != dia_de(mensajes[i - 1].ts);
+    v.divisor = !anterior || dia_de(m.ts) != dia_de(anterior->ts);
     if (v.divisor) v.divisor_texto = formatear_dia(m.ts);
-    v.nuevo_bloque = i == 0 || v.divisor || mensajes[i - 1].remitente != m.remitente ||
-                     mensajes[i - 1].propio != m.propio;
+    v.nuevo_bloque = !anterior || v.divisor || anterior->remitente != m.remitente || anterior->propio != m.propio;
 
     float ancho_contenido = 0, y = PAD_Y;
     if (es_grupo && !m.propio && v.nuevo_bloque) {
@@ -973,7 +1056,7 @@ void App::armar_vista(size_t i) {
             for (auto& e : v.enlaces) {
                 DWRITE_TEXT_RANGE rango = {(UINT32)e.inicio, (UINT32)e.largo};
                 v.texto->SetUnderline(TRUE, rango);
-                v.texto->SetDrawingEffect(g.pincel(Color(0x53bdeb)), rango);
+                v.texto->SetDrawingEffect(g.pincel_enlace.Get(), rango);
             }
         }
         DWRITE_TEXT_METRICS tm;
@@ -1118,15 +1201,6 @@ void App::dibujar() {
     conv.animar(dt);
     necesita_dibujar = false;
 
-    if (layout_pendiente > 0 && !chat_actual.empty()) {
-        // Unos milisegundos por frame armando lo de arriba; la vista no se mueve.
-        double agregado = avanzar_layouts(6000, 15.0f);
-        conv.max += agregado;
-        conv.pos += agregado;
-        conv.objetivo += agregado;
-        if (layout_pendiente == 0 && abierto_en)
-            red::registrar("layouts listos: " + std::to_string(vistas.size()) + " en " + std::to_string(GetTickCount64() - abierto_en) + " ms desde abrir");
-    }
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
     aplicar_ajustes();

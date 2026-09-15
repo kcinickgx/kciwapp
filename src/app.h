@@ -2,6 +2,8 @@
 #pragma once
 #include <algorithm>
 #include <cmath>
+#include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -385,6 +387,16 @@ struct App {
     void armar_items();
     void armar_vistas();
     void armar_vista(size_t i);
+    // El armado puro de una vista: solo lee lo que le pasan (sirve desde
+    // hilos de fondo). `anterior` es el mensaje de arriba, o null.
+    void armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_grupo,
+                          const std::function<std::wstring(const std::string&)>& nombre, float W, VistaMensaje& v);
+    // Armado de fondo en varios hilos de lo pendiente; los resultados se
+    // aplican en el hilo de UI de abajo hacia arriba.
+    std::atomic<unsigned> layout_gen{0};
+    std::map<size_t, std::vector<VistaMensaje>> tandas_listas;  // por indice final
+    void lanzar_armado();
+    void aplicar_tandas();
     // Arma hasta `cuantos` layouts pendientes (o hasta agotar `ms_max`);
     // devuelve el alto agregado arriba de lo visible.
     double avanzar_layouts(int cuantos, float ms_max);

@@ -58,6 +58,7 @@ bool Gfx::iniciar(HWND h) {
     if (FAILED(hr)) return false;
 
     redimensionar();
+    ctx->CreateSolidColorBrush(Color(0x53bdeb).d2d(), &pincel_enlace);
     return true;
 }
 
@@ -108,6 +109,7 @@ ID2D1SolidColorBrush* Gfx::pincel(Color c) {
 
 IDWriteTextFormat* Gfx::formato(float tamano, DWRITE_FONT_WEIGHT peso, const wchar_t* fuente) {
     std::wstring clave = fuente + std::to_wstring((int)(tamano * 10)) + L"/" + std::to_wstring((int)peso);
+    std::lock_guard<std::mutex> candado(formatos_mu);
     auto& f = formatos[clave];
     if (!f) {
         dwrite->CreateTextFormat(fuente, nullptr, peso, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, tamano,

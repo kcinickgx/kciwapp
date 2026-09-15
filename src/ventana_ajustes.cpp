@@ -814,7 +814,8 @@ LRESULT CALLBACK procedimiento(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             DestroyWindow(h);
             return 0;
         case WM_DESTROY:
-            g_gfx = Gfx();
+            g_gfx.~Gfx();
+            new (&g_gfx) Gfx();
             g_hwnd = nullptr;
             g_picker = EstadoPicker();
             g_clics.clear();
