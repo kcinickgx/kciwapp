@@ -329,6 +329,30 @@ std::vector<grabador::Dispositivo> construir_lista_audio(bool entrada) {
     return r;
 }
 
+// Menu con los dispositivos; el elegido se aplica en el acto.
+void desplegar_audio(bool entrada, std::vector<grabador::Dispositivo>* lista, float x, float y) {
+    HMENU menu = CreatePopupMenu();
+    std::wstring actual_id = entrada ? ajustes::actual().entrada : ajustes::actual().salida;
+    AppendMenuW(menu, MF_STRING | (actual_id.empty() ? MF_CHECKED : 0), 1, L"System default");
+    for (size_t i = 0; i < lista->size(); i++) {
+        const auto& d = (*lista)[i];
+        if (d.id.empty()) continue;
+        AppendMenuW(menu, MF_STRING | (d.id == actual_id ? MF_CHECKED : 0), (UINT_PTR)(i + 2), d.nombre.c_str());
+    }
+    float e = GetDpiForWindow(g_hwnd) / 96.0f;
+    POINT p = {(LONG)(x * e), (LONG)(y * e)};
+    ClientToScreen(g_hwnd, &p);
+    int id = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN, p.x, p.y, 0, g_hwnd, nullptr);
+    DestroyMenu(menu);
+    if (id <= 0) return;
+    std::wstring nuevo = id == 1 ? L"" : (*lista)[id - 2].id;
+    ajustes::cambiar([entrada, nuevo](Ajustes& a) {
+        if (entrada) a.entrada = nuevo;
+        else a.salida = nuevo;
+    });
+    InvalidateRect(g_hwnd, nullptr, FALSE);
+}
+
 void ciclar_audio(bool entrada, std::vector<grabador::Dispositivo>* lista, int dir) {
     if (!lista || lista->empty()) return;
     std::wstring actual = entrada ? ajustes::actual().entrada : ajustes::actual().salida;
@@ -380,11 +404,12 @@ float seccion_colores(Gfx& g, float x, float y, float ancho_contenido) {
     y += 6;
     // Se muestran los colores del tema que este activo; tocar uno lo copia
     // al tema Custom y cambia a Custom (como hacia la version vieja).
+    const float FILA_C = 28.0f;  // mas apretadas que el resto
     for (int i = 0; i < CC_CANTIDAD; i++) {
-        hover_si(g, x, y, ancho_contenido, FILA);
-        g.renglon(NOMBRE_CAMPO[i], x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
+        hover_si(g, x, y, ancho_contenido, FILA_C);
+        g.renglon(NOMBRE_CAMPO[i], x, y + (FILA_C - 16) / 2.0f, 14, Color(TXT()));
         unsigned c = leer_campo(ajustes::paleta(), i);
-        float sw = 28.0f, sw_x = x + ancho_contenido - sw, sw_y = y + (FILA - sw) / 2.0f;
+        float sw = 22.0f, sw_x = x + ancho_contenido - sw, sw_y = y + (FILA_C - sw) / 2.0f;
         std::wstring hx = wstr_de(ajustes::hex_de(c));
         float hw = g.medir(hx, 12.5f);
         g.renglon(hx, sw_x - 12 - hw, y + (FILA - 12.5f) / 2.0f, 12.5f, Color(TXT_DIM()));
@@ -395,7 +420,7 @@ float seccion_colores(Gfx& g, float x, float y, float ancho_contenido) {
         agregar_clic(g_clics, sw_x, sw_y, sw, sw, [campo, csx, csy, csw, csh]() {
             if (!g_picker.abierto) abrir_picker(campo, csx, csy, csw, csh);
         });
-        y += FILA;
+        y += FILA_C;
     }
     return y;
 }
@@ -495,17 +520,15 @@ float seccion_audio(Gfx& g, float x, float y, float ancho_contenido) {
         std::wstring nombre = L"System default";
         for (auto& d : *lista)
             if (d.id == actual_id) { nombre = d.nombre; break; }
+        // Un desplegable: caja con el nombre y una flechita; el click abre
+        // un menu nativo (oscuro) con todos los dispositivos.
         float R = x + ancho_contenido;
-        float b = 24.0f, by = y + (FILA - b) / 2.0f;
-        float bx1 = R - b, bx0 = R - 176;
-        g.rect_redondo(bx0, by, b, b, 6, Color(BG_CAMPO()));
-        centrado(g, L"‹", bx0 + b / 2.0f, by + 4, 15, Color(TXT()));
-        g.rect_redondo(bx1, by, b, b, 6, Color(BG_CAMPO()));
-        centrado(g, L"›", bx1 + b / 2.0f, by + 4, 15, Color(TXT()));
-        float nx = bx0 + b + 8, nw = bx1 - 8 - nx;
-        g.renglon(nombre, nx, y + (FILA - 13.5f) / 2.0f, 13.5f, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, nw);
-        agregar_clic(g_clics, bx0, by, b, b, [entrada, lista]() { ciclar_audio(entrada, lista, -1); });
-        agregar_clic(g_clics, bx1, by, b, b, [entrada, lista]() { ciclar_audio(entrada, lista, 1); });
+        float cw = 260.0f, ch = 30.0f, cx = R - cw, cy = y + (FILA - ch) / 2.0f;
+        g.rect_redondo(cx, cy, cw, ch, 6, Color(BG_CAMPO()));
+        g.borde_redondo(cx, cy, cw, ch, 6, Color(BORDE()), 1.0f);
+        g.renglon(nombre, cx + 10, cy + (ch - 13.5f) / 2.0f, 13.5f, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, cw - 40);
+        centrado(g, L"▾", cx + cw - 14, cy + 6, 13, Color(TXT_DIM()));
+        agregar_clic(g_clics, cx, cy, cw, ch, [entrada, lista, cx, cy, ch]() { desplegar_audio(entrada, lista, cx, cy + ch); });
         y += FILA;
     };
     fila(L"Microphone", &g_mics, true);

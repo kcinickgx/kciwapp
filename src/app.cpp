@@ -12,7 +12,6 @@
 namespace {
 
 
-const float FILA_H = 68.0f;
 const float TITULO_H = 34.0f;
 const float PAD_X = 9.0f;
 const float PAD_Y = 6.0f;
@@ -890,7 +889,7 @@ void App::armar_items() {
 int App::item_en(float y) {
     float yy = top_lista() - lista.pos;
     for (size_t i = 0; i < items.size(); i++) {
-        float h = items[i].tipo == ItemLista::Titulo ? TITULO_H : FILA_H;
+        float h = items[i].tipo == ItemLista::Titulo ? TITULO_H : fila_h();
         if (y >= yy && y < yy + h) return (int)i;
         yy += h;
     }
@@ -911,13 +910,14 @@ void App::dibujar_lista() {
     armar_items();
     float H = g.alto - top;
     float total = 0;
-    for (auto& it : items) total += it.tipo == ItemLista::Titulo ? TITULO_H : FILA_H;
+    for (auto& it : items) total += it.tipo == ItemLista::Titulo ? TITULO_H : fila_h();
     lista.max = std::max(0.0f, total - H);
     lista.limitar();
     g.recortar(0, top, W, H);
     float y = top - lista.pos;
     for (size_t k = 0; k < items.size(); k++) {
         const ItemLista& it = items[k];
+        float FILA_H = fila_h();
         float h = it.tipo == ItemLista::Titulo ? TITULO_H : FILA_H;
         if (y + h < top) {
             y += h;
@@ -935,11 +935,11 @@ void App::dibujar_lista() {
             std::wstring quien = nombre_de(m.chat);
             std::wstring fecha = formatear_dia(m.ts);
             float fw = g.medir(fecha, 12);
-            g.renglon(fecha, W - 16 - fw, y + 14, 12, Color(TXT_DIM()));
-            g.renglon(quien, 16, y + 12, letra_lista, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 40 - fw);
+            g.renglon(fecha, W - 16 - fw, y + FILA_H * 0.2f, 12, Color(TXT_DIM()));
+            g.renglon(quien, 16, y + FILA_H * 0.17f, letra_lista, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 40 - fw);
             std::wstring prev = una_linea(m.texto);
             if (m.propio) prev = L"You: " + prev;
-            g.renglon(prev, 16, y + 36, letra_lista - 2, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 32);
+            g.renglon(prev, 16, y + FILA_H * 0.53f, letra_lista - 2, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 32);
             g.linea(16, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE()));
             y += h;
             continue;
@@ -949,7 +949,7 @@ void App::dibujar_lista() {
         if (sel) g.rect(0, y, W, FILA_H, Color(BG_SEL()));
         else if ((int)k == chat_bajo_mouse) g.rect(0, y, W, FILA_H, Color(BG_HOVER()));
         // Avatar
-        float r = 24, cx = 16 + r, cy = y + FILA_H / 2;
+        float r = (FILA_H - 20) / 2, cx = 16 + r, cy = y + FILA_H / 2;
         Imagen* foto = nullptr;
         if (c.tiene_foto || (!c.es_grupo && contactos.count(c.jid) && contactos[c.jid].tiene_foto))
             foto = &imagen("foto:" + c.jid, L"/foto/" + ancho(c.jid), false);
@@ -958,16 +958,16 @@ void App::dibujar_lista() {
         } else {
             g.circulo(cx, cy, r, Color(0x6b7c85));
             std::wstring inicial = c.nombre.empty() ? L"?" : c.nombre.substr(0, 1);
-            float iw = g.medir(inicial, 20);
-            g.renglon(inicial, cx - iw / 2, cy - 13, 20, Color(0xdfe5e7));
+            float iw = g.medir(inicial, r * 0.85f);
+            g.renglon(inicial, cx - iw / 2, cy - r * 0.55f, r * 0.85f, Color(0xdfe5e7));
         }
         // Nombre y hora
         std::wstring hora = c.ultimo_ts ? formatear_hora(c.ultimo_ts) : L"";
         if (c.ultimo_ts && dia_de(c.ultimo_ts) != dia_de(ahora_ms())) hora = formatear_dia(c.ultimo_ts);
         float hw = g.medir(hora, 12);
-        g.renglon(hora, W - 16 - hw, y + 14, 12, Color(c.no_leidos ? ACCENT() : TXT_DIM()));
+        g.renglon(hora, W - 16 - hw, y + FILA_H * 0.2f, 12, Color(c.no_leidos ? ACCENT() : TXT_DIM()));
         float tx = 16 + 2 * r + 14;
-        g.renglon(c.nombre, tx, y + 12, letra_lista, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - tx - 24 - hw);
+        g.renglon(c.nombre, tx, y + FILA_H * 0.17f, letra_lista, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - tx - 24 - hw);
         // Ultimo mensaje (o el borrador, si hay)
         std::wstring prev;
         auto bd = borradores.find(c.jid);
@@ -985,18 +985,19 @@ void App::dibujar_lista() {
         }
         float ancho_prev = W - tx - 16;
         if (c.no_leidos) ancho_prev -= 34;
-        g.renglon(prev, tx, y + 36, letra_lista - 2, Color(prev.rfind(L"Draft:", 0) == 0 ? 0xf15c6d : TXT_DIM()),
+        float py = y + FILA_H * 0.53f;
+        g.renglon(prev, tx, py, letra_lista - 2, Color(prev.rfind(L"Draft:", 0) == 0 ? 0xf15c6d : TXT_DIM()),
                   DWRITE_FONT_WEIGHT_NORMAL, ancho_prev);
         if (c.ultimo && c.ultimo->propio && prev.rfind(L"Draft:", 0) != 0) {
             int estado = c.jid == mi_jid ? std::max(c.ultimo->estado, 2) : c.ultimo->estado;
-            tildes(tx, y + 39, estado >= 2, Color(estado >= 3 ? TICK_AZUL() : TXT_DIM()));
+            tildes(tx, py + 3, estado >= 2, Color(estado >= 3 ? TICK_AZUL() : TXT_DIM()));
         }
         if (c.no_leidos) {
             std::wstring n = std::to_wstring(c.no_leidos);
             float nw = g.medir(n, 11, DWRITE_FONT_WEIGHT_SEMI_BOLD);
             float pw = std::max(20.0f, nw + 12);
-            g.rect_redondo(W - 16 - pw, y + 38, pw, 20, 10, Color(ACCENT()));
-            g.renglon(n, W - 16 - pw + (pw - nw) / 2, y + 40, 11, Color(0x111b21), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            g.rect_redondo(W - 16 - pw, py + 2, pw, 20, 10, Color(ACCENT()));
+            g.renglon(n, W - 16 - pw + (pw - nw) / 2, py + 4, 11, Color(0x111b21), DWRITE_FONT_WEIGHT_SEMI_BOLD);
         }
         g.linea(tx, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE()));
         y += h;

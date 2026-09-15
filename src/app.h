@@ -314,6 +314,8 @@ struct App {
     float w_conv() const { return g.ancho - ancho_lista; }
     float alto_cabecera() const { return 60.0f; }
     float top_lista() const { return 104.0f; }
+    // Alto de una fila de la lista: acompana al tamano de letra.
+    float fila_h() const { return std::round(letra_lista * 3.2f + 20.0f); }
     float alto_pie = 0;
 
     void dibujar_lista();
