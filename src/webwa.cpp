@@ -284,6 +284,37 @@ const wchar_t* JS_ESTADO =
 const wchar_t* JS_EN_LLAMADA =
     L"(function(){return !!document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[data-icon=\"call-end\"]')?'si':'no'})()";
 
+// Deja a la vista solo el panel de la llamada: desde el boton de cortar
+// sube hasta el contenedor que tiene el video, esconde los hermanos de cada
+// nivel hasta el body, y lo estira a toda la pagina. Idempotente; con
+// `deshacer` restaura lo que escondio.
+const wchar_t* JS_AISLAR =
+    L"(function(des){var W=window;"
+    L"if(des){if(W.__kciOcultos){W.__kciOcultos.forEach(function(e){e.style.visibility=e.__kciVis||''});}"
+    L"if(W.__kciCont){W.__kciCont.style.cssText=W.__kciCont.__kciCss||'';}"
+    L"W.__kciOcultos=null;W.__kciCont=null;return 'restaurado'}"
+    L"var b=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
+    L"if(!b)return 'sin boton';"
+    L"var c=b;while(c&&c!==document.body&&!c.querySelector('video'))c=c.parentElement;"
+    L"if(!c||c===document.body){c=b;for(var i=0;i<4&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;}"
+    L"if(W.__kciCont===c)return 'ya';"
+    L"if(W.__kciCont){W.__kciOcultos.forEach(function(e){e.style.visibility=e.__kciVis||''});W.__kciCont.style.cssText=W.__kciCont.__kciCss||'';}"
+    L"var oc=[];var n=c;while(n&&n!==document.body){var p=n.parentElement;if(!p)break;"
+    L"Array.prototype.forEach.call(p.children,function(h){if(h!==n&&h.tagName!=='SCRIPT'&&h.tagName!=='STYLE'){h.__kciVis=h.style.visibility;h.style.visibility='hidden';oc.push(h)}});n=p;}"
+    L"c.__kciCss=c.style.cssText;"
+    L"c.style.cssText+=';position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;"
+    L"max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;transform:none!important;margin:0!important;border-radius:0!important;z-index:2147483647!important;visibility:visible!important;';"
+    L"W.__kciOcultos=oc;W.__kciCont=c;return 'aislado '+oc.length})";
+
+void aislar_llamada(bool deshacer) {
+    Vista& v = g_llamada.web ? g_llamada : g_principal;
+    if (!v.web) return;
+    ejecutar(v, std::wstring(JS_AISLAR) + (deshacer ? L"(true)" : L"(false)"), [deshacer](const std::wstring& r) {
+        std::string s = resultado_str(r);
+        if (s != "ya" && s != "sin boton") registrar(std::string(deshacer ? "deshacer aislar: " : "aislar: ") + s);
+    });
+}
+
 void intentar_llamada_pendiente() {
     if (!g_pendiente.hay || !g_principal.web) return;
     g_pendiente.intentos++;
@@ -401,6 +432,8 @@ void sondear() {
             avisar_llamada(en_pagina);
         }
         intentar_llamada_pendiente();
+        Vista& v = g_llamada.web ? g_llamada : g_principal;
+        if (v.visible && g_en_llamada) aislar_llamada(false);
     });
 }
 
@@ -442,7 +475,9 @@ void mostrar_llamada(const RECT* r) {
     if (r) {
         SetWindowPos(v.hwnd, HWND_TOP, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_SHOWWINDOW);
         v.visible = true;
+        aislar_llamada(false);
     } else {
+        if (v.visible) aislar_llamada(true);
         SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER);
         v.visible = false;
     }
