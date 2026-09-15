@@ -1235,7 +1235,7 @@ void App::armar_items() {
     items.push_back({ItemLista::Titulo, 0, L"Contacts"});
     for (size_t i = 0; i < chats.size(); i++)
         if (plano(chats[i].nombre).find(q) != std::wstring::npos) items.push_back({ItemLista::ChatItem, (int)i, L""});
-    items.push_back({ItemLista::Titulo, 0, buscando ? L"Messages (searching...)" : busqueda_completa ? L"Messages" : L"Messages (scroll for more)"});
+    items.push_back({ItemLista::Titulo, 0, buscando ? L"Messages (searching...)" : L"Messages (" + std::to_wstring(resultados.size()) + L")"});
     for (size_t i = 0; i < resultados.size(); i++) items.push_back({ItemLista::Resultado, (int)i, L""});
 }
 

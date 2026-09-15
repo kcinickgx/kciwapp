@@ -10,7 +10,7 @@
 
 namespace {
 constexpr float ALTO_CAMPO = 36.0f;
-constexpr int PAGINA = 200;
+constexpr int PAGINA = 1000000;  // todas de una, sin paginar
 // Ancho reservado a la derecha del campo para "n/N" y las flechas.
 constexpr float NAVEGADOR_W = 110.0f;
 }  // namespace

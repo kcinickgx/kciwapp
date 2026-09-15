@@ -477,7 +477,7 @@ void App::buscar_mas() {
     std::wstring q = ultima_busqueda;
     if (q.size() < 2 || busqueda_completa) return;
     buscando = true;
-    const int PAGINA = 200;
+    const int PAGINA = 1000000;  // todas de una, sin paginar
     std::string qq = angosto(q);
     // Escapado minimo para la URL.
     std::wstring url = L"/buscar?limite=" + std::to_wstring(PAGINA) + L"&q=";
