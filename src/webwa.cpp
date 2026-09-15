@@ -579,7 +579,10 @@ void poner_vista(HWND padre, const RECT* r) {
     }
 }
 
-bool video_fluye() { return g_en_llamada && g_video_fluye; }
+// Con video andando, o ya atendida y con la ventanita lista (la ventanita
+// no engancha el video hasta estar en pantalla, asi que no se puede esperar
+// a verlo para mostrarla).
+bool video_fluye() { return g_en_llamada && (g_video_fluye || (g_conectada && g_llamada.web)); }
 double proporcion_video() { return g_prop; }
 
 void volcar_dom() {
