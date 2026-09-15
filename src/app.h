@@ -303,6 +303,13 @@ struct App {
     void atender_llamada(const std::string& chat, bool video);
     void llamada_cambio(bool en_curso);
     void llamada_conectada();
+    // Vinculacion: el server no tiene sesion de WhatsApp; se le pide el QR
+    // y se dibuja aca hasta que lo escaneen.
+    bool sin_sesion = false;
+    std::string qr_datos;
+    ComPtr<ID2D1Bitmap1> qr_bmp;
+    void tic_vinculacion();
+    void dibujar_vinculacion();
     void terminar_llamada_ui();
     void colgar_llamada();
     void ubicar_video_llamada();

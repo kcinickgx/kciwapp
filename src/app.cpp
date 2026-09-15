@@ -382,6 +382,18 @@ void App::cargar_chats() {
                 escuchar_eventos();
             }
             aviso_estado = conectado ? L"" : L"Server not connected to WhatsApp";
+            bool logueado = je["logueado"].bul(true);
+            if (!logueado && !sin_sesion) {
+                sin_sesion = true;
+                aviso_estado = L"";
+                red::en_fondo([] { red::mandar_json(L"/vincular", "{}"); });
+                SetTimer(hwnd, 10, 2500, nullptr);
+            } else if (logueado && sin_sesion) {
+                sin_sesion = false;
+                qr_bmp.Reset();
+                qr_datos.clear();
+                KillTimer(hwnd, 10);
+            }
             // Hubo una importacion masiva en el server: la cache de mensajes
             // ya no refleja lo que hay (mensajes nuevos en el medio, media
             // pegada a mensajes viejos). Se tira y se vuelve a pedir de a
@@ -1615,6 +1627,71 @@ void App::dibujar_pie() {
 }
 
 // Lo que se ve sin ningun chat abierto (toda la columna derecha).
+// Cada 2,5 s mientras no hay sesion: estado (ya escanearon?) y el QR nuevo.
+void App::tic_vinculacion() {
+    if (!sin_sesion) return;
+    red::en_fondo([this] {
+        Respuesta est = red::obtener(L"/estado", 8000);
+        if (!est.ok()) return;
+        Json je = Json::parsear(est.cuerpo);
+        bool logueado = je["logueado"].bul();
+        bool vinculando = je["vinculando"].bul();
+        std::string png;
+        if (!logueado) {
+            if (!vinculando) red::mandar_json(L"/vincular", "{}");
+            Respuesta q = red::obtener(L"/qr", 8000);
+            if (q.ok()) png = q.cuerpo;
+        }
+        red::en_ui([this, logueado, png] {
+            if (logueado) {
+                // Listo: chats y todo lo demas.
+                sin_sesion = false;
+                qr_bmp.Reset();
+                qr_datos.clear();
+                KillTimer(hwnd, 10);
+                cargar_chats();
+            } else if (png != qr_datos) {
+                qr_datos = png;
+                qr_bmp.Reset();
+                if (!png.empty()) {
+                    Pixeles p = g.decodificar(png, false);
+                    if (!p.vacio()) qr_bmp = g.subir(p);
+                }
+            }
+            pedir_dibujo();
+        });
+    });
+}
+
+void App::dibujar_vinculacion() {
+    float x = x_conv(), W = w_conv(), H = g.alto;
+    g.rect(x, 0, W, H, Color(BG_SEL()));
+    g.rect(x, 0, W, 6, Color(ACCENT()));
+    float cx = x + W / 2;
+    float lado = 264, bloque = 40 + 16 + lado + 16 + 24 + 3 * 24;
+    float y = std::max(30.0f, (H - bloque) / 2);
+    std::wstring t = L"Link your phone";
+    float tw = g.medir(t, 26, DWRITE_FONT_WEIGHT_LIGHT);
+    g.renglon(t, cx - tw / 2, y, 26, Color(TXT()), DWRITE_FONT_WEIGHT_LIGHT);
+    y += 56;
+    g.rect_redondo(cx - lado / 2 - 8, y - 8, lado + 16, lado + 16, 8, Color(0xffffff));
+    if (qr_bmp) g.bitmap(qr_bmp.Get(), cx - lado / 2, y, lado, lado);
+    else {
+        std::wstring e = L"Getting the QR code...";
+        float ew = g.medir(e, 14);
+        g.renglon(e, cx - ew / 2, y + lado / 2 - 10, 14, Color(0x54656f));
+    }
+    y += lado + 32;
+    const wchar_t* pasos[] = {L"1. Open WhatsApp on your phone",
+                              L"2. Settings \u2192 Linked devices \u2192 Link a device",
+                              L"3. Point your phone at this screen to scan the code"};
+    for (const wchar_t* p : pasos) {
+        float pw = g.medir(p, 14);
+        g.renglon(p, cx - pw / 2, y, 14, Color(TXT_DIM()));
+        y += 24;
+    }
+}
+
 void App::dibujar_pantalla_vacia() {
     float x = x_conv(), W = w_conv(), H = g.alto;
     g.rect(x, 0, W, H, Color(BG_SEL()));
@@ -1652,6 +1729,10 @@ void App::dibujar_pantalla_vacia() {
 void App::dibujar_conversacion() {
     float x = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie, H = bottom - top;
     dibujar_fondo_chat(x, top, W, H);
+    if (sin_sesion) {
+        dibujar_vinculacion();
+        return;
+    }
     if (chat_actual.empty()) {
         dibujar_pantalla_vacia();
         return;
