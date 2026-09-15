@@ -44,26 +44,26 @@ void App::alternar_seleccion(int i) {
     pedir_dibujo();
 }
 
-// La barra que reemplaza a la cabecera mientras se seleccionan mensajes.
+// La barra que reemplaza al pie (el campo de texto) mientras se seleccionan.
 void App::dibujar_seleccion_barra() {
     if (!seleccionando) return;
-    float x = x_conv(), W = w_conv(), H = alto_cabecera();
-    g.rect(x, 0, W, H, Color(BG_PANEL()));
-    g.renglon(L"✕", x + 20, 18, 20, Color(TXT_DIM()));
-    std::wstring t = std::to_wstring(seleccionados.size()) + (seleccionados.size() == 1 ? L" selected" : L" selected");
-    g.renglon(t, x + 60, 19, 16, Color(TXT()));
-    // Botones a la derecha: Forward y Copy.
+    float x = x_conv(), W = w_conv(), H = alto_pie, y0 = g.alto - H;
+    g.rect(x, y0, W, H, Color(BG_PANEL()));
+    float cy = y0 + H / 2;
+    g.renglon(L"✕", x + 20, cy - 12, 20, Color(TXT_DIM()));
+    std::wstring t = std::to_wstring(seleccionados.size()) + L" selected";
+    g.renglon(t, x + 60, cy - 10, 16, Color(TXT()));
     bool hay = !seleccionados.empty();
     float bx = x + W - 130;
-    g.rect_redondo(bx, 14, 110, 32, 16, Color(hay ? ACCENT() : BG_CAMPO()));
+    g.rect_redondo(bx, cy - 16, 110, 32, 16, Color(hay ? ACCENT() : BG_CAMPO()));
     float tw = g.medir(L"Forward", 14, DWRITE_FONT_WEIGHT_SEMI_BOLD);
-    g.renglon(L"Forward", bx + (110 - tw) / 2, 21, 14, Color(hay ? 0x111b21 : TXT_DIM()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    g.renglon(L"Forward", bx + (110 - tw) / 2, cy - 9, 14, Color(hay ? 0x111b21 : TXT_DIM()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
 }
 
 bool App::click_seleccion(float x, float y) {
     if (!seleccionando) return false;
     float xc = x_conv(), W = w_conv();
-    if (y < alto_cabecera() && x >= xc) {
+    if (y >= g.alto - alto_pie && x >= xc) {
         if (x < xc + 50) terminar_seleccion();
         else if (x >= xc + W - 130 && x < xc + W - 20 && !seleccionados.empty()) {
             modal_reenvio = true;
