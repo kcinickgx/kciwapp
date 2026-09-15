@@ -1761,6 +1761,7 @@ void App::raton_mueve(float x, float y) {
     chat_bajo_mouse = x < ancho_lista && y > top_lista() ? item_en(y) : -1;
     if (antes != chat_bajo_mouse || emojis_abierto || info_abierto || menu_abierto) pedir_dibujo();
     cursor_mano = sobre_clickeable(x, y);
+    cursor_texto = !cursor_mano && sobre_campo(x, y);
     {
         int antes_msg = msg_bajo_mouse;
         msg_bajo_mouse = -1;
@@ -2234,6 +2235,20 @@ void App::dibujar_fondo_chat(float x, float y, float w, float h) {
 }
 
 // Que hay bajo el mouse que se pueda clickear: para poner la manito.
+// Sobre algun campo de texto que se dibujo en el ultimo frame (y no esta
+// tapado por el visor o el menu).
+bool App::sobre_campo(float x, float y) const {
+    if (visor || menu_abierto) return false;
+    const Campo* campos[] = {&campo, &buscador, &buscador_chat, &buscador_reenvio, &emoji_buscador};
+    for (const Campo* c : campos) {
+        if (c->dibujado_en != ultimo_frame || !c->tiene(x, y)) continue;
+        // Con el modal de reenvio abierto solo cuenta su buscador.
+        if (modal_reenvio && c != &buscador_reenvio) continue;
+        return true;
+    }
+    return false;
+}
+
 bool App::sobre_clickeable(float x, float y) {
     if (visor) {
         if (visor_video) return true;

@@ -225,6 +225,8 @@ struct App {
     float sel_x0 = 0, sel_y0 = 0;
     std::wstring enlace_pendiente;  // link bajo el mouse al apretar; se abre al soltar sin arrastrar
     bool cursor_mano = false;
+    bool cursor_texto = false;  // I-beam sobre un campo de texto
+    bool sobre_campo(float x, float y) const;
     bool reenviando = false;   // (viejo) eligiendo a que chat reenviar
     std::string reenviar_chat, reenviar_id;
     // Modo seleccion (reenviar varios) y el modal de destinatarios.

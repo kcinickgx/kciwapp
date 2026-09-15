@@ -98,6 +98,8 @@ void Campo::dibujar(Gfx& g, float x, float y, float w, float h, unsigned long lo
     ancho = w;
     ox = x;
     oy = y;
+    alto_dibujado = h;
+    dibujado_en = ahora_ms;
     IDWriteTextLayout* l = armar(g);
     DWRITE_TEXT_METRICS m;
     l->GetMetrics(&m);

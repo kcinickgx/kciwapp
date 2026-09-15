@@ -127,7 +127,7 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_SETCURSOR:
             if (LOWORD(lp) == HTCLIENT) {
-                SetCursor(LoadCursor(nullptr, app && app->cursor_mano ? IDC_HAND : IDC_ARROW));
+                SetCursor(LoadCursor(nullptr, app && app->cursor_mano ? IDC_HAND : (app && app->cursor_texto ? IDC_IBEAM : IDC_ARROW)));
                 return 1;
             }
             break;

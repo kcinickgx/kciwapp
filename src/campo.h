@@ -49,6 +49,9 @@ struct Campo {
     std::wstring layout_de;
     float layout_ancho = 0;
     float ox = 0, oy = 0;  // donde se dibujo por ultima vez
+    float alto_dibujado = 0;
+    unsigned long long dibujado_en = 0;  // `ahora` del frame en que se dibujo
+    bool tiene(float x, float y) const { return x >= ox && x < ox + ancho && y >= oy && y < oy + alto_dibujado; }
     float desplazamiento = 0;  // scroll vertical interno cuando pasa de alto_max
     unsigned long long ultimo_movimiento = 0;
 
