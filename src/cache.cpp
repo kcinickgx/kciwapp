@@ -304,6 +304,11 @@ std::string media_a_json(const Media& x) {
     r += "\"segundos\":" + std::to_string(x.segundos) + ",";
     r += "\"estado\":" + std::to_string(x.estado) + ",";
     r += std::string("\"miniatura\":") + (x.miniatura ? "true" : "false");
+    if (!x.onda.empty()) {
+        r += ",\"onda\":[";
+        for (size_t i = 0; i < x.onda.size(); i++) r += (i ? "," : "") + std::to_string(x.onda[i]);
+        r += "]";
+    }
     r += "}";
     return r;
 }
@@ -319,6 +324,8 @@ Media media_de_json(const Json& md) {
     x.segundos = (int)md["segundos"].entero();
     x.estado = (int)md["estado"].entero();
     x.miniatura = md["miniatura"].bul();
+    const Json& onda = md["onda"];
+    for (size_t k = 0; k < onda.largo(); k++) x.onda.push_back((unsigned char)onda[k].entero());
     return x;
 }
 
@@ -372,7 +379,7 @@ std::string mensaje_a_json(const Mensaje& m) {
 // cita_remitente,cita_texto,editado,borrado,reenviado,estado,media_json.
 const char* COLUMNAS_MENSAJE =
     "chat,id,remitente,propio,ts,tipo,texto,cita_id,cita_remitente,cita_texto,editado,borrado,reenviado,estado,"
-    "media_json";
+    "media_json,reacciones_json";
 
 Mensaje fila_a_mensaje(Stmt& st) {
     Mensaje m;
@@ -392,7 +399,22 @@ Mensaje fila_a_mensaje(Stmt& st) {
     m.estado = st.col_int(13);
     std::string mj = st.col_texto(14);
     if (!mj.empty()) m.media = media_de_json(Json::parsear(mj));
+    std::string rj = st.col_texto(15);
+    if (!rj.empty()) {
+        Json rs = Json::parsear(rj);
+        for (size_t i = 0; i < rs.largo(); i++)
+            m.reacciones.push_back({rs[i]["remitente"].str(), ancho(rs[i]["emoji"].str())});
+    }
     return m;
+}
+
+std::string reacciones_a_json(const Mensaje& m) {
+    if (m.reacciones.empty()) return "";
+    std::string r = "[";
+    for (size_t i = 0; i < m.reacciones.size(); i++)
+        r += (i ? "," : "") + std::string("{\"remitente\":") + json_texto(m.reacciones[i].remitente) +
+             ",\"emoji\":" + json_texto(angosto(m.reacciones[i].emoji)) + "}";
+    return r + "]";
 }
 
 const char* ESQUEMA = R"sql(
@@ -474,6 +496,8 @@ bool abrir(const std::wstring& ruta) {
     ejecutar("PRAGMA busy_timeout=5000;");
     p_create_function(g_db, "plano", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, nullptr, xPlano, nullptr, nullptr);
     ejecutar(ESQUEMA);
+    // Columna agregada despues: si ya existe, el ALTER falla y no pasa nada.
+    ejecutar("ALTER TABLE mensajes ADD COLUMN reacciones_json TEXT;");
     return true;
 }
 
@@ -584,7 +608,7 @@ void guardar_mensajes(const std::vector<Mensaje>& mensajes) {
         Stmt st(
             "INSERT OR REPLACE INTO "
             "mensajes(chat,id,remitente,propio,ts,tipo,texto,texto_plano,cita_id,cita_remitente,cita_texto,"
-            "editado,borrado,reenviado,estado,media_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);");
+            "editado,borrado,reenviado,estado,media_json,reacciones_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);");
         if (st.ok) {
             for (const Mensaje& m : mensajes) {
                 std::string texto_utf8 = angosto(m.texto);
@@ -604,6 +628,7 @@ void guardar_mensajes(const std::vector<Mensaje>& mensajes) {
                 st.bind_int(14, m.reenviado ? 1 : 0);
                 st.bind_int(15, m.estado);
                 st.bind_texto(16, m.media ? media_a_json(*m.media) : std::string());
+                st.bind_texto(17, reacciones_a_json(m));
                 st.correr();
                 p_reset(st.st);
             }

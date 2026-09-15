@@ -656,6 +656,7 @@ bool App::aplicar_evento(const Json& e) {
                 auto& rs = mensajes[i].reacciones;
                 rs.erase(std::remove_if(rs.begin(), rs.end(), [&](const Reaccion& r) { return r.remitente == quien; }), rs.end());
                 if (!emoji.empty()) rs.push_back({quien, emoji});
+                cache::guardar_mensajes({mensajes[i]});
                 armar_vista(i);
             }
     } else if (tipo == "media") {
