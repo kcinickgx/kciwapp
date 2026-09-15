@@ -316,6 +316,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     webwa::al_cambiar_llamada([](bool en) {
         if (g_app) g_app->llamada_cambio(en);
     });
+    webwa::al_conectar_llamada([]() {
+        if (g_app) g_app->llamada_conectada();
+    });
     vllamada::al_colgar([]() {
         if (g_app) g_app->colgar_llamada();
     });

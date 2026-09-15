@@ -39,8 +39,10 @@ Vista g_principal, g_llamada;
 bool g_activo = false, g_logueado = false, g_cargando = true, g_en_llamada = false, g_silenciado = false;
 std::string g_qr;
 std::function<void(bool)> g_al_cambiar;
+std::function<void()> g_al_conectar;
 double g_prop = 900.0 / 620.0;  // proporcion del panel (ancho/alto); la ventana la sigue
 bool g_video_fluye = false;  // llega video del otro lado
+bool g_conectada = false;    // atendida (el panel muestra el reloj)
 int g_popout_intentos = 0;      // clicks al boton de "abrir en ventana" de la llamada
 bool g_quiero_popout = false;   // solo en las de video
 bool g_sondeando = false;
@@ -145,6 +147,7 @@ void avisar_llamada(bool en) {
     if (!en) {
         g_silenciado = false;
         g_video_fluye = false;
+        g_conectada = false;
     }
     registrar(en ? "llamada en curso" : "llamada terminada");
     if (g_al_cambiar) g_al_cambiar(en);
@@ -320,19 +323,28 @@ const wchar_t* JS_ESTADO =
     L"(function(){var side=document.querySelector('#pane-side')||document.querySelector('[aria-label=\"Chat list\"]')||document.querySelector('[data-testid=\"chat-list\"]');"
     L"var qr=document.querySelector('canvas[aria-label]')||document.querySelector('canvas');"
     L"var out={logueado:!!side,qr:''};if(!side&&qr){try{out.qr=qr.toDataURL('image/png')}catch(e){}}"
-    L"out.llamada=!!document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[aria-label=\"Cortar\"]');"
+    L"var ec=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[aria-label=\"Cortar\"]');out.llamada=!!ec;out.conectada=false;"
+    L"if(ec){var c=ec;for(var i=0;i<8&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;var t=c.innerText||'';"
+    L"out.conectada=!/calling|ringing|connecting|llamando|conectando/i.test(t)&&/(^|\\s)\\d{1,2}:\\d\\d(\\s|$)/.test(t)}"
     L"return JSON.stringify(out)})()";
 
 // Hay un video del otro lado andando (el nuestro esta muted; el remoto no).
 const wchar_t* JS_VIDEO =
-    L"(function(){var vs=Array.prototype.filter.call(document.querySelectorAll('video'),function(v){return v.videoWidth>0&&v.readyState>=2&&!v.paused&&!v.muted});"
-    L"return vs.length?'si':'no'})()";
+    L"(function(){var vs=Array.prototype.filter.call(document.querySelectorAll('video'),function(v){return v.videoWidth>0&&v.readyState>=2&&!v.paused});"
+    L"if(!vs.length)return 'no';"
+    L"function remoto(v){try{var t=v.srcObject&&v.srcObject.getVideoTracks();return t&&t.length&&!t[0].label}catch(e){return false}}"
+    L"if(vs.some(remoto))return 'si';"
+    L"if(vs.length>=2)return 'si';"
+    L"var r=vs[0].getBoundingClientRect();return (r.width>=innerWidth*0.5)?'si':'no'})()";
 
 const wchar_t* JS_EN_LLAMADA =
-    L"(function(){return !!document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[data-icon=\"call-end\"]')?'si':'no'})()";
+    L"(function(){var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
+    L"if(!e)return 'no';var c=e;for(var i=0;i<8&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;"
+    L"var t=(c.innerText||'');if(/calling|ringing|connecting|llamando|conectando/i.test(t))return 'si';"
+    L"return /(^|\s)\d{1,2}:\d\d(\s|$)/.test(t)?'conectada':'si'})()";
 
 const wchar_t* JS_POPOUT =
-    L"(function(){var b=document.querySelector('[aria-label=\"Pop out\"],[aria-label=\"Pop-out\"],[aria-label=\"Open in new window\"],[aria-label=\"Expand\"],"
+    L"(function(){var b=document.querySelector('[aria-label=\"Move to new window\"],[title=\"Move to new window\"],[aria-label=\"Pop out\"],[aria-label=\"Pop-out\"],[aria-label=\"Open in new window\"],[aria-label=\"Expand\"],"
     L"[aria-label=\"Picture in picture\"],[data-icon=\"pop-out\"],[data-icon=\"popout\"],[data-icon=\"expand\"],[data-icon=\"pip\"],[data-icon=\"new-window\"]');"
     L"if(b){b.click();return 'ok etiqueta'}"
     L"var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
@@ -435,6 +447,7 @@ std::string qr_png() { return g_qr; }
 bool en_llamada() { return g_en_llamada; }
 bool silenciado() { return g_silenciado; }
 void al_cambiar_llamada(std::function<void(bool)> f) { g_al_cambiar = std::move(f); }
+void al_conectar_llamada(std::function<void()> f) { g_al_conectar = std::move(f); }
 
 void sondear() {
     if (!g_activo || !g_principal.web || g_sondeando) return;
@@ -452,9 +465,20 @@ void sondear() {
         if (g_logueado != antes) registrar(g_logueado ? "WhatsApp Web logueado" : "WhatsApp Web sin sesion");
         // La llamada puede vivir en la ventanita o en la misma pagina.
         bool en_pagina = j["llamada"].bul();
+        if (en_pagina && j["conectada"].bul() && !g_conectada && !g_llamada.web) {
+            g_conectada = true;
+            registrar("llamada conectada (pagina)");
+            if (g_al_conectar) g_al_conectar();
+        }
         if (g_llamada.web) {
             ejecutar(g_llamada, JS_EN_LLAMADA, [en_pagina](const std::wstring& r2) {
-                avisar_llamada(resultado_str(r2) == "si" || en_pagina);
+                std::string e = resultado_str(r2);
+                avisar_llamada(e == "si" || e == "conectada" || en_pagina);
+                if (e == "conectada" && !g_conectada) {
+                    g_conectada = true;
+                    registrar("llamada conectada");
+                    if (g_al_conectar) g_al_conectar();
+                }
             });
             ejecutar(g_llamada, JS_VIDEO, [](const std::wstring& r2) { g_video_fluye = resultado_str(r2) == "si"; });
         } else {

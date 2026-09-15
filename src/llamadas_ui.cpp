@@ -64,12 +64,19 @@ void App::llamada_cambio(bool en_curso) {
             llamada_con = chat_de(chat_actual) ? chat_de(chat_actual)->nombre : L"";
             llamada_chat = chat_actual;
         }
-        if (!llamada_desde) llamada_desde = GetTickCount64();
         if (!vllamada::abierta()) abrir_ventana_llamada();
-        vllamada::estado(L"", llamada_desde);
+        if (llamada_desde) vllamada::estado(L"", llamada_desde);
     } else {
         terminar_llamada_ui();
     }
+    pedir_dibujo();
+}
+
+// La atendieron: desde aca corre el reloj.
+void App::llamada_conectada() {
+    if (!llamada_activa) return;
+    if (!llamada_desde) llamada_desde = GetTickCount64();
+    vllamada::estado(L"", llamada_desde);
     pedir_dibujo();
 }
 

@@ -300,6 +300,7 @@ struct App {
     void abrir_ventana_llamada();
     void atender_llamada(const std::string& chat, bool video);
     void llamada_cambio(bool en_curso);
+    void llamada_conectada();
     void terminar_llamada_ui();
     void colgar_llamada();
     void ubicar_video_llamada();

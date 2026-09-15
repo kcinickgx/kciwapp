@@ -47,6 +47,8 @@ double proporcion_video();
 
 // Avisos hacia la app (en el hilo de la UI).
 void al_cambiar_llamada(std::function<void(bool en_llamada)> f);
+// La atendieron (el panel de WhatsApp Web muestra el reloj): arranca el contador.
+void al_conectar_llamada(std::function<void()> f);
 
 // Debug: vuelca los aria-label / data-icon que hay en las dos paginas al log.
 void volcar_dom();
