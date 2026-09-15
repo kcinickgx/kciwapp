@@ -1717,16 +1717,20 @@ void App::cargar_todo_el_chat() {
             if (mio == chat_actual) todo_total = std::max(total, todo_cargado);
             pedir_dibujo();
         });
-        // Primero lo que ya tiene la cache.
-        std::vector<Mensaje> resto = viejo > 0 ? cache::leer_mensajes(mio, viejo, 1000000) : std::vector<Mensaje>();
-        if (!resto.empty()) {
+        // Primero lo que ya tiene la cache, de a 5000 para que la barra avance.
+        while (viejo > 0) {
+            std::vector<Mensaje> resto = cache::leer_mensajes(mio, viejo, 5000);
+            if (resto.empty()) break;
             viejo = resto.front().ts;
+            bool ultimo = resto.size() < 5000;
             red::en_ui([this, mio, resto] {
                 if (mio != chat_actual) return;
                 anteponer(resto);
                 todo_cargado += (long long)resto.size();
                 pedir_dibujo();
             });
+            if (ultimo) break;
+            Sleep(15);  // que se vea
         }
         bool agotado = false, fallo = false;
         for (;;) {
@@ -1782,7 +1786,7 @@ void App::dibujar_progreso_carga() {
         int c = 0;
         for (int i = (int)s.size() - 1; i >= 0; i--) {
             o.insert(o.begin(), s[i]);
-            if (++c % 3 == 0 && i > 0) o.insert(o.begin(), L'.');
+            if (++c % 3 == 0 && i > 0) o.insert(o.begin(), L',');
         }
         return o;
     };
