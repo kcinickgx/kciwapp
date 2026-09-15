@@ -165,7 +165,7 @@ void App::dibujar_grabacion(float x, float yy, float W, float ch) {
             g.rect(bx + 17, yy + ch / 2 - 6, 4, 12, Color(0x111b21));
             g.rect(bx + 23, yy + ch / 2 - 6, 4, 12, Color(0x111b21));
         } else {
-            g.renglon(L"▶", bx + 15, yy + ch / 2 - 9, 14, Color(0x111b21));
+            g.triangulo(bx + 17, yy + ch / 2 - 7, bx + 29, yy + ch / 2, bx + 17, yy + ch / 2 + 7, Color(0x111b21));
         }
         tx = bx + 46;
     } else {
@@ -188,6 +188,47 @@ void App::dibujar_grabacion(float x, float yy, float W, float ch) {
     }
     if (grab == Grab::Grabando) {
         g.rect_redondo(x + W - 44, yy + ch / 2 - 10, 20, 20, 4, Color(0xf15c6d));
+    } else {
+        g.renglon(L"➤", x + W - 44, yy + ch / 2 - 12, 22, Color(ACCENT()));
+    }
+}
+
+bool App::click_grabacion(float x, float y, float yy, float ch) {
+    float W = w_conv();
+    if (x < x_conv() + 52) {
+        grabar_cancelar();
+        return true;
+    }
+    if (x > x_conv() + W - 60) {
+        if (grab == Grab::Grabando) grabar_parar();
+        else grabar_mandar();
+        return true;
+    }
+    if (grab == Grab::Lista && x < x_conv() + 52 + 40) grabar_escuchar();
+    return true;
+}
+
+// ---- la tarjeta de audio --------------------------------------------------
+
+// Geometria de la tarjeta: play a la izquierda, la onda en el medio (clickeable
+// para adelantar), tiempo abajo y, mientras suena, el boton de velocidad.
+namespace {
+const float AUDIO_ONDA_X = 52.0f;   // donde arranca la onda
+const float AUDIO_ONDA_DER = 14.0f; // margen derecho
+const float AUDIO_VEL_W = 40.0f;    // el boton 1x/1.5x/2x
+}  // namespace
+
+void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
+    const Mensaje& m = mensajes[i];
+    bool suena = reproduciendo_id == m.id;
+    bool nota = m.tipo == "nota";
+    g.rect_redondo(cx, cy, w, h, 6, Color(0x000000, 0.18f));
+    // Play / pausa
+    float pcx = cx + 24, pcy = cy + h / 2;
+    g.circulo(pcx, pcy, 17, Color(ACCENT()));
+    if (suena && !reproductor.pausado() && !reproductor.terminado()) {
+        g.rect(pcx - 6, pcy - 7, 4, 14, Color(0x111b21));
+        g.rect(pcx + 2, pcy - 7, 4, 14, Color(0x111b21));
     } else {
         g.triangulo(pcx - 5, pcy - 7.5f, pcx + 8, pcy, pcx - 5, pcy + 7.5f, Color(0x111b21));
     }
@@ -213,7 +254,6 @@ void App::dibujar_grabacion(float x, float yy, float W, float ch) {
     int seg = (int)(suena ? pos : (double)m.media->segundos);
     std::wstring t = std::to_wstring(seg / 60) + L":" + (seg % 60 < 10 ? L"0" : L"") + std::to_wstring(seg % 60);
     g.renglon(t, ox, cy + h - 17, 11, Color(TXT_DIM()));
-    if (nota && !suena) g.renglon(L"\U0001F3A4", cx + w - 30, cy + h - 19, 12, Color(TXT_DIM()));
     // Velocidad, solo mientras suena.
     if (suena) {
         float vx = cx + w - AUDIO_ONDA_DER - AUDIO_VEL_W, vy = cy + 12;
