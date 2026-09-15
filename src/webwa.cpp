@@ -338,7 +338,9 @@ const wchar_t* JS_ESTADO =
     L"var qr=document.querySelector('canvas[aria-label]')||document.querySelector('canvas');"
     L"var out={logueado:!!side,qr:''};if(!side&&qr){try{out.qr=qr.toDataURL('image/png')}catch(e){}}"
     L"var ec=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[aria-label=\"Cortar\"]');out.llamada=!!ec;out.conectada=false;"
-    L"if(ec){var c=ec;for(var i=0;i<8&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;var t=c.innerText||'';"
+    L"if(ec){var c=null,n=ec.parentElement;while(n&&n!==document.body){var cs=getComputedStyle(n),r=n.getBoundingClientRect();"
+    L"if((cs.position==='fixed'||cs.position==='absolute')&&r.width>=200&&r.height>=150){c=n;break}n=n.parentElement;}"
+    L"if(!c){c=ec;for(var i=0;i<8&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;}var t=c.innerText||'';"
     L"out.conectada=!/calling|ringing|connecting|llamando|conectando/i.test(t)&&/(^|\\s)\\d{1,2}:\\d\\d(\\s|$)/.test(t)}"
     L"return JSON.stringify(out)})()";
 
