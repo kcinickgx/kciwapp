@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "aviso.h"
+#include "cache.h"
 #include "red.h"
 
 namespace {
@@ -250,6 +252,14 @@ void App::iniciar(HWND h) {
     buscador.al_enviar = [this] { buscar_ahora(); };
     buscador.al_escapar = [this] { escapar(); };
     aviso_estado = L"Connecting...";
+    // Lo que quedo en la cache se muestra al instante; el server corrige.
+    chats = cache::leer_chats();
+    contactos = cache::leer_contactos();
+    ordenar_chats();
+    mi_jid = cache::valor("mi_jid");
+    if (std::string v = cache::valor("letra_chat"); !v.empty()) letra_chat = (float)atof(v.c_str());
+    if (std::string v = cache::valor("letra_lista"); !v.empty()) letra_lista = (float)atof(v.c_str());
+    campo.tamano = letra_chat + 0.5f;
     cargar_chats();
 }
 
@@ -289,6 +299,24 @@ void App::cargar_chats() {
         Json je = Json::parsear(est.cuerpo);
         Json jc = Json::parsear(rc.cuerpo);
         Json j = Json::parsear(r.cuerpo);
+        {
+            std::vector<Chat> lista_chats;
+            for (size_t i = 0; i < j.largo(); i++) lista_chats.push_back(Chat::de_json(j[i]));
+            std::map<std::string, Contacto> lista_contactos;
+            for (size_t i = 0; i < jc.largo(); i++) {
+                const Json& c = jc[i];
+                Contacto k;
+                std::string jid = c["jid"].str();
+                std::string nn = c["nombre_agenda"].str();
+                if (nn.empty()) nn = c["nombre_push"].str();
+                k.nombre = nn.empty() ? formatear_telefono(jid) : ancho(nn);
+                k.tiene_foto = !c["foto"].str().empty();
+                lista_contactos[jid] = k;
+            }
+            cache::guardar_chats(lista_chats);
+            cache::guardar_contactos(lista_contactos);
+            cache::guardar_valor("mi_jid", je["jid"].str());
+        }
         red::en_ui([this, je, jc, j] {
             cargando_chats = false;
             mi_jid = je["jid"].str();
@@ -364,18 +392,44 @@ void App::abrir_chat(const std::string& jid) {
     campo.poner(borradores[jid]);
     adjunto = borradores_adjunto[jid];
     campo.foco = true;
+    // Lo que hay en la cache se ve ya; el server manda los ultimos 60 (que
+    // pisan lo cacheado: estados, ediciones, reacciones).
+    mensajes = cache::leer_mensajes(jid, 0, 60);
+    if (!mensajes.empty()) {
+        armar_vistas();
+        bajar_al_final(true);
+    }
     pedir_dibujo();
     std::string mio = jid;
     red::en_fondo([this, mio] {
         Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&limite=60");
         Json j = Json::parsear(r.cuerpo);
-        red::en_ui([this, mio, j] {
+        std::vector<Mensaje> nuevos;
+        for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
+        if (r.ok()) cache::guardar_mensajes(nuevos);
+        bool ok = r.ok();
+        red::en_ui([this, mio, nuevos, ok] {
             if (mio != chat_actual) return;
             cargando_mensajes = false;
-            for (size_t i = 0; i < j.largo(); i++) mensajes.push_back(Mensaje::de_json(j[i]));
-            hay_mas_viejos = j.largo() >= 60;
+            if (!ok) {
+                if (mensajes.empty()) aviso_estado = L"Cannot reach the server";
+                pedir_dibujo();
+                return;
+            }
+            // Se fusiona con lo que vino de la cache: lo del server manda.
+            bool abajo = al_final();
+            std::vector<Mensaje> mezcla;
+            for (auto& m : mensajes) {
+                bool en_server = false;
+                for (auto& s : nuevos)
+                    if (s.id == m.id) en_server = true;
+                if (!en_server && (nuevos.empty() || m.ts < nuevos.front().ts)) mezcla.push_back(m);
+            }
+            mezcla.insert(mezcla.end(), nuevos.begin(), nuevos.end());
+            mensajes = std::move(mezcla);
+            hay_mas_viejos = nuevos.size() >= 60 || mensajes.size() > nuevos.size();
             armar_vistas();
-            bajar_al_final(true);
+            bajar_al_final(abajo || true);
             marcar_leido(mio);
             pedir_dibujo();
         });
@@ -388,15 +442,27 @@ void App::cargar_mas_viejos() {
     std::string mio = chat_actual;
     long long antes = mensajes.front().ts;
     red::en_fondo([this, mio, antes] {
-        Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&antes=" + std::to_wstring(antes) + L"&limite=60");
-        Json j = Json::parsear(r.cuerpo);
-        red::en_ui([this, mio, j] {
+        // Si la cache tiene una pagina entera anterior, va esa; si no, el server.
+        std::vector<Mensaje> viejos = cache::leer_mensajes(mio, antes, 60);
+        bool del_server = false;
+        if (viejos.size() < 60) {
+            Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&antes=" + std::to_wstring(antes) + L"&limite=60");
+            Json j = Json::parsear(r.cuerpo);
+            if (r.ok()) {
+                viejos.clear();
+                for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
+                cache::guardar_mensajes(viejos);
+                del_server = true;
+            }
+        }
+        red::en_ui([this, mio, viejos, del_server] {
             if (mio != chat_actual) return;
             cargando_mensajes = false;
-            hay_mas_viejos = j.largo() >= 60;
-            if (j.largo() == 0) return;
-            std::vector<Mensaje> viejos;
-            for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
+            hay_mas_viejos = viejos.size() >= 60 || !del_server;
+            if (viejos.empty()) {
+                hay_mas_viejos = false;
+                return;
+            }
             float antes_alto = alto_contenido();
             mensajes.insert(mensajes.begin(), viejos.begin(), viejos.end());
             if (sel_msg >= 0) sel_msg += (int)viejos.size();
@@ -498,7 +564,16 @@ bool App::aplicar_evento(const Json& e) {
     const Json& d = e["datos"];
     if (tipo == "mensaje") {
         Mensaje m = Mensaje::de_json(d);
+        cache::guardar_mensajes({m});
         bool hay = chat_de(m.chat) != nullptr;
+        // Aviso en la bandeja si no estoy mirando ese chat.
+        if (!m.propio && (m.chat != chat_actual || !aviso::esta_al_frente(hwnd))) {
+            const Chat* c = chat_de(m.chat);
+            std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
+            std::wstring texto = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
+            if (c && c->es_grupo) texto = nombre_de(m.remitente) + L": " + texto;
+            aviso::mostrar(titulo, texto, m.chat, m.id);
+        }
         if (hay && !m.propio && m.chat != chat_actual)
             for (auto& c : chats)
                 if (c.jid == m.chat) c.no_leidos++;
@@ -506,13 +581,16 @@ bool App::aplicar_evento(const Json& e) {
         if (m.chat == chat_actual && !m.propio && GetForegroundWindow() == hwnd) marcar_leido(m.chat);
         return !hay;
     } else if (tipo == "acuse") {
-        if (chat != chat_actual) return false;
         std::string id = d["id"].str();
         int estado = (int)d["estado"].entero();
+        cache::poner_estado(chat, id, estado);
+        if (chat != chat_actual) return false;
         for (auto& x : mensajes)
             if (x.id == id) x.estado = std::max(x.estado, estado);
     } else if (tipo == "editado" || tipo == "borrado") {
         std::string id = d["id"].str();
+        if (tipo == "borrado") cache::marcar_borrado(chat, id);
+        else cache::editar_texto(chat, id, ancho(d["texto"].str()));
         for (auto& c : chats)
             if (c.jid == chat && c.ultimo && c.ultimo->id == id) {
                 if (tipo == "borrado") c.ultimo->borrado = true;
@@ -1307,6 +1385,8 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
         letra_chat = std::clamp(letra_chat + (mas ? 1.0f : -1.0f), 10.0f, 24.0f);
         letra_lista = std::clamp(letra_lista + (mas ? 1.0f : -1.0f), 10.0f, 24.0f);
         campo.tamano = letra_chat + 0.5f;
+        cache::guardar_valor("letra_chat", std::to_string(letra_chat));
+        cache::guardar_valor("letra_lista", std::to_string(letra_lista));
         armar_vistas();
         pedir_dibujo();
         return;

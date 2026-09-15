@@ -9,6 +9,9 @@
 
 
 #include "app.h"
+#include "aviso.h"
+#include "cache.h"
+#include "emoji.h"
 #include "red.h"
 
 namespace {
@@ -199,8 +202,23 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     if (!h) return 1;
     red::anotar_ventana(h);
     DragAcceptFiles(h, TRUE);
+    cache::abrir(carpeta_datos() + L"\\cache.sqlite3");
+    emoji::cargar(carpeta_exe());
     app.iniciar(h);
     g_app = &app;
+    // Bandeja y globos de notificacion; el click en un globo abre ese mensaje.
+    aviso::arrancar(wc.hIcon, L"kciwapp");
+    aviso::anotar_principal(h);
+    aviso::al_click([](aviso::Destino d) {
+        red::en_ui([d] {
+            if (!g_app) return;
+            long long ts = 0;
+            for (auto& c : g_app->chats)
+                if (c.jid == d.chat && c.ultimo && c.ultimo->id == d.mensaje) ts = c.ultimo->ts;
+            if (ts) g_app->ir_a_mensaje(d.chat, d.mensaje, ts);
+            else g_app->abrir_chat(d.chat);
+        });
+    });
     SetTimer(h, TIMER_CURSOR, 500, nullptr);
     ShowWindow(h, SW_SHOW);
 
@@ -227,5 +245,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         }
     }
     g_app = nullptr;
+    aviso::parar();
+    cache::cerrar();
     return 0;
 }

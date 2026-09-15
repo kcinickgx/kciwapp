@@ -6,6 +6,7 @@
 #include <shellapi.h>
 #include <shlwapi.h>
 
+#include "cache.h"
 #include "red.h"
 
 namespace {
@@ -384,6 +385,7 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
                 if (!repetido) mensajes.push_back(m);
             }
             hay_mas_viejos = ja.largo() >= 40;
+            cache::guardar_mensajes(mensajes);
             armar_vistas();
             float H = g.alto - alto_cabecera() - alto_pie;
             conv.max = std::max(0.0f, alto_contenido() - H);
