@@ -362,6 +362,7 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
         chat_actual = chat;
         mensajes.clear();
         vistas.clear();
+        layout_pendiente = 0;
         cargando_mensajes = true;
         hay_mas_viejos = true;
         conv = Desplazable();
@@ -391,6 +392,8 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
             if (mio != chat_actual) return;
             cargando_mensajes = false;
             mensajes.clear();
+            vistas.clear();
+            layout_pendiente = 0;
             for (size_t i = 0; i < ja.largo(); i++) mensajes.push_back(Mensaje::de_json(ja[i]));
             for (size_t i = 0; i < jd.largo(); i++) {
                 Mensaje m = Mensaje::de_json(jd[i]);

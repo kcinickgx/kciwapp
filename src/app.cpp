@@ -403,6 +403,7 @@ void App::abrir_chat(const std::string& jid) {
     chat_actual = jid;
     mensajes.clear();
     vistas.clear();
+    layout_pendiente = 0;
     cargando_mensajes = true;
     hay_mas_viejos = true;
     conv = Desplazable();
@@ -734,6 +735,11 @@ void App::armar_vistas() {
 }
 
 float App::avanzar_layouts(int cuantos, float ms_max) {
+    if (layout_pendiente > vistas.size()) layout_pendiente = vistas.size();
+    if (vistas.size() != mensajes.size()) {
+        vistas.resize(mensajes.size());
+        layout_pendiente = std::min(layout_pendiente, vistas.size());
+    }
     LARGE_INTEGER f, t0, t1;
     QueryPerformanceFrequency(&f);
     QueryPerformanceCounter(&t0);
