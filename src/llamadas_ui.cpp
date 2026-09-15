@@ -28,7 +28,7 @@ void App::iniciar_llamada(bool video) {
     llamada_desde = 0;  // arranca cuando WhatsApp Web la tiene en curso
     llamada_activa = true;
     abrir_ventana_llamada();
-    webwa::llamar(telefono_de(chat_actual), video);
+    webwa::llamar(telefono_de(chat_actual), c->nombre, video);
     pedir_dibujo();
 }
 

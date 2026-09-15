@@ -27,7 +27,7 @@ std::string qr_png();
 void sondear();
 
 // Llamar a un numero (jid sin @...). Navega al chat y aprieta el boton.
-void llamar(const std::string& telefono, bool video);
+void llamar(const std::string& telefono, const std::wstring& nombre, bool video);
 // Atender la llamada entrante que WhatsApp Web esta mostrando.
 void atender();
 // Que la llamada en curso (video) pase a la ventanita aparte de WhatsApp Web.

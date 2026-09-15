@@ -54,7 +54,14 @@ struct Pendiente {
     bool video = false;
     int intentos = 0;
     bool menu_abierto = false;
+    std::wstring telefono, nombre;
+    // 0 = ver si el chat ya esta abierto / buscarlo, 1 = esperando el chat,
+    // 2 = chat abierto: apretar llamar. `ticks` cuenta desde que empezo.
+    int paso = 0;
+    int ticks = 0;
+    bool navego = false;
 } g_pendiente;
+constexpr UINT_PTR TIMER_RAPIDO = 2;
 
 void registrar(const std::string& s) { red::registrar("webwa: " + s); }
 
@@ -111,7 +118,13 @@ std::string resultado_str(const std::wstring& res) {
     return j.str();
 }
 
+void tic_rapido();
+
 LRESULT CALLBACK proc_hija(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_TIMER && wp == TIMER_RAPIDO) {
+        tic_rapido();
+        return 0;
+    }
     if (msg == WM_SIZE) {
         Vista* v = (Vista*)GetWindowLongPtrW(h, GWLP_USERDATA);
         if (v && v->ctrl) {
@@ -295,6 +308,7 @@ void crear_vista_principal() {
                     return S_OK;
                 }).Get(), &t);
             g_principal.web->Navigate(L"https://web.whatsapp.com/");
+            SetTimer(g_principal.hwnd, TIMER_RAPIDO, 400, nullptr);
             return S_OK;
         }).Get());
 }
@@ -344,7 +358,7 @@ const wchar_t* JS_DIAG_VIDEO =
     L"try{var t=v.srcObject&&v.srcObject.getVideoTracks();lab=t&&t.length?('['+t[0].label+']'):'sin-track'}catch(e){lab='err'}"
     L"o.push('video '+v.videoWidth+'x'+v.videoHeight+' rs='+v.readyState+' paused='+v.paused+' muted='+v.muted+' rect='+Math.round(r.width)+'x'+Math.round(r.height)+' '+lab)}"
     L"var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
-    L"o.push('cortar='+(e?'si':'no'));var t2=(document.body?document.body.innerText:'')||'';o.push('texto: '+t2.replace(/\s+/g,' ').slice(0,300));"
+    L"o.push('cortar='+(e?'si':'no'));var t2=(document.body?document.body.innerText:'')||'';o.push('texto: '+t2.replace(/\\s+/g,' ').slice(0,300));"
     L"return o.join(' || ')}catch(e){return 'ERR '+e}})()";
 
 const wchar_t* JS_BOTONES =
@@ -355,7 +369,7 @@ const wchar_t* JS_BOTONES =
 const wchar_t* JS_EN_LLAMADA =
     L"(function(){var e=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
     L"if(!e)return 'no';var t=(document.body&&document.body.innerText)||'';"
-    L"if(/(^|\s)\d{1,2}:\d\d(\s|$)/.test(t))return 'conectada';return 'si'})()";
+    L"if(/(^|\\s)\\d{1,2}:\\d\\d(\\s|$)/.test(t))return 'conectada';return 'si'})()";
 
 const wchar_t* JS_POPOUT =
     L"(function(){var b=document.querySelector('[aria-label=\"Move to new window\"],[title=\"Move to new window\"],[aria-label=\"Pop out\"],[aria-label=\"Pop-out\"],[aria-label=\"Open in new window\"],[aria-label=\"Expand\"],"
@@ -368,16 +382,61 @@ const wchar_t* JS_POPOUT =
     L"if(bs.length>=2){bs.sort(function(a,c){return a.getBoundingClientRect().left-c.getBoundingClientRect().left});"
     L"var t=bs[bs.length-2];t.click();return 'ok fila '+(t.getAttribute('aria-label')||t.getAttribute('title')||t.outerHTML.slice(0,80))}}return 'no'})()";
 
+// El chat abierto en WhatsApp Web se llama asi? (cabecera del panel principal)
+std::wstring js_chat_abierto(const std::wstring& nombre, const std::wstring& telefono) {
+    return L"(function(n,t){var h=document.querySelector('#main header');if(!h)return 'no';var x=(h.innerText||'');"
+           L"var d=t.replace(/\\D/g,'');var xd=x.replace(/\\D/g,'');"
+           L"return (n&&x.indexOf(n)>=0)||(d&&xd.indexOf(d)>=0)?'si':'no'})(" + js_literal(nombre) + L"," + js_literal(telefono) + L")";
+}
+
+// Escribe en el buscador de chats y aprieta el primer resultado.
+std::wstring js_buscar_chat(const std::wstring& que) {
+    return L"(function(q){var s=document.querySelector('#side [contenteditable=\"true\"]')||document.querySelector('[data-tab=\"3\"]');"
+           L"if(!s)return 'sin buscador';s.focus();document.execCommand('selectAll',false,null);document.execCommand('insertText',false,q);return 'ok'})(" + js_literal(que) + L")";
+}
+const wchar_t* JS_PRIMER_RESULTADO =
+    L"(function(){var r=document.querySelector('#pane-side [role=\"listitem\"],#pane-side [role=\"row\"],#pane-side [role=\"gridcell\"]');"
+    L"if(!r)return 'no';var c=r.querySelector('[role=\"button\"],[tabindex]')||r;c.click();return 'ok'})()";
+
 void intentar_llamada_pendiente() {
     if (!g_pendiente.hay || !g_principal.web) return;
-    g_pendiente.intentos++;
-    if (g_pendiente.intentos > 12) {
-        registrar("no encontre el boton de llamar; me rindo");
-        g_pendiente.hay = false;
+    Pendiente& p = g_pendiente;
+    p.ticks++;
+    if (p.ticks > 60) {  // 24 s
+        registrar("no pude llamar; me rindo");
+        p.hay = false;
         return;
     }
-    std::vector<std::wstring> etiquetas = g_pendiente.video ? std::vector<std::wstring>{L"Video call", L"Videollamada", L"video-call"}
-                                                            : std::vector<std::wstring>{L"Voice call", L"Llamada de voz", L"Audio call", L"audio-call"};
+    if (p.paso == 0) {
+        p.paso = 1;
+        ejecutar(g_principal, js_chat_abierto(p.nombre, p.telefono), [](const std::wstring& r) {
+            if (resultado_str(r) == "si") {
+                g_pendiente.paso = 2;
+                return;
+            }
+            ejecutar(g_principal, js_buscar_chat(g_pendiente.telefono), [](const std::wstring& r2) {
+                registrar("buscar chat: " + resultado_str(r2));
+            });
+        });
+        return;
+    }
+    if (p.paso == 1) {
+        // Cada tic: primer resultado, y ver si ya es el chat.
+        ejecutar(g_principal, JS_PRIMER_RESULTADO, nullptr);
+        ejecutar(g_principal, js_chat_abierto(p.nombre, p.telefono), [](const std::wstring& r) {
+            if (resultado_str(r) == "si" && g_pendiente.paso == 1) g_pendiente.paso = 2;
+        });
+        if (p.ticks > 8 && !p.navego) {
+            // Plan B: la pagina entera con el chat.
+            p.navego = true;
+            registrar("el buscador no lo encontro; recargo con /send");
+            g_principal.web->Navigate((L"https://web.whatsapp.com/send?phone=" + p.telefono).c_str());
+        }
+        return;
+    }
+    // paso 2: el boton de llamar.
+    std::vector<std::wstring> etiquetas = p.video ? std::vector<std::wstring>{L"Video call", L"Videollamada", L"video-call"}
+                                                  : std::vector<std::wstring>{L"Voice call", L"Llamada de voz", L"Audio call", L"audio-call"};
     ejecutar(g_principal, js_click(etiquetas), [](const std::wstring& r) {
         std::string s = resultado_str(r);
         if (s == "ok") {
@@ -385,13 +444,25 @@ void intentar_llamada_pendiente() {
             g_pendiente.hay = false;
             return;
         }
-        // Version nueva: un solo boton "Call" que abre un menu.
         if (!g_pendiente.menu_abierto) {
             ejecutar(g_principal, js_click({L"Call", L"Llamar", L"call"}), [](const std::wstring& r2) {
                 if (resultado_str(r2) == "ok") g_pendiente.menu_abierto = true;
             });
         }
     });
+}
+
+// Cada 400 ms: lo que no puede esperar al sondeo de 2 s (llamar, pop-out).
+void tic_rapido() {
+    if (!g_principal.web) return;
+    if (g_pendiente.hay) intentar_llamada_pendiente();
+    if (g_en_llamada && g_quiero_popout && !g_llamada.web && !g_llamada.creando && g_popout_intentos < 30) {
+        g_popout_intentos++;
+        ejecutar(g_principal, JS_POPOUT, [](const std::wstring& r) {
+            std::string s = resultado_str(r);
+            if (s.rfind("ok", 0) == 0) registrar("pop-out: " + s);
+        });
+    }
 }
 
 }  // namespace
@@ -504,21 +575,20 @@ void sondear() {
             avisar_llamada(en_pagina);
             ejecutar(g_principal, JS_VIDEO, [](const std::wstring& r2) { g_video_fluye = resultado_str(r2) == "si"; });
         }
-        intentar_llamada_pendiente();
-        if (g_en_llamada && g_quiero_popout && !g_llamada.web && !g_llamada.creando && g_popout_intentos < 6) {
-            g_popout_intentos++;
-            ejecutar(g_principal, JS_POPOUT, [](const std::wstring& r) { registrar("pop-out: " + resultado_str(r)); });
-        }
     });
 }
 
-void llamar(const std::string& telefono, bool video) {
+void llamar(const std::string& telefono, const std::wstring& nombre, bool video) {
     if (!logueado()) return;
-    g_pendiente = {true, video, 0, false};
+    g_pendiente = Pendiente();
+    g_pendiente.hay = true;
+    g_pendiente.video = video;
+    g_pendiente.telefono = ancho(telefono);
+    g_pendiente.nombre = nombre;
     g_quiero_popout = video;
     g_popout_intentos = 0;
     registrar("llamar a " + telefono + (video ? " (video)" : ""));
-    g_principal.web->Navigate((L"https://web.whatsapp.com/send?phone=" + ancho(telefono)).c_str());
+    intentar_llamada_pendiente();
 }
 
 void querer_popout(bool si) {
