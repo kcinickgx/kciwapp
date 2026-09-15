@@ -539,7 +539,7 @@ float seccion_letras(Gfx& g, float x, float y, float ancho_contenido) {
 float seccion_chat(Gfx& g, float x, float y, float ancho_contenido) {
     y = titulo_seccion(g, x, y, L"CHAT");
     y += 6;
-    g.renglon(L"Messages loaded per chat", x, y + (FILA - 19) / 2.0f, 14, Color(TXT()));
+    g.renglon(L"Preload", x, y + (FILA - 19) / 2.0f, 14, Color(TXT()));
     static const std::pair<int, const wchar_t*> opciones[] = {{200, L"200"}, {1000, L"1000"}, {5000, L"5000"}, {0, L"All"}};
     float bw = 56.0f, bh = 28.0f, by = y + (FILA - bh) / 2.0f;
     float bx = x + ancho_contenido - 4 * (bw + 6) + 6;
