@@ -414,6 +414,12 @@ void App::intentar_salto() {
         salto_id.clear();
         return;
     }
+    if (cargando_mensajes || cargando_todo || layout_pendiente > 0) {
+        // Todavia cargando (o armando layouts: sin ellos las alturas no valen).
+        if (++salto_intentos < 600) SetTimer(hwnd, 11, 250, nullptr);
+        else salto_id.clear();
+        return;
+    }
     for (size_t i = 0; i < mensajes.size(); i++)
         if (mensajes[i].id == salto_id) {
             if (inicio.size() != vistas.size() + 1) recalcular_inicios();
@@ -424,12 +430,6 @@ void App::intentar_salto() {
             pedir_dibujo();
             return;
         }
-    if (cargando_mensajes || cargando_todo || layout_pendiente > 0) {
-        // Todavia cargando (o armando layouts: sin ellos las alturas no valen).
-        if (++salto_intentos < 600) SetTimer(hwnd, 11, 250, nullptr);
-        else salto_id.clear();
-        return;
-    }
     if (hay_mas_viejos && ajustes::actual().mensajes_por_chat > 0) {
         cargar_todo_el_chat();
         SetTimer(hwnd, 11, 250, nullptr);
