@@ -19,6 +19,9 @@ add_executable(kciwapp2 WIN32
     src/grabador.cpp
     src/audio_ui.cpp
     src/tema.cpp
+    src/emoji_ui.cpp
+    src/info_ui.cpp
+    src/ventana_ajustes.cpp
     src/app.rc
 )
 target_compile_definitions(kciwapp2 PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)

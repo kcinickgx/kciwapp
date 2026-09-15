@@ -173,6 +173,20 @@ bool App::en_texto(int i, float y_msg, float x, float y, size_t* indice) {
     return x >= tx - 4 && x <= tx + v.tw + 4 && y >= ty && y <= ty + v.th;
 }
 
+// La URL del link bajo el punto (x, y) del mensaje i, o vacia.
+std::wstring App::enlace_en(int i, float y_msg, float x, float y) {
+    const VistaMensaje& v = vistas[i];
+    if (!v.texto || v.enlaces.empty()) return L"";
+    float tx = x_conv() + v.bx + 9.0f, ty = y_msg + v.by + v.ty;
+    BOOL final = FALSE, dentro = FALSE;
+    DWRITE_HIT_TEST_METRICS m;
+    v.texto->HitTestPoint(x - tx, y - ty, &final, &dentro, &m);
+    if (!dentro) return L"";
+    for (auto& e : v.enlaces)
+        if (m.textPosition >= e.inicio && m.textPosition < e.inicio + e.largo) return e.url;
+    return L"";
+}
+
 // ---- menu contextual ------------------------------------------------------
 
 void App::raton_derecho(float x, float y) {
@@ -577,6 +591,10 @@ void App::abrir_media(int i) {
         reproducir_audio(i);
         return;
     }
+    if ((m.tipo == "video" || m.tipo == "gif") && reproductor_ok) {
+        abrir_video(i);
+        return;
+    }
     // Lo demas se abre con lo que tenga Windows (video, audio, documentos).
     Mensaje copia = m;
     red::en_fondo([this, copia] {
@@ -594,9 +612,120 @@ void App::abrir_visor(int i) {
     pedir_dibujo();
 }
 
+// Rect del video dentro del visor, en DIPs.
+static void rect_video(const App& a, float& x, float& y, float& w, float& h) {
+    x = 40;
+    y = 40;
+    w = a.g.ancho - 80;
+    h = a.g.alto - 150;
+}
+
+void App::abrir_video(int i) {
+    Mensaje copia = mensajes[i];
+    aviso_estado = L"Loading video...";
+    pedir_dibujo();
+    red::en_fondo([this, copia] {
+        std::wstring ruta = bajar_media(copia);
+        red::en_ui([this, ruta] {
+            aviso_estado.clear();
+            if (ruta.empty()) return;
+            if (!ventana_video) {
+                WNDCLASSW wc = {};
+                wc.lpfnWndProc = DefWindowProcW;
+                wc.hInstance = GetModuleHandleW(nullptr);
+                wc.lpszClassName = L"kciwapp2-video";
+                wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+                RegisterClassW(&wc);
+                ventana_video = CreateWindowExW(0, L"kciwapp2-video", L"", WS_CHILD, 0, 0, 10, 10, hwnd, nullptr,
+                                               wc.hInstance, nullptr);
+            }
+            if (!reproduciendo_id.empty()) reproduciendo_id.clear();
+            grab_escuchando = false;
+            visor = true;
+            visor_video = true;
+            visor_ruta = ruta;
+            float x, y, w, h;
+            rect_video(*this, x, y, w, h);
+            float e = g.dpi / 96.0f;
+            SetWindowPos(ventana_video, HWND_TOP, (int)(x * e), (int)(y * e), (int)(w * e), (int)(h * e), SWP_SHOWWINDOW);
+            reproductor.abrir(ruta, ventana_video);
+            reproductor.reproducir();
+            pedir_dibujo();
+        });
+    });
+}
+
+void App::cerrar_visor() {
+    if (visor_video) {
+        reproductor.parar();
+        if (ventana_video) ShowWindow(ventana_video, SW_HIDE);
+        visor_video = false;
+    }
+    visor = false;
+    pedir_dibujo();
+}
+
+// Clicks dentro del visor: controles del video, o cerrar.
+bool App::click_visor(float x, float y) {
+    if (!visor) return false;
+    if (visor_video) {
+        float vx, vy, vw, vh;
+        rect_video(*this, vx, vy, vw, vh);
+        float by = vy + vh + 30;  // la barra de progreso
+        if (y > by - 12 && y < by + 12 && x > vx + 60 && x < vx + vw - 80) {
+            double d = reproductor.duracion();
+            if (d > 0) reproductor.ir_a(d * (x - vx - 60) / (vw - 140));
+            return true;
+        }
+        if (x > vx && x < vx + 50 && y > by - 20 && y < by + 20) {
+            if (reproductor.terminado()) {
+                reproductor.ir_a(0);
+                reproductor.reproducir();
+            } else if (reproductor.pausado()) reproductor.reproducir();
+            else reproductor.pausar();
+            return true;
+        }
+        if (x > vx && x < vx + vw && y > vy && y < vy + vh) {
+            if (reproductor.pausado()) reproductor.reproducir();
+            else reproductor.pausar();
+            return true;
+        }
+    }
+    cerrar_visor();
+    return true;
+}
+
 void App::dibujar_visor() {
     if (!visor) return;
     g.rect(0, 0, g.ancho, g.alto, Color(0x000000, 0.92f));
+    if (visor_video) {
+        float vx, vy, vw, vh;
+        rect_video(*this, vx, vy, vw, vh);
+        float e = g.dpi / 96.0f;
+        if (ventana_video)
+            SetWindowPos(ventana_video, HWND_TOP, (int)(vx * e), (int)(vy * e), (int)(vw * e), (int)(vh * e), SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        float by = vy + vh + 30;
+        bool pausado = reproductor.pausado() || reproductor.terminado();
+        g.circulo(vx + 24, by, 18, Color(0xffffff, 0.15f));
+        if (pausado) g.renglon(L"▶", vx + 16, by - 11, 16, Color(0xffffff));
+        else {
+            g.rect(vx + 18, by - 7, 4, 14, Color(0xffffff));
+            g.rect(vx + 26, by - 7, 4, 14, Color(0xffffff));
+        }
+        double d = reproductor.duracion(), pos = reproductor.posicion();
+        float f = d > 0 ? (float)std::clamp(pos / d, 0.0, 1.0) : 0;
+        g.rect_redondo(vx + 60, by - 2, vw - 140, 4, 2, Color(0xffffff, 0.25f));
+        g.rect_redondo(vx + 60, by - 2, (vw - 140) * f, 4, 2, Color(0x00a884));
+        g.circulo(vx + 60 + (vw - 140) * f, by, 6, Color(0x00a884));
+        auto mmss = [](double s) {
+            int t = (int)s;
+            return std::to_wstring(t / 60) + L":" + (t % 60 < 10 ? L"0" : L"") + std::to_wstring(t % 60);
+        };
+        g.renglon(mmss(pos) + L" / " + mmss(d), vx + vw - 70, by - 9, 12, Color(0xffffff));
+        g.renglon(L"✕", g.ancho - 40, 12, 22, Color(0xe9edef));
+        necesita_dibujar = !pausado;
+        return;
+    }
     Imagen& im = imagenes[visor_clave];
     ID2D1Bitmap1* b = im.cuadro_actual(g, ahora);
     if (!im.anim.cuadros.empty()) necesita_dibujar = true;
@@ -617,7 +746,13 @@ void App::dibujar_visor() {
 // Escape: cierra lo que este abierto, en orden de "mas encima".
 void App::escapar() {
     if (visor) {
-        visor = false;
+        cerrar_visor();
+    } else if (emojis_abierto) {
+        emojis_abierto = false;
+        emoji_buscador.foco = false;
+        campo.foco = true;
+    } else if (info_abierto) {
+        cerrar_info();
     } else if (grab != Grab::Nada) {
         grabar_cancelar();
     } else if (reenviando) {

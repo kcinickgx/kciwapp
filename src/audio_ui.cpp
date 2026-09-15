@@ -66,7 +66,7 @@ void App::grabar_empezar() {
     if (chat_actual.empty() || grab != Grab::Nada) return;
     CreateDirectoryW((carpeta_exe() + L"\\datos").c_str(), nullptr);
     grab_ruta = carpeta_exe() + L"\\datos\\nota.wav";
-    if (!grabador::empezar(L"", grab_ruta)) {
+    if (!grabador::empezar(ajustes::actual().entrada, grab_ruta)) {
         aviso_estado = L"No microphone available";
         pedir_dibujo();
         return;

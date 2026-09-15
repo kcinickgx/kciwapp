@@ -111,6 +111,12 @@ struct VistaMensaje {
     std::wstring divisor_texto;
     bool nuevo_bloque = false;
     float reacciones_alto = 0;
+    // Links dentro del texto: rango en el layout y la URL.
+    struct Enlace {
+        size_t inicio, largo;
+        std::wstring url;
+    };
+    std::vector<Enlace> enlaces;
 };
 
 // Un archivo listo para mandar (pegado, arrastrado o elegido).
@@ -155,7 +161,7 @@ struct App {
     Desplazable conv;
     int chat_bajo_mouse = -1;
     float mouse_x = 0, mouse_y = 0;
-    bool arrastrando_barra = false;
+    bool arrastrando_barra = false, arrastrando_lista = false;
     float arrastre_origen = 0;
     Campo campo;
     Campo buscador;
@@ -171,12 +177,16 @@ struct App {
     size_t sel_a = 0, sel_b = 0;
     bool sel_arrastrando = false;
     float sel_x0 = 0, sel_y0 = 0;
+    std::wstring enlace_pendiente;  // link bajo el mouse al apretar; se abre al soltar sin arrastrar
+    bool cursor_mano = false;
     bool reenviando = false;   // eligiendo a que chat reenviar
     std::string reenviar_chat, reenviar_id;
     std::map<std::string, std::wstring> borradores;
     std::map<std::string, std::optional<Adjunto>> borradores_adjunto;
     std::optional<Adjunto> adjunto;
-    bool visor = false;        // foto a pantalla completa
+    bool visor = false;        // foto (o video) a pantalla completa
+    bool visor_video = false;
+    HWND ventana_video = nullptr;  // ventana hija donde mpv dibuja
     std::string visor_clave;
     std::wstring visor_ruta;
     // Busqueda
@@ -243,7 +253,9 @@ struct App {
     void escuchar_eventos();
     // Devuelve si hay que recargar la lista de chats.
     bool aplicar_evento(const Json& e);
-    void marcar_leido(const std::string& jid);
+    // Marca leido en WhatsApp: los ids dados, o (sin ids) lo reciente del chat.
+    void marcar_leido(const std::string& jid, const std::vector<std::string>& ids = {});
+    void ventana_activada();
 
     // Acciones (acciones.cpp)
     void menu_contextual(int i);
@@ -262,11 +274,15 @@ struct App {
     void pegar();
     void abrir_media(int i);
     void abrir_visor(int i);
+    void abrir_video(int i);
+    void cerrar_visor();
+    bool click_visor(float x, float y);
     std::wstring bajar_media(const Mensaje& m);
     void elegir_archivo();
     void copiar_seleccion();
     int mensaje_en(float y, float* y_msg);
     bool en_texto(int i, float y_msg, float x, float y, size_t* indice);
+    std::wstring enlace_en(int i, float y_msg, float x, float y);
     void agregar_mensaje(const Mensaje& m);
     // Emojis (emoji_ui.cpp). El panel se dibuja encima de todo, anclado
     // arriba-izquierda del pie; `click_emojis` devuelve si se comio el click.
@@ -305,6 +321,10 @@ struct App {
     void dibujar_cabecera();
     void dibujar_pie();
     void dibujar_visor();
+    void barra_scroll(const Desplazable& d, float x, float top, float H, float total, bool cerca, bool arrastrando);
+    void agarrar_barra(Desplazable& d, float y, float top, float H, float total);
+    void arrastrar_barra(Desplazable& d, float y, float top, float H, float total);
+    void tildes(float x, float y, bool doble, Color c);
     void dibujar_mensaje(size_t i, float y);
     void armar_items();
     void armar_vistas();

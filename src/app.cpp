@@ -7,6 +7,7 @@
 #include "cache.h"
 #include "red.h"
 #include "tema.h"
+#include "ventana_ajustes.h"
 
 namespace {
 
@@ -47,6 +48,32 @@ long long ahora_ms() {
     u.LowPart = ft.dwLowDateTime;
     u.HighPart = ft.dwHighDateTime;
     return (long long)((u.QuadPart - 116444736000000000ULL) / 10000ULL);
+}
+
+// Encuentra URLs (http://, https://, www.) en un texto.
+std::vector<VistaMensaje::Enlace> buscar_enlaces(const std::wstring& t) {
+    std::vector<VistaMensaje::Enlace> r;
+    size_t i = 0;
+    while (i < t.size()) {
+        size_t a = std::wstring::npos;
+        size_t h1 = t.find(L"http://", i), h2 = t.find(L"https://", i), h3 = t.find(L"www.", i);
+        a = std::min({h1, h2, h3});
+        if (a == std::wstring::npos) break;
+        if (a == h3 && a > 0 && iswalnum(t[a - 1])) {
+            i = a + 4;
+            continue;
+        }
+        size_t b = a;
+        while (b < t.size() && !iswspace(t[b]) && t[b] != L'<' && t[b] != L'>' && t[b] != L'"' && t[b] != L'\'') b++;
+        while (b > a && wcschr(L".,;:!?)]}", t[b - 1])) b--;
+        if (b - a > 6) {
+            std::wstring url = t.substr(a, b - a);
+            if (url.rfind(L"www.", 0) == 0) url = L"https://" + url;
+            r.push_back({a, b - a, url});
+        }
+        i = b > a ? b : a + 1;
+    }
+    return r;
 }
 
 std::wstring una_linea(std::wstring s) {
@@ -245,8 +272,8 @@ void App::iniciar(HWND h) {
     contactos = cache::leer_contactos();
     ordenar_chats();
     mi_jid = cache::valor("mi_jid");
-    if (std::string v = cache::valor("letra_chat"); !v.empty()) letra_chat = (float)atof(v.c_str());
-    if (std::string v = cache::valor("letra_lista"); !v.empty()) letra_lista = (float)atof(v.c_str());
+    letra_chat = ajustes::actual().letra_chat;
+    letra_lista = ajustes::actual().letra_lista;
     campo.tamano = letra_chat + 0.5f;
     cargar_chats();
 }
@@ -378,6 +405,9 @@ void App::abrir_chat(const std::string& jid) {
     respondiendo.reset();
     editando.reset();
     sel_msg = -1;
+    info_abierto = false;
+    info_pila.clear();
+    emojis_abierto = false;
     campo.poner(borradores[jid]);
     adjunto = borradores_adjunto[jid];
     campo.foco = true;
@@ -466,12 +496,31 @@ void App::cargar_mas_viejos() {
     });
 }
 
-void App::marcar_leido(const std::string& jid) {
+void App::marcar_leido(const std::string& jid, const std::vector<std::string>& ids) {
+    bool habia = false;
     for (auto& c : chats)
         if (c.jid == jid && c.no_leidos > 0) {
             c.no_leidos = 0;
-            red::en_fondo([jid] { red::mandar_json(L"/leido", "{\"chat\":" + json_texto(jid) + "}"); });
+            habia = true;
         }
+    if (!habia && ids.empty()) return;
+    std::string cuerpo = "{\"chat\":" + json_texto(jid);
+    if (!ids.empty()) {
+        cuerpo += ",\"ids\":[";
+        for (size_t i = 0; i < ids.size(); i++) cuerpo += (i ? "," : "") + json_texto(ids[i]);
+        cuerpo += "]";
+    }
+    cuerpo += "}";
+    red::en_fondo([cuerpo] { red::mandar_json(L"/leido", cuerpo); });
+}
+
+// Al volver a la ventana, lo que llego mientras no estaba se marca leido.
+void App::ventana_activada() {
+    if (chat_actual.empty()) return;
+    std::vector<std::string> ids;
+    for (auto& m : mensajes)
+        if (!m.propio && m.ts > ahora_ms() - 3600000LL) ids.push_back(m.id);
+    if (!ids.empty()) marcar_leido(chat_actual, ids);
 }
 
 void App::enviar_texto() {
@@ -561,13 +610,13 @@ bool App::aplicar_evento(const Json& e) {
             std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
             std::wstring texto = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
             if (c && c->es_grupo) texto = nombre_de(m.remitente) + L": " + texto;
-            aviso::mostrar(titulo, texto, m.chat, m.id);
+            if (ajustes::actual().notificaciones) aviso::mostrar(titulo, texto, m.chat, m.id);
         }
         if (hay && !m.propio && m.chat != chat_actual)
             for (auto& c : chats)
                 if (c.jid == m.chat) c.no_leidos++;
         agregar_mensaje(m);
-        if (m.chat == chat_actual && !m.propio && GetForegroundWindow() == hwnd) marcar_leido(m.chat);
+        if (m.chat == chat_actual && !m.propio && GetForegroundWindow() == hwnd) marcar_leido(m.chat, {m.id});
         return !hay;
     } else if (tipo == "acuse") {
         std::string id = d["id"].str();
@@ -710,6 +759,15 @@ void App::armar_vista(size_t i) {
     else if (t.empty() && !m.media) t = nombre_tipo(m.tipo);
     if (!t.empty()) {
         v.texto = g.texto(t, letra_chat, interior);
+        // Links: subrayados y en celeste.
+        if (!m.borrado) {
+            v.enlaces = buscar_enlaces(t);
+            for (auto& e : v.enlaces) {
+                DWRITE_TEXT_RANGE rango = {(UINT32)e.inicio, (UINT32)e.largo};
+                v.texto->SetUnderline(TRUE, rango);
+                v.texto->SetDrawingEffect(g.pincel(Color(0x53bdeb)), rango);
+            }
+        }
         DWRITE_TEXT_METRICS tm;
         v.texto->GetMetrics(&tm);
         v.tw = tm.widthIncludingTrailingWhitespace;
@@ -796,6 +854,7 @@ void App::dibujar() {
 
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
+    aplicar_ajustes();
     alto_pie = campo.alto(g) + 16;
     if (respondiendo || editando) alto_pie += BARRA_H;
     if (adjunto) alto_pie += ADJUNTO_H;
@@ -803,6 +862,8 @@ void App::dibujar() {
     dibujar_conversacion();
     dibujar_cabecera();
     dibujar_pie();
+    dibujar_info();
+    dibujar_emojis();
     dibujar_visor();
     g.terminar_frame();
 }
@@ -917,13 +978,17 @@ void App::dibujar_lista() {
             else if (con_imagen(u.tipo) || u.media) prev = nombre_tipo(u.tipo) + L" " + u.texto;
             else prev = u.texto;
             prev = una_linea(prev);
-            if (u.propio) prev = (u.estado >= 3 ? L"✓✓ " : L"✓ ") + prev;
+            if (u.propio) prev = L"     " + prev;  // lugar para los tildes
             else if (c.es_grupo) prev = nombre_de(u.remitente) + L": " + prev;
         }
         float ancho_prev = W - tx - 16;
         if (c.no_leidos) ancho_prev -= 34;
         g.renglon(prev, tx, y + 36, letra_lista - 2, Color(prev.rfind(L"Draft:", 0) == 0 ? 0xf15c6d : TXT_DIM()),
                   DWRITE_FONT_WEIGHT_NORMAL, ancho_prev);
+        if (c.ultimo && c.ultimo->propio && prev.rfind(L"Draft:", 0) != 0) {
+            int estado = c.jid == mi_jid ? std::max(c.ultimo->estado, 2) : c.ultimo->estado;
+            tildes(tx, y + 39, estado >= 2, Color(estado >= 3 ? TICK_AZUL() : TXT_DIM()));
+        }
         if (c.no_leidos) {
             std::wstring n = std::to_wstring(c.no_leidos);
             float nw = g.medir(n, 11, DWRITE_FONT_WEIGHT_SEMI_BOLD);
@@ -935,7 +1000,40 @@ void App::dibujar_lista() {
         y += h;
     }
     g.destapar();
+    barra_scroll(lista, W - 10, top, H, total, mouse_x > W - 24 && mouse_x < W && mouse_y > top, arrastrando_lista);
     g.rect(W - 1, 0, 1, g.alto, Color(BORDE()));
+}
+
+// La barra de scroll de un area: pulgar proporcional, mas visible con el
+// mouse cerca o arrastrando.
+void App::barra_scroll(const Desplazable& d, float x, float top, float H, float total, bool cerca, bool arrastrando) {
+    if (d.max <= 0 || total <= H) return;
+    float bh = std::max(30.0f, H * H / total);
+    float by = top + (H - bh) * (d.pos / d.max);
+    g.rect_redondo(x, by, 6, bh, 3, Color(0xffffff, cerca || arrastrando ? 0.35f : 0.18f));
+}
+
+// Empieza a arrastrar el pulgar de una barra (o salta ahi si se clickeo la pista).
+void App::agarrar_barra(Desplazable& d, float y, float top, float H, float total) {
+    float bh = std::max(30.0f, H * H / total);
+    float by = top + (H - bh) * (d.pos / d.max);
+    arrastre_origen = (y >= by && y <= by + bh) ? y - by : bh / 2;
+}
+
+void App::arrastrar_barra(Desplazable& d, float y, float top, float H, float total) {
+    float bh = std::max(30.0f, H * H / total);
+    float frac = (y - top - arrastre_origen) / (H - bh);
+    d.ir(frac * d.max, true);
+}
+
+// Los tildes como los dibuja WhatsApp: dos "checks" superpuestos.
+void App::tildes(float x, float y, bool doble, Color c) {
+    auto check = [&](float ox) {
+        g.linea(x + ox, y + 5.5f, x + ox + 3, y + 8.5f, c, 1.4f);
+        g.linea(x + ox + 3, y + 8.5f, x + ox + 8.5f, y + 2.5f, c, 1.4f);
+    };
+    check(0);
+    if (doble) check(4.5f);
 }
 
 void App::dibujar_cabecera() {
@@ -952,6 +1050,7 @@ void App::dibujar_cabecera() {
     g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
     std::wstring sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
     g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
+    g.renglon(L"\u2699", x + W - 40, 16, 22, Color(TXT_DIM()));
 }
 
 void App::dibujar_pie() {
@@ -988,6 +1087,14 @@ void App::dibujar_pie() {
             g.renglon(std::to_wstring(adjunto->datos.size() / 1024) + L" KB", x + 72, yy + 36, 12, Color(TXT_DIM()));
         }
         g.renglon(L"Enter to send, Esc to discard", x + 24, yy + ADJUNTO_H - 30, 12, Color(TXT_DIM()));
+        if (adjunto->vista) {
+            // Mandar como sticker en vez de foto.
+            bool sticker = adjunto->tipo == "figurita";
+            float sx = x + W - 180, sy = yy + ADJUNTO_H - 32;
+            g.borde_redondo(sx, sy, 16, 16, 3, Color(sticker ? ACCENT() : TXT_DIM()), 1.5f);
+            if (sticker) g.rect_redondo(sx + 3, sy + 3, 10, 10, 2, Color(ACCENT()));
+            g.renglon(L"Send as sticker", sx + 24, sy - 1, 12.5f, Color(TXT()));
+        }
         g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM()));
         yy += ADJUNTO_H;
     }
@@ -996,17 +1103,18 @@ void App::dibujar_pie() {
         dibujar_grabacion(x, yy, W, ch);
         return;
     }
-    // El clip a la izquierda, el campo, y el boton de mandar/grabar.
-    g.renglon(L"\U0001F4CE", x + 18, yy + ch / 2 - 12, 20, Color(TXT_DIM()));
-    g.rect_redondo(x + 52, yy, W - 52 - 60, ch, 8, Color(BG_CAMPO()));
-    campo.dibujar(g, x + 52, yy, W - 52 - 60, ch, ahora);
+    // Emojis y clip a la izquierda, el campo, y el boton de mandar/grabar.
+    g.renglon(L"\U0001F642", x + 14, yy + ch / 2 - 12, 20, Color(emojis_abierto ? ACCENT() : TXT_DIM()));
+    g.renglon(L"\U0001F4CE", x + 48, yy + ch / 2 - 12, 20, Color(TXT_DIM()));
+    g.rect_redondo(x + 82, yy, W - 82 - 60, ch, 8, Color(BG_CAMPO()));
+    campo.dibujar(g, x + 82, yy, W - 82 - 60, ch, ahora);
     bool hay_texto = !campo.texto.empty() || adjunto;
     g.renglon(hay_texto ? L"➤" : L"\U0001F3A4", x + W - 44, yy + ch / 2 - 12, 22, Color(hay_texto ? ACCENT() : TXT_DIM()));
 }
 
 void App::dibujar_conversacion() {
     float x = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie, H = bottom - top;
-    g.rect(x, top, W, H, Color(BG_CHAT()));
+    dibujar_fondo_chat(x, top, W, H);
     if (chat_actual.empty()) {
         std::wstring t = L"Select a chat";
         float tw = g.medir(t, 18);
@@ -1051,13 +1159,24 @@ void App::dibujar_conversacion() {
         dibujar_mensaje(i, y);
         y += v.alto;
     }
-    // Barra de scroll
-    if (conv.max > 0) {
-        float total = alto_contenido();
-        float bh = std::max(30.0f, H * H / total);
-        float by = top + (H - bh) * (conv.pos / conv.max);
-        bool cerca = mouse_x > x + W - 24 && mouse_x < x + W && mouse_y > top && mouse_y < bottom;
-        g.rect_redondo(x + W - 10, by, 6, bh, 3, Color(0xffffff, cerca || arrastrando_barra ? 0.35f : 0.18f));
+    barra_scroll(conv, x + W - 10, top, H, alto_contenido(),
+                 mouse_x > x + W - 24 && mouse_x < x + W && mouse_y > top && mouse_y < bottom, arrastrando_barra);
+    // Boton para ir al final, cuando estamos lejos de el.
+    if (conv.max - conv.objetivo > 150) {
+        float cx = x + W - 44, cy = bottom - 36;
+        g.circulo(cx, cy, 20, Color(BG_PANEL()));
+        g.borde_redondo(cx - 20, cy - 20, 40, 40, 20, Color(BORDE()), 1.0f);
+        Color c(TXT_DIM());
+        g.linea(cx - 6, cy - 3, cx, cy + 3, c, 1.8f);
+        g.linea(cx, cy + 3, cx + 6, cy - 3, c, 1.8f);
+        const Chat* ch = chat_de(chat_actual);
+        if (ch && ch->no_leidos > 0) {
+            std::wstring n = std::to_wstring(ch->no_leidos);
+            float nw = g.medir(n, 11, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            float pw = std::max(20.0f, nw + 12);
+            g.rect_redondo(cx + 8 - pw / 2, cy - 32, pw, 20, 10, Color(ACCENT()));
+            g.renglon(n, cx + 8 - nw / 2, cy - 30, 11, Color(0x111b21), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        }
     }
     g.destapar();
 }
@@ -1197,8 +1316,16 @@ void App::dibujar_mensaje(size_t i, float y) {
     }
     float hw = g.renglon(v.hora_texto, hx, hy, HORA_TAM, Color(sobre_media ? 0xffffff : TXT_DIM()));
     if (m.propio) {
-        std::wstring tick = m.estado >= 2 ? L"✓✓" : (m.estado >= 1 ? L"✓" : L"○");
-        g.renglon(tick, hx + hw + 4, hy - 1, 12, Color(m.estado >= 3 ? TICK_AZUL() : (sobre_media ? 0xffffff : TXT_DIM())));
+        int estado = m.chat == mi_jid ? std::max(m.estado, 2) : m.estado;
+        Color c = estado >= 3 ? Color(TICK_AZUL()) : Color(sobre_media ? 0xffffff : TXT_DIM());
+        if (estado == 0) {
+            // Reloj: todavia no llego al servidor.
+            g.ctx->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(hx + hw + 10, hy + 7), 5, 5), g.pincel(c), 1.2f);
+            g.linea(hx + hw + 10, hy + 4, hx + hw + 10, hy + 7.5f, c, 1.2f);
+            g.linea(hx + hw + 10, hy + 7.5f, hx + hw + 12.5f, hy + 8.5f, c, 1.2f);
+        } else {
+            tildes(hx + hw + 4, hy + 2, estado >= 2, c);
+        }
     }
     // Reacciones: una pastilla pisando el borde de abajo de la burbuja.
     if (!m.reacciones.empty()) {
@@ -1225,13 +1352,21 @@ void App::raton_mueve(float x, float y) {
     mouse_y = y;
     int antes = chat_bajo_mouse;
     chat_bajo_mouse = x < ancho_lista && y > top_lista() ? item_en(y) : -1;
-    if (antes != chat_bajo_mouse) pedir_dibujo();
+    if (antes != chat_bajo_mouse || emojis_abierto || info_abierto) pedir_dibujo();
+    cursor_mano = false;
+    if (x >= ancho_lista && !visor && !info_abierto && !sel_arrastrando) {
+        float ym = 0;
+        int i = mensaje_en(y, &ym);
+        if (i >= 0 && !enlace_en(i, ym, x, y).empty()) cursor_mano = true;
+    }
     if (arrastrando_barra) {
         float top = alto_cabecera(), H = g.alto - alto_pie - top;
-        float total = alto_contenido();
-        float bh = std::max(30.0f, H * H / total);
-        float frac = (y - top - arrastre_origen) / (H - bh);
-        conv.ir(frac * conv.max, true);
+        arrastrar_barra(conv, y, top, H, alto_contenido());
+        pedir_dibujo();
+    }
+    if (arrastrando_lista) {
+        float top = top_lista(), H = g.alto - top;
+        arrastrar_barra(lista, y, top, H, lista.max + H);
         pedir_dibujo();
     }
     if (campo.arrastrando) {
@@ -1258,12 +1393,28 @@ void App::raton_mueve(float x, float y) {
 void App::raton_abajo(float x, float y, bool shift) {
     SetCapture(hwnd);
     if (visor) {
-        visor = false;
+        click_visor(x, y);
+        pedir_dibujo();
+        return;
+    }
+    if (click_emojis(x, y)) {
+        pedir_dibujo();
+        return;
+    }
+    if (click_info(x, y)) {
         pedir_dibujo();
         return;
     }
     buscador.foco = false;
+    emoji_buscador.foco = false;
     if (x < ancho_lista) {
+        if (y > top_lista() && lista.max > 0 && x > ancho_lista - 24) {
+            float top = top_lista(), H = g.alto - top;
+            arrastrando_lista = true;
+            agarrar_barra(lista, y, top, H, lista.max + H);
+            raton_mueve(x, y);
+            return;
+        }
         if (y >= 60 && y < top_lista()) {
             buscador.foco = true;
             campo.foco = false;
@@ -1284,6 +1435,17 @@ void App::raton_abajo(float x, float y, bool shift) {
     }
     float top = alto_cabecera(), bottom = g.alto - alto_pie;
     float W = w_conv();
+    if (y < top && !chat_actual.empty()) {
+        if (x > x_conv() + W - 50) ventana_ajustes::abrir(hwnd);
+        else abrir_info(chat_actual);
+        return;
+    }
+    // El boton de ir al final.
+    if (conv.max - conv.objetivo > 150 && x > x_conv() + W - 68 && x < x_conv() + W - 20 && y > bottom - 60 && y < bottom - 12) {
+        bajar_al_final(false);
+        pedir_dibujo();
+        return;
+    }
     if (y >= bottom) {
         campo.foco = true;
         float yy = bottom + 8;
@@ -1298,7 +1460,9 @@ void App::raton_abajo(float x, float y, bool shift) {
         }
         if (respondiendo || editando) yy += BARRA_H;
         if (adjunto && y < yy + ADJUNTO_H) {
-            if (x > x_conv() + W - 56) adjunto.reset();
+            if (x > x_conv() + W - 56 && y < yy + 40) adjunto.reset();
+            else if (adjunto->vista && x > x_conv() + W - 180 && y > yy + ADJUNTO_H - 40)
+                adjunto->tipo = adjunto->tipo == "figurita" ? "imagen" : "figurita";
             pedir_dibujo();
             return;
         }
@@ -1307,7 +1471,13 @@ void App::raton_abajo(float x, float y, bool shift) {
             click_grabacion(x, y, yy, campo.alto(g));
             return;
         }
-        if (x < x_conv() + 52) {
+        if (x < x_conv() + 44) {
+            emojis_abierto = !emojis_abierto;
+            emoji_buscador.foco = false;
+            pedir_dibujo();
+            return;
+        }
+        if (x < x_conv() + 82) {
             elegir_archivo();
             return;
         }
@@ -1340,6 +1510,7 @@ void App::raton_abajo(float x, float y, bool shift) {
     if (i >= 0) {
         size_t idx = 0;
         if (en_texto(i, ym, x, y, &idx)) {
+            enlace_pendiente = enlace_en(i, ym, x, y);
             sel_msg = i;
             sel_a = sel_b = idx;
             sel_arrastrando = true;
@@ -1357,11 +1528,17 @@ void App::raton_abajo(float x, float y, bool shift) {
 void App::raton_arriba(float, float) {
     ReleaseCapture();
     arrastrando_barra = false;
+    arrastrando_lista = false;
     campo.arrastrando = false;
     buscador.arrastrando = false;
     if (sel_arrastrando) {
         sel_arrastrando = false;
-        if (sel_a == sel_b) sel_msg = -1;
+        if (sel_a == sel_b) {
+            sel_msg = -1;
+            if (!enlace_pendiente.empty())
+                ShellExecuteW(nullptr, L"open", enlace_pendiente.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        enlace_pendiente.clear();
         pedir_dibujo();
     }
 }
@@ -1372,6 +1549,7 @@ void App::rueda(float x, float y, float delta) {
     UINT lineas = 3;
     SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lineas, 0);
     float px = -delta / 120.0f * lineas * 40.0f;
+    if (rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
     if (x < ancho_lista) lista.rodar(px);
     else if (y > alto_cabecera() && y < g.alto - alto_pie) conv.rodar(px);
     pedir_dibujo();
@@ -1399,12 +1577,15 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
     }
     if (ctrl && (vk == VK_OEM_PLUS || vk == VK_ADD || vk == VK_OEM_MINUS || vk == VK_SUBTRACT)) {
         bool mas = vk == VK_OEM_PLUS || vk == VK_ADD;
-        letra_chat = std::clamp(letra_chat + (mas ? 1.0f : -1.0f), 10.0f, 24.0f);
-        letra_lista = std::clamp(letra_lista + (mas ? 1.0f : -1.0f), 10.0f, 24.0f);
-        campo.tamano = letra_chat + 0.5f;
-        cache::guardar_valor("letra_chat", std::to_string(letra_chat));
-        cache::guardar_valor("letra_lista", std::to_string(letra_lista));
-        armar_vistas();
+        ajustes::cambiar([&](Ajustes& a) {
+            a.letra_chat = std::clamp(a.letra_chat + (mas ? 1.0f : -1.0f), 10.0f, 24.0f);
+            a.letra_lista = std::clamp(a.letra_lista + (mas ? 1.0f : -1.0f), 10.0f, 24.0f);
+        });
+        pedir_dibujo();
+        return;
+    }
+    if (emoji_buscador.foco && emoji_buscador.tecla(g, vk, shift, ctrl)) {
+        emoji_scroll.ir(0, true);
         pedir_dibujo();
         return;
     }
@@ -1426,5 +1607,82 @@ void App::caracter(wchar_t c) {
         if (buscador.caracter(c)) pedir_dibujo();
         return;
     }
+    if (emoji_buscador.foco) {
+        if (emoji_buscador.caracter(c)) {
+            emoji_scroll.ir(0, true);
+            pedir_dibujo();
+        }
+        return;
+    }
     if (campo.foco && campo.caracter(c)) pedir_dibujo();
+}
+
+// ---- ajustes en vivo ------------------------------------------------------
+
+// Lo que cambio en la ventana de settings se aplica aca, una vez por cambio.
+void App::aplicar_ajustes() {
+    unsigned rev = ajustes::revision();
+    if (rev == ajustes_aplicados) return;
+    ajustes_aplicados = rev;
+    const Ajustes& a = ajustes::actual();
+    if (letra_chat != a.letra_chat || letra_lista != a.letra_lista) {
+        letra_chat = a.letra_chat;
+        letra_lista = a.letra_lista;
+        campo.tamano = letra_chat + 0.5f;
+        bool abajo = al_final();
+        armar_vistas();
+        if (abajo) bajar_al_final(true);
+    }
+    if (reproductor_ok) reproductor.salida(a.salida);
+    if (fondo_cargado != a.fondo) {
+        fondo_cargado = a.fondo;
+        fondo_bmp.Reset();
+        fondo_pincel.Reset();
+        std::wstring ruta;
+        if (a.fondo == L"whatsapp") ruta = carpeta_exe() + L"\\fondo-wa.webp";
+        else if (!a.fondo.empty()) ruta = ajustes::carpeta_fondos() + L"\\" + a.fondo;
+        if (!ruta.empty()) {
+            std::string datos;
+            HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+            if (h != INVALID_HANDLE_VALUE) {
+                LARGE_INTEGER tam;
+                GetFileSizeEx(h, &tam);
+                datos.resize((size_t)tam.QuadPart);
+                DWORD leido = 0;
+                ReadFile(h, datos.data(), (DWORD)datos.size(), &leido, nullptr);
+                CloseHandle(h);
+            }
+            Pixeles p = g.decodificar(datos, false);
+            if (!p.vacio()) {
+                fondo_bmp = g.subir(p);
+                if (a.fondo == L"whatsapp" && fondo_bmp) {
+                    // Los garabatos se repiten como mosaico.
+                    D2D1_BITMAP_BRUSH_PROPERTIES bp = D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP);
+                    D2D1_BRUSH_PROPERTIES bp2 = D2D1::BrushProperties();
+                    ComPtr<ID2D1BitmapBrush> pincel;
+                    g.ctx->CreateBitmapBrush(fondo_bmp.Get(), &bp, &bp2, &pincel);
+                    fondo_pincel = pincel;
+                }
+            }
+        }
+    }
+    pedir_dibujo();
+}
+
+// El fondo de la conversacion: color liso, garabatos en mosaico o una foto.
+void App::dibujar_fondo_chat(float x, float y, float w, float h) {
+    g.rect(x, y, w, h, Color(BG_CHAT()));
+    if (fondo_pincel) {
+        bool claro = ajustes::paleta().claro;
+        fondo_pincel->SetOpacity(claro ? 0.4f : 0.06f);
+        fondo_pincel->SetTransform(D2D1::Matrix3x2F::Scale(0.5f, 0.5f) * D2D1::Matrix3x2F::Translation(x, y));
+        g.ctx->FillRectangle(D2D1::RectF(x, y, x + w, y + h), fondo_pincel.Get());
+    } else if (fondo_bmp) {
+        D2D1_SIZE_F t = fondo_bmp->GetSize();
+        float esc = std::max(w / t.width, h / t.height);
+        float dw = t.width * esc, dh = t.height * esc;
+        g.recortar(x, y, w, h);
+        g.bitmap(fondo_bmp.Get(), x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+        g.destapar();
+    }
 }
