@@ -399,6 +399,8 @@ void App::ir_a_mensaje(const std::string& chat, const std::string& id, long long
         mensajes.clear();
         vistas.clear();
         layout_pendiente = 0;
+        layout_gen++;
+        tandas_listas.clear();
         cargando_mensajes = true;
         hay_mas_viejos = true;
         conv = Desplazable();
