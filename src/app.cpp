@@ -319,7 +319,7 @@ void App::redimensionado() {
 bool App::animando() {
     return !lista.quieto() || !conv.quieto() ||
            (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
-           alguien_escribe(chat_actual) || cargando_todo || (todo_fin && ahora - todo_fin < 900) ||
+           alguien_escribe(chat_actual) || cargando_todo ||
            grab == Grab::Grabando ||
            ((!reproduciendo_id.empty() || grab_escuchando) && !reproductor.pausado() && !reproductor.terminado());
 }
@@ -1792,7 +1792,7 @@ void App::cargar_todo_el_chat() {
 
 // La ventanita de progreso, centrada sobre la conversacion.
 void App::dibujar_progreso_carga() {
-    if (!cargando_todo && (todo_fin == 0 || ahora - todo_fin > 900)) return;
+    if (!cargando_todo) return;
     float W = 360, H = 110, x = x_conv() + (w_conv() - W) / 2, y = alto_cabecera() + (g.alto - alto_pie - alto_cabecera() - H) / 2;
     g.rect_redondo(x, y, W, H, 12, Color(BG_PANEL()));
     g.borde_redondo(x, y, W, H, 12, Color(BORDE()), 1.0f);
