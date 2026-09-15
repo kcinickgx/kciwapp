@@ -1566,8 +1566,11 @@ void App::dibujar_cabecera() {
     g.renglon(sub, cx + r + 14, 34, 12.5f, Color(escribe ? ACCENT() : TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 200);
     // La lupa para buscar en este chat, "cargar todo" y los botones de llamar.
     if (!seleccionando) g.lupa(x + W - 72, 27, 8, Color(TXT_DIM()));
-    if (!seleccionando && ajustes::actual().mensajes_por_chat > 0 && hay_mas_viejos && !cargando_todo)
-        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE896", x + W - 45, 21, 18, Color(TXT_DIM()));
+    if (!seleccionando) {
+        // Siempre visible; apagado cuando no hay nada mas que traer.
+        bool activo = ajustes::actual().mensajes_por_chat > 0 && hay_mas_viejos && !cargando_todo;
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE896", x + W - 45, 21, 18, Color(TXT_DIM(), activo ? 1.0f : 0.35f));
+    }
     dibujar_botones_llamada();
 }
 
