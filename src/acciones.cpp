@@ -8,10 +8,10 @@
 
 #include "cache.h"
 #include "red.h"
+#include "tema.h"
 
 namespace {
 
-const unsigned ACCENT = 0x00a884;
 
 enum IdMenu {
     M_RESPONDER = 1, M_COPIAR, M_REENVIAR, M_EDITAR, M_BORRAR, M_ABRIR, M_GUARDAR, M_MOSTRAR,

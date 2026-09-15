@@ -6,24 +6,10 @@
 #include "aviso.h"
 #include "cache.h"
 #include "red.h"
+#include "tema.h"
 
 namespace {
 
-// Paleta (tema oscuro, como WhatsApp).
-const unsigned BG_APP = 0x111b21;
-const unsigned BG_PANEL = 0x202c33;
-const unsigned BG_CHAT = 0x0b141a;
-const unsigned BG_HOVER = 0x202c33;
-const unsigned BG_SEL = 0x2a3942;
-const unsigned BG_CAMPO = 0x2a3942;
-const unsigned BUBBLE_MIA = 0x005c4b;
-const unsigned BUBBLE_OTRA = 0x202c33;
-const unsigned TXT = 0xe9edef;
-const unsigned TXT_DIM = 0x8696a0;
-const unsigned ACCENT = 0x00a884;
-const unsigned TICK_AZUL = 0x53bdeb;
-const unsigned DIVISOR = 0x182229;
-const unsigned BORDE = 0x222d34;
 
 const float FILA_H = 68.0f;
 const float TITULO_H = 34.0f;
@@ -809,7 +795,7 @@ void App::dibujar() {
     necesita_dibujar = false;
 
     g.empezar_frame();
-    g.ctx->Clear(Color(BG_APP).d2d());
+    g.ctx->Clear(Color(BG_APP()).d2d());
     alto_pie = campo.alto(g) + 16;
     if (respondiendo || editando) alto_pie += BARRA_H;
     if (adjunto) alto_pie += ADJUNTO_H;
@@ -850,13 +836,13 @@ int App::item_en(float y) {
 
 void App::dibujar_lista() {
     float W = ancho_lista, top = top_lista();
-    g.rect(0, 0, W, g.alto, Color(BG_APP));
+    g.rect(0, 0, W, g.alto, Color(BG_APP()));
     // Cabecera de la lista: titulo, aviso y buscador.
-    g.rect(0, 0, W, top, Color(BG_PANEL));
-    g.renglon(reenviando ? L"Forward to..." : L"Chats", 16, 17, 20, Color(reenviando ? ACCENT : TXT), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    g.rect(0, 0, W, top, Color(BG_PANEL()));
+    g.renglon(reenviando ? L"Forward to..." : L"Chats", 16, 17, 20, Color(reenviando ? ACCENT() : TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
     if (!aviso_estado.empty()) g.renglon(aviso_estado, 90, 22, 12, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
-    g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO));
-    g.renglon(L"\U0001F50D", 22, 67, 14, Color(TXT_DIM));
+    g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO()));
+    g.renglon(L"\U0001F50D", 22, 67, 14, Color(TXT_DIM()));
     buscador.dibujar(g, 40, 61, W - 54, 32, ahora);
 
     armar_items();
@@ -876,29 +862,29 @@ void App::dibujar_lista() {
         }
         if (y > g.alto) break;
         if (it.tipo == ItemLista::Titulo) {
-            g.renglon(it.titulo, 16, y + 10, 13, Color(ACCENT), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            g.renglon(it.titulo, 16, y + 10, 13, Color(ACCENT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
             y += h;
             continue;
         }
         if (it.tipo == ItemLista::Resultado) {
             const Mensaje& m = resultados[it.idx];
-            if ((int)k == chat_bajo_mouse) g.rect(0, y, W, FILA_H, Color(BG_HOVER));
+            if ((int)k == chat_bajo_mouse) g.rect(0, y, W, FILA_H, Color(BG_HOVER()));
             std::wstring quien = nombre_de(m.chat);
             std::wstring fecha = formatear_dia(m.ts);
             float fw = g.medir(fecha, 12);
-            g.renglon(fecha, W - 16 - fw, y + 14, 12, Color(TXT_DIM));
-            g.renglon(quien, 16, y + 12, letra_lista, Color(TXT), DWRITE_FONT_WEIGHT_NORMAL, W - 40 - fw);
+            g.renglon(fecha, W - 16 - fw, y + 14, 12, Color(TXT_DIM()));
+            g.renglon(quien, 16, y + 12, letra_lista, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 40 - fw);
             std::wstring prev = una_linea(m.texto);
             if (m.propio) prev = L"You: " + prev;
-            g.renglon(prev, 16, y + 36, letra_lista - 2, Color(TXT_DIM), DWRITE_FONT_WEIGHT_NORMAL, W - 32);
-            g.linea(16, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE));
+            g.renglon(prev, 16, y + 36, letra_lista - 2, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 32);
+            g.linea(16, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE()));
             y += h;
             continue;
         }
         const Chat& c = chats[it.idx];
         bool sel = c.jid == chat_actual;
-        if (sel) g.rect(0, y, W, FILA_H, Color(BG_SEL));
-        else if ((int)k == chat_bajo_mouse) g.rect(0, y, W, FILA_H, Color(BG_HOVER));
+        if (sel) g.rect(0, y, W, FILA_H, Color(BG_SEL()));
+        else if ((int)k == chat_bajo_mouse) g.rect(0, y, W, FILA_H, Color(BG_HOVER()));
         // Avatar
         float r = 24, cx = 16 + r, cy = y + FILA_H / 2;
         Imagen* foto = nullptr;
@@ -916,9 +902,9 @@ void App::dibujar_lista() {
         std::wstring hora = c.ultimo_ts ? formatear_hora(c.ultimo_ts) : L"";
         if (c.ultimo_ts && dia_de(c.ultimo_ts) != dia_de(ahora_ms())) hora = formatear_dia(c.ultimo_ts);
         float hw = g.medir(hora, 12);
-        g.renglon(hora, W - 16 - hw, y + 14, 12, Color(c.no_leidos ? ACCENT : TXT_DIM));
+        g.renglon(hora, W - 16 - hw, y + 14, 12, Color(c.no_leidos ? ACCENT() : TXT_DIM()));
         float tx = 16 + 2 * r + 14;
-        g.renglon(c.nombre, tx, y + 12, letra_lista, Color(TXT), DWRITE_FONT_WEIGHT_NORMAL, W - tx - 24 - hw);
+        g.renglon(c.nombre, tx, y + 12, letra_lista, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - tx - 24 - hw);
         // Ultimo mensaje (o el borrador, si hay)
         std::wstring prev;
         auto bd = borradores.find(c.jid);
@@ -936,25 +922,25 @@ void App::dibujar_lista() {
         }
         float ancho_prev = W - tx - 16;
         if (c.no_leidos) ancho_prev -= 34;
-        g.renglon(prev, tx, y + 36, letra_lista - 2, Color(prev.rfind(L"Draft:", 0) == 0 ? 0xf15c6d : TXT_DIM),
+        g.renglon(prev, tx, y + 36, letra_lista - 2, Color(prev.rfind(L"Draft:", 0) == 0 ? 0xf15c6d : TXT_DIM()),
                   DWRITE_FONT_WEIGHT_NORMAL, ancho_prev);
         if (c.no_leidos) {
             std::wstring n = std::to_wstring(c.no_leidos);
             float nw = g.medir(n, 11, DWRITE_FONT_WEIGHT_SEMI_BOLD);
             float pw = std::max(20.0f, nw + 12);
-            g.rect_redondo(W - 16 - pw, y + 38, pw, 20, 10, Color(ACCENT));
+            g.rect_redondo(W - 16 - pw, y + 38, pw, 20, 10, Color(ACCENT()));
             g.renglon(n, W - 16 - pw + (pw - nw) / 2, y + 40, 11, Color(0x111b21), DWRITE_FONT_WEIGHT_SEMI_BOLD);
         }
-        g.linea(tx, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE));
+        g.linea(tx, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE()));
         y += h;
     }
     g.destapar();
-    g.rect(W - 1, 0, 1, g.alto, Color(BORDE));
+    g.rect(W - 1, 0, 1, g.alto, Color(BORDE()));
 }
 
 void App::dibujar_cabecera() {
     float x = x_conv(), W = w_conv(), H = alto_cabecera();
-    g.rect(x, 0, W, H, Color(BG_PANEL));
+    g.rect(x, 0, W, H, Color(BG_PANEL()));
     const Chat* c = chat_de(chat_actual);
     if (!c) return;
     float r = 20, cx = x + 16 + r, cy = H / 2;
@@ -963,46 +949,46 @@ void App::dibujar_cabecera() {
         foto = &imagen("foto:" + c->jid, L"/foto/" + ancho(c->jid), false);
     if (foto && foto->bmp) g.bitmap_circular(foto->bmp.Get(), cx, cy, r);
     else g.circulo(cx, cy, r, Color(0x6b7c85));
-    g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
+    g.renglon(c->nombre, cx + r + 14, 12, 16, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
     std::wstring sub = c->es_grupo ? L"Group" : formatear_telefono(c->jid);
-    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
+    g.renglon(sub, cx + r + 14, 34, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
 }
 
 void App::dibujar_pie() {
     float x = x_conv(), W = w_conv(), H = alto_pie, y = g.alto - H;
-    g.rect(x, y, W, H, Color(BG_PANEL));
+    g.rect(x, y, W, H, Color(BG_PANEL()));
     if (chat_actual.empty()) return;
     float yy = y + 8;
     // Barra de respuesta / edicion.
     if (respondiendo || editando) {
         const Mensaje& m = respondiendo ? *respondiendo : *editando;
-        Color color = editando ? Color(ACCENT) : (m.propio ? Color(ACCENT) : color_de_nombre(nombre_de(m.remitente)));
-        g.rect_redondo(x + 16, yy, W - 32, BARRA_H - 8, 6, Color(BG_CAMPO));
+        Color color = editando ? Color(ACCENT()) : (m.propio ? Color(ACCENT()) : color_de_nombre(nombre_de(m.remitente)));
+        g.rect_redondo(x + 16, yy, W - 32, BARRA_H - 8, 6, Color(BG_CAMPO()));
         g.rect_redondo(x + 16, yy, 4, BARRA_H - 8, 2, color);
         std::wstring titulo = editando ? L"Edit message" : (m.propio ? L"You" : nombre_de(m.remitente));
         g.renglon(titulo, x + 30, yy + 5, 13, color, DWRITE_FONT_WEIGHT_SEMI_BOLD, W - 100);
         std::wstring t = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
-        g.renglon(t, x + 30, yy + 22, 12.5f, Color(TXT_DIM), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
-        g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM));
+        g.renglon(t, x + 30, yy + 22, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
+        g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM()));
         yy += BARRA_H;
     }
     // Vista previa del adjunto.
     if (adjunto) {
-        g.rect_redondo(x + 16, yy, W - 32, ADJUNTO_H - 8, 6, Color(BG_CAMPO));
+        g.rect_redondo(x + 16, yy, W - 32, ADJUNTO_H - 8, 6, Color(BG_CAMPO()));
         if (adjunto->vista) {
             float esc = std::min((ADJUNTO_H - 24) / adjunto->h, 200.0f / adjunto->w);
             float w = adjunto->w * esc, h = adjunto->h * esc;
             g.recortar_redondo(x + 24, yy + 8, w, h, 4);
             g.bitmap(adjunto->vista.Get(), x + 24, yy + 8, w, h);
             g.destapar_redondo();
-            g.renglon(ancho(adjunto->nombre), x + 24 + w + 14, yy + 12, 13, Color(TXT), DWRITE_FONT_WEIGHT_NORMAL, W - w - 120);
+            g.renglon(ancho(adjunto->nombre), x + 24 + w + 14, yy + 12, 13, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - w - 120);
         } else {
-            g.renglon(L"\U0001F4C4", x + 28, yy + 14, 28, Color(TXT_DIM));
-            g.renglon(ancho(adjunto->nombre), x + 72, yy + 14, 14, Color(TXT), DWRITE_FONT_WEIGHT_NORMAL, W - 160);
-            g.renglon(std::to_wstring(adjunto->datos.size() / 1024) + L" KB", x + 72, yy + 36, 12, Color(TXT_DIM));
+            g.renglon(L"\U0001F4C4", x + 28, yy + 14, 28, Color(TXT_DIM()));
+            g.renglon(ancho(adjunto->nombre), x + 72, yy + 14, 14, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 160);
+            g.renglon(std::to_wstring(adjunto->datos.size() / 1024) + L" KB", x + 72, yy + 36, 12, Color(TXT_DIM()));
         }
-        g.renglon(L"Enter to send, Esc to discard", x + 24, yy + ADJUNTO_H - 30, 12, Color(TXT_DIM));
-        g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM));
+        g.renglon(L"Enter to send, Esc to discard", x + 24, yy + ADJUNTO_H - 30, 12, Color(TXT_DIM()));
+        g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM()));
         yy += ADJUNTO_H;
     }
     float ch = campo.alto(g);
@@ -1011,32 +997,32 @@ void App::dibujar_pie() {
         return;
     }
     // El clip a la izquierda, el campo, y el boton de mandar/grabar.
-    g.renglon(L"\U0001F4CE", x + 18, yy + ch / 2 - 12, 20, Color(TXT_DIM));
-    g.rect_redondo(x + 52, yy, W - 52 - 60, ch, 8, Color(BG_CAMPO));
+    g.renglon(L"\U0001F4CE", x + 18, yy + ch / 2 - 12, 20, Color(TXT_DIM()));
+    g.rect_redondo(x + 52, yy, W - 52 - 60, ch, 8, Color(BG_CAMPO()));
     campo.dibujar(g, x + 52, yy, W - 52 - 60, ch, ahora);
     bool hay_texto = !campo.texto.empty() || adjunto;
-    g.renglon(hay_texto ? L"➤" : L"\U0001F3A4", x + W - 44, yy + ch / 2 - 12, 22, Color(hay_texto ? ACCENT : TXT_DIM));
+    g.renglon(hay_texto ? L"➤" : L"\U0001F3A4", x + W - 44, yy + ch / 2 - 12, 22, Color(hay_texto ? ACCENT() : TXT_DIM()));
 }
 
 void App::dibujar_conversacion() {
     float x = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie, H = bottom - top;
-    g.rect(x, top, W, H, Color(BG_CHAT));
+    g.rect(x, top, W, H, Color(BG_CHAT()));
     if (chat_actual.empty()) {
         std::wstring t = L"Select a chat";
         float tw = g.medir(t, 18);
-        g.renglon(t, x + (W - tw) / 2, top + H / 2 - 12, 18, Color(TXT_DIM));
+        g.renglon(t, x + (W - tw) / 2, top + H / 2 - 12, 18, Color(TXT_DIM()));
         return;
     }
     if (cargando_mensajes && mensajes.empty()) {
         std::wstring t = L"Loading...";
         float tw = g.medir(t, 15);
-        g.renglon(t, x + (W - tw) / 2, top + H / 2 - 10, 15, Color(TXT_DIM));
+        g.renglon(t, x + (W - tw) / 2, top + H / 2 - 10, 15, Color(TXT_DIM()));
         return;
     }
     if (!cargando_mensajes && mensajes.empty()) {
         std::wstring t = L"No messages yet";
         float tw = g.medir(t, 15);
-        g.renglon(t, x + (W - tw) / 2, top + H / 2 - 10, 15, Color(TXT_DIM));
+        g.renglon(t, x + (W - tw) / 2, top + H / 2 - 10, 15, Color(TXT_DIM()));
         return;
     }
     // Las vistas armadas con otro ancho se rearman.
@@ -1083,17 +1069,17 @@ void App::dibujar_mensaje(size_t i, float y) {
     if (v.divisor) {
         float tw = g.medir(v.divisor_texto, 12);
         float px = x + (W - tw - 20) / 2;
-        g.rect_redondo(px, y + 8, tw + 20, 24, 7, Color(DIVISOR));
-        g.renglon(v.divisor_texto, px + 10, y + 12, 12, Color(TXT_DIM));
+        g.rect_redondo(px, y + 8, tw + 20, 24, 7, Color(DIVISOR()));
+        g.renglon(v.divisor_texto, px + 10, y + 12, 12, Color(TXT_DIM()));
     }
     float bx = x + v.bx, by = y + v.by;
-    Color fondo(m.propio ? BUBBLE_MIA : BUBBLE_OTRA);
+    Color fondo(m.propio ? BUBBLE_MIA() : BUBBLE_OTRA());
     bool figurita = m.tipo == "figurita" && !m.borrado;
     if (!figurita) g.rect_redondo(bx, by, v.bw, v.bh, 8, fondo);
     // Resaltado al llegar desde una busqueda o notificacion: se apaga solo.
     if (m.id == resaltado_id) {
         float t = (ahora - resaltado_desde) / 2000.0f;
-        if (t < 1) g.rect_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT, 0.35f * (1 - t)));
+        if (t < 1) g.rect_redondo(bx - 4, by - 4, v.bw + 8, v.bh + 8, 10, Color(ACCENT(), 0.35f * (1 - t)));
     }
     float cy = by + PAD_Y, cx = bx + PAD_X;
     if (v.nombre) {
@@ -1101,16 +1087,16 @@ void App::dibujar_mensaje(size_t i, float y) {
         cy += v.nh + 2;
     }
     if (m.reenviado && !m.borrado) {
-        g.renglon(L"↪ Forwarded", cx, cy, 11.5f, Color(TXT_DIM));
+        g.renglon(L"↪ Forwarded", cx, cy, 11.5f, Color(TXT_DIM()));
         cy += 16;
     }
     if (v.cita) {
         float ancho_cita = v.bw - 2 * PAD_X;
-        Color color = m.cita_remitente == mi_jid ? Color(ACCENT) : color_de_nombre(nombre_de(m.cita_remitente));
+        Color color = m.cita_remitente == mi_jid ? Color(ACCENT()) : color_de_nombre(nombre_de(m.cita_remitente));
         g.rect_redondo(cx, cy, ancho_cita, v.ch, 5, Color(0x000000, 0.22f));
         g.rect_redondo(cx, cy, 4, v.ch, 2, color);
         g.recortar(cx, cy, ancho_cita, v.ch);
-        g.dibujar_texto(v.cita.Get(), cx + 12, cy + 5, Color(TXT_DIM));
+        g.dibujar_texto(v.cita.Get(), cx + 12, cy + 5, Color(TXT_DIM()));
         g.destapar();
         cy += v.ch + 6;
     }
@@ -1155,7 +1141,7 @@ void App::dibujar_mensaje(size_t i, float y) {
             // Audio o documento: una tarjeta simple por ahora.
             g.rect_redondo(cx, cy, v.mw, v.mh, 6, Color(0x000000, 0.18f));
             bool audio = m.tipo == "audio" || m.tipo == "nota";
-            g.circulo(cx + 22, cy + v.mh / 2, 16, Color(ACCENT));
+            g.circulo(cx + 22, cy + v.mh / 2, 16, Color(ACCENT()));
             if (!(audio && reproduciendo_id == m.id))
                 g.renglon(audio ? L"▶" : L"\U0001F4C4", cx + 15, cy + v.mh / 2 - 9, 14, Color(0x111b21));
             std::wstring t = audio ? std::to_wstring(m.media->segundos / 60) + L":" +
@@ -1170,8 +1156,8 @@ void App::dibujar_mensaje(size_t i, float y) {
                     double d = reproductor.duracion(), pos = reproductor.posicion();
                     if (d > 0) {
                         float f = (float)std::clamp(pos / d, 0.0, 1.0);
-                        g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, (v.mw - 64) * f, 4, 2, Color(ACCENT));
-                        g.circulo(cx + 48 + (v.mw - 64) * f, cy + v.mh / 2, 6, Color(ACCENT));
+                        g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, (v.mw - 64) * f, 4, 2, Color(ACCENT()));
+                        g.circulo(cx + 48 + (v.mw - 64) * f, cy + v.mh / 2, 6, Color(ACCENT()));
                         int s = (int)pos;
                         t = std::to_wstring(s / 60) + L":" + (s % 60 < 10 ? L"0" : L"") + std::to_wstring(s % 60);
                     }
@@ -1182,11 +1168,11 @@ void App::dibujar_mensaje(size_t i, float y) {
                     // nada especial
                 }
                 if (!suena) g.rect_redondo(cx + 48, cy + v.mh / 2 - 2, v.mw - 64, 4, 2, Color(0xffffff, 0.25f));
-                g.renglon(t, cx + 48, cy + v.mh / 2 + 6, 11, Color(TXT_DIM));
+                g.renglon(t, cx + 48, cy + v.mh / 2 + 6, 11, Color(TXT_DIM()));
             } else {
-                g.renglon(t, cx + 48, cy + 10, 13.5f, Color(TXT), DWRITE_FONT_WEIGHT_NORMAL, v.mw - 60);
+                g.renglon(t, cx + 48, cy + 10, 13.5f, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, v.mw - 60);
                 std::wstring tam = std::to_wstring(m.media->bytes / 1024) + L" KB";
-                g.renglon(tam, cx + 48, cy + 30, 11, Color(TXT_DIM));
+                g.renglon(tam, cx + 48, cy + 30, 11, Color(TXT_DIM()));
             }
         }
     }
@@ -1200,7 +1186,7 @@ void App::dibujar_mensaje(size_t i, float y) {
             v.texto->HitTestTextRange((UINT32)a, (UINT32)(b - a), tx, ty, cajas.data(), cuantos, &cuantos);
             for (auto& c : cajas) g.rect(c.left, c.top, c.width, c.height, Color(0x53bdeb, 0.4f));
         }
-        g.dibujar_texto(v.texto.Get(), tx, ty, Color(m.borrado ? TXT_DIM : TXT));
+        g.dibujar_texto(v.texto.Get(), tx, ty, Color(m.borrado ? TXT_DIM() : TXT()));
     }
     // Hora y tildes
     float hx = bx + v.hora_x, hy = by + v.hora_y;
@@ -1209,10 +1195,10 @@ void App::dibujar_mensaje(size_t i, float y) {
         float hw = g.medir(v.hora_texto, HORA_TAM) + (m.propio ? 20 : 0);
         g.rect_redondo(hx - 6, hy - 2, hw + 12, 18, 9, Color(0x000000, 0.45f));
     }
-    float hw = g.renglon(v.hora_texto, hx, hy, HORA_TAM, Color(sobre_media ? 0xffffff : TXT_DIM));
+    float hw = g.renglon(v.hora_texto, hx, hy, HORA_TAM, Color(sobre_media ? 0xffffff : TXT_DIM()));
     if (m.propio) {
         std::wstring tick = m.estado >= 2 ? L"✓✓" : (m.estado >= 1 ? L"✓" : L"○");
-        g.renglon(tick, hx + hw + 4, hy - 1, 12, Color(m.estado >= 3 ? TICK_AZUL : (sobre_media ? 0xffffff : TXT_DIM)));
+        g.renglon(tick, hx + hw + 4, hy - 1, 12, Color(m.estado >= 3 ? TICK_AZUL() : (sobre_media ? 0xffffff : TXT_DIM())));
     }
     // Reacciones: una pastilla pisando el borde de abajo de la burbuja.
     if (!m.reacciones.empty()) {
@@ -1226,9 +1212,9 @@ void App::dibujar_mensaje(size_t i, float y) {
         if (m.reacciones.size() > 1) t += L" " + std::to_wstring(m.reacciones.size());
         float tw = g.medir(t, 12);
         float px = m.propio ? bx + v.bw - tw - 20 : bx + 4;
-        g.rect_redondo(px, by + v.bh - 8, tw + 14, 22, 11, Color(BG_PANEL));
-        g.borde_redondo(px, by + v.bh - 8, tw + 14, 22, 11, Color(BG_CHAT), 1.5f);
-        g.renglon(t, px + 7, by + v.bh - 5, 12, Color(TXT));
+        g.rect_redondo(px, by + v.bh - 8, tw + 14, 22, 11, Color(BG_PANEL()));
+        g.borde_redondo(px, by + v.bh - 8, tw + 14, 22, 11, Color(BG_CHAT()), 1.5f);
+        g.renglon(t, px + 7, by + v.bh - 5, 12, Color(TXT()));
     }
 }
 

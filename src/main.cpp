@@ -13,6 +13,7 @@
 #include "cache.h"
 #include "emoji.h"
 #include "red.h"
+#include "tema.h"
 
 namespace {
 
@@ -203,6 +204,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     red::anotar_ventana(h);
     DragAcceptFiles(h, TRUE);
     cache::abrir(carpeta_datos() + L"\\cache.sqlite3");
+    ajustes::cargar(carpeta_exe());
     emoji::cargar(carpeta_exe());
     app.iniciar(h);
     g_app = &app;

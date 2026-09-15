@@ -195,6 +195,28 @@ struct App {
     std::vector<float> grab_niveles;
     bool grab_escuchando = false;   // la vista previa sonando
 
+    // Selector de emojis (emoji_ui.cpp): un panel flotante arriba del pie.
+    bool emojis_abierto = false;
+    int emoji_categoria = -1;       // -1 = recientes
+    Campo emoji_buscador;
+    Desplazable emoji_scroll;
+    int emoji_bajo_mouse = -1;
+
+    // Panel de info del contacto o grupo (info_ui.cpp): tapa la conversacion.
+    bool info_abierto = false;
+    std::string info_jid;           // de quien
+    std::vector<std::string> info_pila;  // para volver atras (grupo -> persona)
+    struct Miembro { std::string jid; bool admin = false; };
+    std::vector<Miembro> miembros;
+    bool cargando_miembros = false;
+    Desplazable info_scroll;
+
+    // Ajustes: la revision que ya aplicamos, y el fondo del chat en la GPU.
+    unsigned ajustes_aplicados = 0;
+    ComPtr<ID2D1Bitmap1> fondo_bmp;
+    ComPtr<ID2D1BitmapBrush> fondo_pincel;
+    std::wstring fondo_cargado;
+
     void iniciar(HWND h);
     void dibujar();
     bool animando();
@@ -246,6 +268,21 @@ struct App {
     int mensaje_en(float y, float* y_msg);
     bool en_texto(int i, float y_msg, float x, float y, size_t* indice);
     void agregar_mensaje(const Mensaje& m);
+    // Emojis (emoji_ui.cpp). El panel se dibuja encima de todo, anclado
+    // arriba-izquierda del pie; `click_emojis` devuelve si se comio el click.
+    void dibujar_emojis();
+    bool click_emojis(float x, float y);
+    bool rueda_emojis(float x, float y, float delta);
+    void elegir_emoji(const std::wstring& simbolo);
+    // Info (info_ui.cpp): abre la ficha de un chat o persona.
+    void abrir_info(const std::string& jid);
+    void cerrar_info();
+    void dibujar_info();
+    bool click_info(float x, float y);
+    bool rueda_info(float x, float y, float delta);
+    // Ajustes (app.cpp): aplica lo que cambio en la ventana de settings.
+    void aplicar_ajustes();
+    void dibujar_fondo_chat(float x, float y, float w, float h);
     // Audio (audio_ui.cpp)
     void reproducir_audio(int i);
     void grabar_empezar();

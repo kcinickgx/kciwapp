@@ -18,6 +18,7 @@ add_executable(kciwapp2 WIN32
     src/reproductor.cpp
     src/grabador.cpp
     src/audio_ui.cpp
+    src/tema.cpp
     src/app.rc
 )
 target_compile_definitions(kciwapp2 PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)

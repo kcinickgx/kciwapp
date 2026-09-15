@@ -3,12 +3,9 @@
 #include "app.h"
 #include "grabador.h"
 #include "red.h"
+#include "tema.h"
 
 namespace {
-const unsigned ACCENT = 0x00a884;
-const unsigned TXT = 0xe9edef;
-const unsigned TXT_DIM = 0x8696a0;
-const unsigned BG_CAMPO = 0x2a3942;
 
 std::string leer_wav(const std::wstring& ruta) {
     std::string s;
@@ -156,13 +153,13 @@ void App::grabar_mandar() {
 void App::dibujar_grabacion(float x, float yy, float W, float ch) {
     g.renglon(L"\U0001F5D1", x + 18, yy + ch / 2 - 12, 20, Color(0xf15c6d));
     float bx = x + 52, bw = W - 52 - 60;
-    g.rect_redondo(bx, yy, bw, ch, 8, Color(BG_CAMPO));
+    g.rect_redondo(bx, yy, bw, ch, 8, Color(BG_CAMPO()));
     std::vector<float> niveles = grab == Grab::Grabando ? grabador::niveles() : grab_niveles;
     double seg = grab == Grab::Grabando ? grabador::segundos() : grab_segundos;
     float tx = bx + 12;
     if (grab == Grab::Lista) {
         // Play/pausa de la vista previa.
-        g.circulo(bx + 22, yy + ch / 2, 14, Color(ACCENT));
+        g.circulo(bx + 22, yy + ch / 2, 14, Color(ACCENT()));
         if (grab_escuchando && !reproductor.pausado() && !reproductor.terminado()) {
             g.rect(bx + 17, yy + ch / 2 - 6, 4, 12, Color(0x111b21));
             g.rect(bx + 23, yy + ch / 2 - 6, 4, 12, Color(0x111b21));
@@ -179,19 +176,19 @@ void App::dibujar_grabacion(float x, float yy, float W, float ch) {
     std::wstring t = mm_ss(seg);
     if (grab == Grab::Lista && grab_escuchando) t = mm_ss(reproductor.posicion()) + L" / " + t;
     float tw = g.medir(t, 13);
-    g.renglon(t, bx + bw - tw - 14, yy + ch / 2 - 9, 13, Color(TXT));
+    g.renglon(t, bx + bw - tw - 14, yy + ch / 2 - 9, 13, Color(TXT()));
     // La onda: una barrita por muestra, las ultimas que entren.
     float ox = tx, ow = bx + bw - tw - 30 - tx, paso = 3.0f;
     int cuantas = std::max(1, (int)(ow / paso));
     int desde = std::max(0, (int)niveles.size() - cuantas);
     for (int k = desde; k < (int)niveles.size(); k++) {
         float h = std::max(2.0f, std::min(1.0f, niveles[k] * 3.0f) * (ch - 16));
-        g.rect_redondo(ox + (k - desde) * paso, yy + ch / 2 - h / 2, 2, h, 1, Color(ACCENT, 0.9f));
+        g.rect_redondo(ox + (k - desde) * paso, yy + ch / 2 - h / 2, 2, h, 1, Color(ACCENT(), 0.9f));
     }
     if (grab == Grab::Grabando) {
         g.rect_redondo(x + W - 44, yy + ch / 2 - 10, 20, 20, 4, Color(0xf15c6d));
     } else {
-        g.renglon(L"➤", x + W - 44, yy + ch / 2 - 12, 22, Color(ACCENT));
+        g.renglon(L"➤", x + W - 44, yy + ch / 2 - 12, 22, Color(ACCENT()));
     }
 }
 
