@@ -313,6 +313,7 @@ struct App {
     // con ventana de progreso.
     bool cargando_todo = false;
     long long todo_cargado = 0, todo_total = 0;
+    unsigned long long todo_fin = 0;  // cuando termino (la ventanita queda un momento)
     void cargar_todo_el_chat();
     void dibujar_progreso_carga();
     void dibujar_vinculacion();
