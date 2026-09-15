@@ -1257,8 +1257,8 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
     bool media_visual = m.media && con_imagen(m.tipo) && !m.borrado;
     if (media_visual) {
         if (m.album > 0) {
-            // Grilla: 2 columnas hasta 4 fotos, 3 de ahi en mas; casilleros cuadrados.
-            int cols = m.album <= 4 ? 2 : 3, filas = (m.album + cols - 1) / cols;
+            // Grilla: 2 columnas con 3 o 4 fotos, 4 de ahi en mas; casilleros cuadrados.
+            int cols = m.album <= 4 ? 2 : 4, filas = (m.album + cols - 1) / cols;
             v.mw = std::min(interior, 340.0f);
             float gap = 3, lado = (v.mw - gap * (cols - 1)) / cols;
             v.mh = filas * lado + gap * (filas - 1);
