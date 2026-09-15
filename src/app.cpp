@@ -341,9 +341,10 @@ void App::cargar_chats() {
             mi_jid = je["jid"].str();
             conectado = je["conectado"].bul();
             if (!escuchando) {
-                // El cursor arranca en el estado actual: lo anterior ya viene
-                // en /chats y /mensajes.
-                seq_eventos = je["seq"].entero();
+                // El cursor guardado: lo que paso con la app cerrada se aplica
+                // a la cache al arrancar. Sin cursor (primera vez), desde ahora.
+                std::string guardado = cache::valor("seq");
+                seq_eventos = guardado.empty() ? je["seq"].entero() : atoll(guardado.c_str());
                 escuchando = true;
                 escuchar_eventos();
             }
@@ -420,49 +421,68 @@ void App::abrir_chat(const std::string& jid) {
     if (cuantos <= 0) cuantos = 1000000;
     pedir_dibujo();
     std::string mio = jid;
-    red::en_fondo([this, mio, cuantos] {
-        // La cache se lee en este hilo (con "All" son miles de filas) y se
-        // muestra apenas esta; el server viene despues.
+    long long ultimo_lista = 0;
+    for (auto& c : chats)
+        if (c.jid == jid) ultimo_lista = c.ultimo_ts;
+    red::en_fondo([this, mio, cuantos, ultimo_lista] {
+        // La cache manda: se lee en este hilo (con "All" son miles de filas)
+        // y se muestra. Al server solo se le pide lo que falta: mas viejos
+        // que no estan cacheados, o mas nuevos si la lista dice que hay.
         std::vector<Mensaje> de_cache = cache::leer_mensajes(mio, 0, cuantos);
-        if (!de_cache.empty()) {
-            red::en_ui([this, mio, de_cache] {
-                if (mio != chat_actual || !mensajes.empty()) return;
-                mensajes = de_cache;
-                armar_vistas();
-                bajar_al_final(true);
-                pedir_dibujo();
-            });
-        }
-        Respuesta r = red::obtener(L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(cuantos), 300000);
-        Json j = Json::parsear(r.cuerpo);
+        long long mas_nuevo = de_cache.empty() ? 0 : de_cache.back().ts;
+        long long mas_viejo = de_cache.empty() ? 0 : de_cache.front().ts;
+        bool ok = true;
         std::vector<Mensaje> nuevos;
-        for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
+        // Lo que llego despues de lo cacheado (la app cerrada sin log, o historia).
+        if (mas_nuevo > 0 && (ultimo_lista > mas_nuevo || resync_pendiente)) {
+            std::wstring url = L"/mensajes?chat=" + ancho(mio) + L"&limite=100000&desde=" + std::to_wstring(mas_nuevo + 1);
+            Respuesta r = red::obtener(url, 120000);
+            ok = r.ok();
+            Json j = Json::parsear(r.cuerpo);
+            for (size_t i = 0; i < j.largo(); i++) nuevos.push_back(Mensaje::de_json(j[i]));
+        }
+        // Lo mas viejo que la cache no tiene, si se pidieron mas de los que hay.
+        std::vector<Mensaje> viejos;
+        bool servidor_agotado = false;
+        if ((int)de_cache.size() < cuantos && ok) {
+            int faltan = std::min(cuantos - (int)de_cache.size(), 100000);
+            std::wstring url = L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(faltan);
+            if (mas_viejo > 0) url += L"&antes=" + std::to_wstring(mas_viejo);
+            Respuesta r = red::obtener(url, 300000);
+            ok = r.ok();
+            Json j = Json::parsear(r.cuerpo);
+            for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
+            servidor_agotado = ok && (int)viejos.size() < faltan;
+        }
         // A la cache de a tandas, para no tener el candado tomado segundos.
-        if (r.ok())
-            for (size_t i = 0; i < nuevos.size(); i += 500)
-                cache::guardar_mensajes(std::vector<Mensaje>(nuevos.begin() + i, nuevos.begin() + std::min(nuevos.size(), i + 500)));
-        bool ok = r.ok();
-        red::en_ui([this, mio, nuevos, ok, cuantos] {
+        auto guardar = [](const std::vector<Mensaje>& v) {
+            for (size_t i = 0; i < v.size(); i += 500)
+                cache::guardar_mensajes(std::vector<Mensaje>(v.begin() + i, v.begin() + std::min(v.size(), i + 500)));
+        };
+        if (ok) {
+            guardar(nuevos);
+            guardar(viejos);
+        }
+        std::vector<Mensaje> todo;
+        todo.reserve(viejos.size() + de_cache.size() + nuevos.size());
+        // Sin repetidos (el "desde" incluye el limite y la cache puede tener alguno).
+        std::unordered_set<std::string> vistos;
+        for (auto* lista : {&viejos, &de_cache, &nuevos})
+            for (auto& m : *lista)
+                if (vistos.insert(m.id).second) todo.push_back(m);
+        bool agotado = servidor_agotado;
+        red::en_ui([this, mio, todo, ok, agotado, cuantos] {
             if (mio != chat_actual) return;
             cargando_mensajes = false;
-            if (!ok) {
-                if (mensajes.empty()) aviso_estado = L"Cannot reach the server";
+            if (!ok && todo.empty()) {
+                aviso_estado = L"Cannot reach the server";
                 pedir_dibujo();
                 return;
             }
-            // Se fusiona con lo que vino de la cache: lo del server manda.
-            bool abajo = al_final();
-            std::vector<Mensaje> mezcla;
-            std::unordered_set<std::string> ids_server;
-            for (auto& s : nuevos) ids_server.insert(s.id);
-            long long primero_server = nuevos.empty() ? 0 : nuevos.front().ts;
-            for (auto& m : mensajes)
-                if (!ids_server.count(m.id) && (nuevos.empty() || m.ts < primero_server)) mezcla.push_back(m);
-            mezcla.insert(mezcla.end(), nuevos.begin(), nuevos.end());
-            mensajes = std::move(mezcla);
-            hay_mas_viejos = (int)nuevos.size() >= cuantos || mensajes.size() > nuevos.size();
+            mensajes = todo;
+            hay_mas_viejos = !agotado;
             armar_vistas();
-            bajar_al_final(abajo || true);
+            bajar_al_final(true);
             marcar_leido(mio);
             pedir_dibujo();
         });
@@ -584,7 +604,15 @@ void App::escuchar_eventos() {
             }
             Json j = Json::parsear(r.cuerpo);
             if (j["resync"].bul()) {
-                red::en_ui([this] { cargar_chats(); });
+                // El server ya no tiene el log desde nuestro cursor: se
+                // arranca desde ahora y cada chat se completa al abrirlo.
+                red::en_ui([this] {
+                    resync_pendiente = true;
+                    cargar_chats();
+                });
+                Respuesta est = red::obtener(L"/estado");
+                seq_eventos = Json::parsear(est.cuerpo)["seq"].entero();
+                cache::guardar_valor("seq", std::to_string(seq_eventos));
                 Sleep(1000);
                 continue;
             }
@@ -599,6 +627,7 @@ void App::escuchar_eventos() {
                     seq_eventos = std::max(seq_eventos, l[i]["seq"].entero());
                 }
                 if (recargar) cargar_chats();
+                cache::guardar_valor("seq", std::to_string(seq_eventos));
                 pedir_dibujo();
             });
             // El hilo espera a que la UI anote el cursor: alcanza con seguir.

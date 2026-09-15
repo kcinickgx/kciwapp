@@ -154,6 +154,7 @@ struct App {
     size_t layout_pendiente = 0;
     bool cargando_mensajes = false;
     bool cargando_chats = false, recarga_pendiente = false, escuchando = false;
+    bool resync_pendiente = false;   // el log de eventos se perdio: completar cada chat al abrirlo
     bool hay_mas_viejos = true;
     long long seq_eventos = 0;
     bool conectado = false;

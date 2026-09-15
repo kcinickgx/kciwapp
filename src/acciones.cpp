@@ -335,6 +335,7 @@ void App::reenviar_a(const std::string& destino) {
 // Mete un mensaje nuevo (propio recien mandado, o llegado por eventos) en
 // el chat abierto, si corresponde, y actualiza la lista.
 void App::agregar_mensaje(const Mensaje& m) {
+    cache::guardar_mensajes({m});
     for (auto& c : chats)
         if (c.jid == m.chat) {
             c.ultimo = m;
