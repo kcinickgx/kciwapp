@@ -230,7 +230,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
             else g_app->abrir_chat(d.chat);
         });
     });
-    SetTimer(h, TIMER_CURSOR, 500, nullptr);
+    SetTimer(h, TIMER_CURSOR, 250, nullptr);
     ShowWindow(h, SW_SHOW);
 
     MSG msg;

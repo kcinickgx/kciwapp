@@ -129,7 +129,7 @@ void Campo::dibujar(Gfx& g, float x, float y, float w, float h, unsigned long lo
         }
         g.dibujar_texto(l, tx, ty, Color(0xe9edef));
     }
-    if (foco && ((ahora_ms - ultimo_movimiento) / 530) % 2 == 0) {
+    if (foco && ((ahora_ms - ultimo_movimiento) / 250) % 2 == 0) {
         posicion_cursor(g, cx, cy, ch);
         g.rect(cx, cy - desplazamiento, 1.5f, ch, Color(0xe9edef));
     }
