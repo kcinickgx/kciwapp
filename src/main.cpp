@@ -47,7 +47,11 @@ float escala(HWND h) { return GetDpiForWindow(h) / 96.0f; }
 
 // Posicion y tamano de la ventana en ajustes.json, para que vuelva a abrir
 // donde quedo (y maximizada si lo estaba).
+bool g_ventana_lista = false;  // hasta restaurar, los WM_SIZE de la creacion no cuentan
+bool g_era_max = false;
+
 void guardar_ventana(HWND h) {
+    if (!g_ventana_lista) return;
     WINDOWPLACEMENT wp{sizeof wp};
     if (!GetWindowPlacement(h, &wp) || IsIconic(h)) return;
     RECT r = wp.rcNormalPosition;
@@ -87,7 +91,8 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_SIZE:
             // Maximizar/restaurar no pasa por EXITSIZEMOVE.
-            if (wp == SIZE_MAXIMIZED || wp == SIZE_RESTORED) guardar_ventana(h);
+            if (wp == SIZE_MAXIMIZED || (wp == SIZE_RESTORED && g_era_max)) guardar_ventana(h);
+            if (wp == SIZE_MAXIMIZED || wp == SIZE_RESTORED) g_era_max = wp == SIZE_MAXIMIZED;
             if (app && wp != SIZE_MINIMIZED) {
                 app->redimensionado();
                 app->dibujar();
@@ -260,6 +265,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
                              (int)(1100 * 1.0f), (int)(760 * 1.0f), nullptr, nullptr, inst, nullptr);
     if (!h) return 1;
     restaurar_ventana(h);
+    g_ventana_lista = true;
     red::anotar_ventana(h);
     DragAcceptFiles(h, TRUE);
     cache::abrir(carpeta_datos() + L"\\cache.sqlite3");
