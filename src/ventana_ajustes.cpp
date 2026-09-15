@@ -409,8 +409,8 @@ float seccion_colores(Gfx& g, float x, float y, float ancho_contenido) {
         unsigned c = leer_campo(ajustes::paleta(), i);
         float sw = 22.0f, sw_x = x + ancho_contenido - sw, sw_y = y + (FILA_C - sw) / 2.0f;
         std::wstring hx = wstr_de(ajustes::hex_de(c));
-        float hw = g.medir(hx, 12.5f);
-        g.renglon(hx, sw_x - 12 - hw, y + (FILA_C - 17) / 2.0f, 12.5f, Color(TXT_DIM()));
+        float hw = g.medir_mono(hx, 13.0f);
+        g.renglon_mono(hx, sw_x - 12 - hw, y + (FILA_C - 17) / 2.0f, 13.0f, Color(TXT_DIM()));
         g.rect_redondo(sw_x, sw_y, sw, sw, 5, Color(c));
         g.borde_redondo(sw_x, sw_y, sw, sw, 5, Color(BORDE()), 1.0f);
         int campo = i;
@@ -596,7 +596,7 @@ void dibujar_selector_color(Gfx& g) {
     g.rect_redondo(ix, iy, 26, 26, 5, Color(actual));
     g.borde_redondo(ix, iy, 26, 26, 5, Color(BORDE()), 1.0f);
     std::wstring hx_txt = wstr_de(ajustes::hex_de(actual));
-    g.renglon(hx_txt, ix + 26 + 10, iy + 6, 13.5f, Color(TXT()));
+    g.renglon_mono(hx_txt, ix + 26 + 10, iy + 6, 13.5f, Color(TXT()));
     iy += 26 + 12;
 
     float bw = 70, bh = 28;
