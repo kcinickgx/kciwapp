@@ -39,9 +39,8 @@ Vista g_principal, g_llamada;
 bool g_activo = false, g_logueado = false, g_cargando = true, g_en_llamada = false, g_silenciado = false;
 std::string g_qr;
 std::function<void(bool)> g_al_cambiar;
-std::function<void()> g_al_cerrar_ventana;
-HWND g_ventana = nullptr;  // la ventana propia de la videollamada
 double g_prop = 900.0 / 620.0;  // proporcion del panel (ancho/alto); la ventana la sigue
+bool g_video_fluye = false;  // llega video del otro lado
 int g_popout_intentos = 0;      // clicks al boton de "abrir en ventana" de la llamada
 bool g_quiero_popout = false;   // solo en las de video
 bool g_sondeando = false;
@@ -143,7 +142,10 @@ HWND crear_hija(Vista& v) {
 void avisar_llamada(bool en) {
     if (en == g_en_llamada) return;
     g_en_llamada = en;
-    if (!en) g_silenciado = false;
+    if (!en) {
+        g_silenciado = false;
+        g_video_fluye = false;
+    }
     registrar(en ? "llamada en curso" : "llamada terminada");
     if (g_al_cambiar) g_al_cambiar(en);
 }
@@ -170,10 +172,6 @@ void configurar_permisos(Vista& v) {
 }
 
 void cerrar_vista(Vista& v) {
-    if (v.visible && g_ventana) {
-        DestroyWindow(g_ventana);
-        g_ventana = nullptr;
-    }
     if (v.ctrl) v.ctrl->Close();
     v.ctrl.Reset();
     v.web.Reset();
@@ -237,19 +235,6 @@ void crear_vista_llamada(std::function<void()> listo) {
                     return S_OK;
                 }).Get(), &t);
             listo();
-            // Si la ventana de video ya estaba mostrando el recorte de la
-            // principal, pasa a mostrar la ventanita entera.
-            if (g_ventana) {
-                if (GetParent(g_principal.hwnd) != g_padre) SetParent(g_principal.hwnd, g_padre);
-                g_principal.ctrl->put_ZoomFactor(1.0);
-                SetWindowPos(g_principal.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER);
-                g_principal.visible = false;
-                SetParent(g_llamada.hwnd, g_ventana);
-                g_llamada.visible = true;
-                RECT c;
-                GetClientRect(g_ventana, &c);
-                SetWindowPos(g_llamada.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER | SWP_SHOWWINDOW);
-            }
             return S_OK;
         }).Get());
 }
@@ -338,26 +323,14 @@ const wchar_t* JS_ESTADO =
     L"out.llamada=!!document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[aria-label=\"Cortar\"]');"
     L"return JSON.stringify(out)})()";
 
+// Hay un video del otro lado andando (el nuestro esta muted; el remoto no).
+const wchar_t* JS_VIDEO =
+    L"(function(){var vs=Array.prototype.filter.call(document.querySelectorAll('video'),function(v){return v.videoWidth>0&&v.readyState>=2&&!v.paused&&!v.muted});"
+    L"return vs.length?'si':'no'})()";
+
 const wchar_t* JS_EN_LLAMADA =
     L"(function(){return !!document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[data-icon=\"call-end\"]')?'si':'no'})()";
 
-// Donde esta el panel flotante de la llamada dentro de la pagina (en
-// pixeles fisicos del WebView2 y en CSS px). Vacio si no hay llamada.
-const wchar_t* JS_RECT_PANEL =
-    L"(function(){var b=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
-    L"if(!b)return '';var c=null,n=b.parentElement;"
-    L"while(n&&n!==document.body){var cs=getComputedStyle(n),r=n.getBoundingClientRect();"
-    L"if((cs.position==='fixed'||cs.position==='absolute')&&r.width>=200&&r.height>=150&&r.width<innerWidth*0.95){c=n;break}n=n.parentElement;}"
-    L"if(!c)return '';var r=c.getBoundingClientRect(),d=window.devicePixelRatio;"
-    L"return JSON.stringify({x:r.left*d,y:r.top*d,w:r.width*d,h:r.height*d,cw:r.width,ch:r.height})})()";
-
-constexpr UINT_PTR TIMER_ENCUADRE = 1;
-bool g_encuadrando = false;
-
-// Acomoda el WebView2 adentro de la ventana de video para que se vea solo el
-// panel de la llamada: zoom para que el panel llene la ventana (manteniendo
-// la proporcion) y desplazamiento para que caiga en (0,0). La pagina no se
-// toca: sigue viendo un viewport de ANCHO_PX x ALTO_PX CSS px.
 const wchar_t* JS_POPOUT =
     L"(function(){var b=document.querySelector('[aria-label=\"Pop out\"],[aria-label=\"Pop-out\"],[aria-label=\"Open in new window\"],[aria-label=\"Expand\"],"
     L"[aria-label=\"Picture in picture\"],[data-icon=\"pop-out\"],[data-icon=\"popout\"],[data-icon=\"expand\"],[data-icon=\"pip\"],[data-icon=\"new-window\"]');"
@@ -368,64 +341,6 @@ const wchar_t* JS_POPOUT =
     L"var er=e.getBoundingClientRect();bs=bs.filter(function(x){var r=x.getBoundingClientRect();return Math.abs((r.top+r.height/2)-(er.top+er.height/2))<er.height});"
     L"if(bs.length>=2){bs.sort(function(a,c){return a.getBoundingClientRect().left-c.getBoundingClientRect().left});"
     L"var t=bs[bs.length-2];t.click();return 'ok fila '+(t.getAttribute('aria-label')||t.getAttribute('title')||t.outerHTML.slice(0,80))}}return 'no'})()";
-
-void encuadrar() {
-    Vista& v = g_llamada.web ? g_llamada : g_principal;
-    if (!g_ventana || !v.web || !v.ctrl || !v.visible || g_encuadrando) return;
-    if (&v == &g_llamada) {
-        // La ventanita de WhatsApp Web es solo la llamada: llena la ventana.
-        RECT c;
-        GetClientRect(g_ventana, &c);
-        RECT actual;
-        GetWindowRect(v.hwnd, &actual);
-        MapWindowPoints(nullptr, g_ventana, (POINT*)&actual, 2);
-        if (actual.left != 0 || actual.top != 0 || actual.right != c.right || actual.bottom != c.bottom) {
-            v.ctrl->put_ZoomFactor(1.0);
-            SetWindowPos(v.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER | SWP_SHOWWINDOW);
-        }
-        return;
-    }
-    g_encuadrando = true;
-    ejecutar(v, JS_RECT_PANEL, [&v](const std::wstring& res) {
-        g_encuadrando = false;
-        if (!g_ventana || !v.ctrl) return;
-        std::string s = resultado_str(res);
-        if (s.empty()) return;
-        Json j = Json::parsear(s);
-        double cw = j["cw"].num(), ch = j["ch"].num();
-        if (cw < 10 || ch < 10) return;
-        RECT c;
-        GetClientRect(g_ventana, &c);
-        double Wc = c.right, Hc = c.bottom;
-        double dpi = GetDpiForWindow(g_ventana) / 96.0;
-        // La ventana toma la proporcion del panel (asi no asoma la pagina alrededor).
-        double prop = cw / ch;
-        if (std::abs(prop - g_prop) > 0.01 || std::abs(Wc / Hc - prop) > 0.01) {
-            g_prop = prop;
-            RECT wr;
-            GetWindowRect(g_ventana, &wr);
-            int extra_w = (wr.right - wr.left) - c.right, extra_h = (wr.bottom - wr.top) - c.bottom;
-            int nh = (int)(Wc / prop + 0.5);
-            SetWindowPos(g_ventana, nullptr, 0, 0, (int)Wc + extra_w, nh + extra_h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-            return;  // WM_SIZE vuelve a encuadrar
-        }
-        double z = std::min(Wc / (cw * dpi), Hc / (ch * dpi));
-        z = std::clamp(z, 0.25, 5.0);
-        double z0 = 1;
-        v.ctrl->get_ZoomFactor(&z0);
-        if (std::abs(z - z0) > 0.02) {
-            // Con el zoom nuevo el panel se mide distinto: se vuelve a medir en el proximo tic.
-            v.ctrl->put_ZoomFactor(z);
-            int w = (int)(ANCHO_PX * z * dpi), h = (int)(ALTO_PX * z * dpi);
-            SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, w, h, SWP_NOZORDER);
-            return;
-        }
-        double x = j["x"].num(), y = j["y"].num(), w = j["w"].num(), h = j["h"].num();
-        int offx = (int)((Wc - w) / 2), offy = (int)((Hc - h) / 2);
-        int pw = (int)(ANCHO_PX * z * dpi), ph = (int)(ALTO_PX * z * dpi);
-        SetWindowPos(v.hwnd, nullptr, (int)(offx - x), (int)(offy - y), pw, ph, SWP_NOZORDER | SWP_SHOWWINDOW);
-    });
-}
 
 void intentar_llamada_pendiente() {
     if (!g_pendiente.hay || !g_principal.web) return;
@@ -502,8 +417,7 @@ bool iniciar(HWND padre, const std::wstring& carpeta_exe) {
 
 void cerrar() {
     if (!g_activo) return;
-    if (g_ventana) DestroyWindow(g_ventana);
-    g_ventana = nullptr;
+    poner_vista(nullptr, nullptr);
     cerrar_vista(g_llamada);
     cerrar_vista(g_principal);
     g_env.Reset();
@@ -542,8 +456,10 @@ void sondear() {
             ejecutar(g_llamada, JS_EN_LLAMADA, [en_pagina](const std::wstring& r2) {
                 avisar_llamada(resultado_str(r2) == "si" || en_pagina);
             });
+            ejecutar(g_llamada, JS_VIDEO, [](const std::wstring& r2) { g_video_fluye = resultado_str(r2) == "si"; });
         } else {
             avisar_llamada(en_pagina);
+            ejecutar(g_principal, JS_VIDEO, [](const std::wstring& r2) { g_video_fluye = resultado_str(r2) == "si"; });
         }
         intentar_llamada_pendiente();
         if (g_en_llamada && g_quiero_popout && !g_llamada.web && !g_llamada.creando && g_popout_intentos < 6) {
@@ -592,91 +508,31 @@ void silenciar(bool si) {
     });
 }
 
-// La ventana propia de la videollamada: adentro va la vista (reparentada).
-static LRESULT CALLBACK proc_ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
-    switch (msg) {
-        case WM_SIZE:
-            encuadrar();
-            return 0;
-        case WM_TIMER:
-            // El panel se puede mover o cambiar de tamano: se sigue.
-            if (wp == TIMER_ENCUADRE) encuadrar();
-            return 0;
-        case WM_SIZING: {
-            // Se agranda manteniendo la proporcion del area de la llamada.
-            RECT* r = (RECT*)lp;
-            RECT wr, cr;
-            GetWindowRect(h, &wr);
-            GetClientRect(h, &cr);
-            int extra_w = (wr.right - wr.left) - cr.right, extra_h = (wr.bottom - wr.top) - cr.bottom;
-            const double prop = g_prop;
-            int w = (r->right - r->left) - extra_w, hh = (r->bottom - r->top) - extra_h;
-            bool por_alto = wp == WMSZ_TOP || wp == WMSZ_BOTTOM;
-            if (por_alto) w = (int)(hh * prop + 0.5);
-            else hh = (int)(w / prop + 0.5);
-            if (wp == WMSZ_LEFT || wp == WMSZ_TOPLEFT || wp == WMSZ_BOTTOMLEFT) r->left = r->right - (w + extra_w);
-            else r->right = r->left + (w + extra_w);
-            if (wp == WMSZ_TOP || wp == WMSZ_TOPLEFT || wp == WMSZ_TOPRIGHT) r->top = r->bottom - (hh + extra_h);
-            else r->bottom = r->top + (hh + extra_h);
-            return TRUE;
-        }
-        case WM_CLOSE:
-            // Cerrar la ventana corta la llamada.
-            if (g_al_cerrar_ventana) g_al_cerrar_ventana();
-            return 0;
-        case WM_DESTROY:
-            g_ventana = nullptr;
-            return 0;
-    }
-    return DefWindowProcW(h, msg, wp, lp);
-}
-
-void mostrar_llamada(bool si) {
+// La vista de la llamada, como hija de la ventana que la muestra (o escondida).
+void poner_vista(HWND padre, const RECT* r) {
     Vista& v = g_llamada.web ? g_llamada : g_principal;
     if (!v.hwnd) return;
-    if (si) {
-        if (!g_ventana) {
-            static bool registrada = false;
-            if (!registrada) {
-                WNDCLASSW wc{};
-                wc.lpfnWndProc = proc_ventana;
-                wc.hInstance = GetModuleHandleW(nullptr);
-                wc.lpszClassName = L"kciwapp2-llamada";
-                wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-                wc.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1));
-                RegisterClassW(&wc);
-                registrada = true;
-            }
-            // Centrada sobre la principal.
-            RECT rp;
-            GetWindowRect(g_padre, &rp);
-            UINT dpi = GetDpiForWindow(g_padre);
-            int w = MulDiv(900, dpi, 96), h = MulDiv(620, dpi, 96);
-            int x = rp.left + ((rp.right - rp.left) - w) / 2, y = rp.top + ((rp.bottom - rp.top) - h) / 2;
-            g_ventana = CreateWindowExW(0, L"kciwapp2-llamada", L"Video call", WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr, nullptr,
-                                        GetModuleHandleW(nullptr), nullptr);
-            BOOL oscuro = TRUE;
-            DwmSetWindowAttribute(g_ventana, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &oscuro, sizeof oscuro);
-        }
-        if (GetParent(v.hwnd) != g_ventana) SetParent(v.hwnd, g_ventana);
-        // Hasta que se mida el panel, fuera de la vista (fondo negro).
-        SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER | SWP_SHOWWINDOW);
-        ShowWindow(g_ventana, SW_SHOW);
+    if (padre && r) {
+        if (GetParent(v.hwnd) != padre) SetParent(v.hwnd, padre);
+        SetWindowPos(v.hwnd, HWND_TOP, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_SHOWWINDOW);
         v.visible = true;
-        SetTimer(g_ventana, TIMER_ENCUADRE, 400, nullptr);
-        encuadrar();
     } else {
-        if (g_ventana) KillTimer(g_ventana, TIMER_ENCUADRE);
-        if (GetParent(v.hwnd) != g_padre) SetParent(v.hwnd, g_padre);
-        if (v.ctrl) v.ctrl->put_ZoomFactor(1.0);
-        SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER);
-        v.visible = false;
-        if (g_ventana) DestroyWindow(g_ventana);
-        g_ventana = nullptr;
+        for (Vista* x : {&g_llamada, &g_principal}) {
+            if (!x->hwnd) continue;
+            if (GetParent(x->hwnd) != g_padre) SetParent(x->hwnd, g_padre);
+            SetWindowPos(x->hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER);
+            x->visible = false;
+        }
+    }
+    if (v.ctrl) {
+        RECT c;
+        GetClientRect(v.hwnd, &c);
+        v.ctrl->put_Bounds(c);
     }
 }
 
-void al_cerrar_ventana(std::function<void()> f) { g_al_cerrar_ventana = std::move(f); }
+bool video_fluye() { return g_en_llamada && g_video_fluye; }
+double proporcion_video() { return g_prop; }
 
 void volcar_dom() {
     const wchar_t* js =

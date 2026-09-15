@@ -36,14 +36,17 @@ void colgar();
 void silenciar(bool si);
 bool en_llamada();
 bool silenciado();
-// Mostrar (video) u ocultar la llamada. Se muestra en una ventana propia,
-// aparte de la principal, con solo el panel de la llamada.
-void mostrar_llamada(bool si);
+// Pone la vista de la llamada (la ventanita de WhatsApp Web, o la principal
+// si no hay) como hija de `padre` en el rectangulo `r` (pixeles fisicos), o la
+// devuelve escondida a la ventana principal si padre es nulo.
+void poner_vista(HWND padre, const RECT* r);
+// Si esta llegando video del otro lado (recien ahi vale la pena mostrar la web).
+bool video_fluye();
+// Proporcion ancho/alto que pidio la ventanita de WhatsApp Web (para el resize).
+double proporcion_video();
 
 // Avisos hacia la app (en el hilo de la UI).
 void al_cambiar_llamada(std::function<void(bool en_llamada)> f);
-// La ventana de la llamada se cerro con la X: hay que cortar.
-void al_cerrar_ventana(std::function<void()> f);
 
 // Debug: vuelca los aria-label / data-icon que hay en las dos paginas al log.
 void volcar_dom();

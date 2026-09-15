@@ -15,6 +15,7 @@
 #include "red.h"
 #include "tema.h"
 #include "toast.h"
+#include "ventana_llamada.h"
 #include "webwa.h"
 
 namespace {
@@ -315,7 +316,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     webwa::al_cambiar_llamada([](bool en) {
         if (g_app) g_app->llamada_cambio(en);
     });
-    webwa::al_cerrar_ventana([]() {
+    vllamada::al_colgar([]() {
         if (g_app) g_app->colgar_llamada();
     });
     SetTimer(h, 8, 1000, nullptr);

@@ -297,6 +297,7 @@ struct App {
     std::map<std::string, std::pair<std::string, bool>> llamadas_entrantes;  // id -> (chat, video)
     bool llamadas_disponibles() const;
     void iniciar_llamada(bool video);
+    void abrir_ventana_llamada();
     void atender_llamada(const std::string& chat, bool video);
     void llamada_cambio(bool en_curso);
     void terminar_llamada_ui();
