@@ -1,6 +1,9 @@
 #include "webwa.h"
 
 #include <dwmapi.h>
+
+#include <algorithm>
+#include <cmath>
 #include <wrl.h>
 
 #include "WebView2.h"
@@ -37,7 +40,6 @@ bool g_activo = false, g_logueado = false, g_cargando = true, g_en_llamada = fal
 std::string g_qr;
 std::function<void(bool)> g_al_cambiar;
 std::function<void()> g_al_cerrar_ventana;
-HWND g_ventana = nullptr;  // la ventana propia de la videollamada
 bool g_sondeando = false;
 
 // Llamada pedida y todavia no concretada: se intenta apretar el boton en
@@ -291,36 +293,55 @@ const wchar_t* JS_ESTADO =
 const wchar_t* JS_EN_LLAMADA =
     L"(function(){return !!document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[aria-label=\"Hang up\"],[data-icon=\"call-end\"]')?'si':'no'})()";
 
-// Deja a la vista solo el panel de la llamada: desde el boton de cortar
-// sube hasta el contenedor que tiene el video, esconde los hermanos de cada
-// nivel hasta el body, y lo estira a toda la pagina. Idempotente; con
-// `deshacer` restaura lo que escondio.
-const wchar_t* JS_AISLAR =
-    L"(function(des){var W=window;"
-    L"if(des){if(W.__kciOcultos){W.__kciOcultos.forEach(function(e){e.style.visibility=e.__kciVis||''});}"
-    L"if(W.__kciCont){W.__kciCont.style.cssText=W.__kciCont.__kciCss||'';}"
-    L"W.__kciOcultos=null;W.__kciCont=null;return 'restaurado'}"
-    L"var b=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
-    L"if(!b)return 'sin boton';"
-    L"var c=null,n=b.parentElement;"
+// Donde esta el panel flotante de la llamada dentro de la pagina (en
+// pixeles fisicos del WebView2 y en CSS px). Vacio si no hay llamada.
+const wchar_t* JS_RECT_PANEL =
+    L"(function(){var b=document.querySelector('[aria-label=\"End call\"],[data-icon=\"end-call\"],[data-icon=\"call-end\"],[aria-label=\"Hang up\"]');"
+    L"if(!b)return '';var c=null,n=b.parentElement;"
     L"while(n&&n!==document.body){var cs=getComputedStyle(n),r=n.getBoundingClientRect();"
     L"if((cs.position==='fixed'||cs.position==='absolute')&&r.width>=200&&r.height>=150&&r.width<innerWidth*0.95){c=n;break}n=n.parentElement;}"
-    L"if(!c){c=b;for(var i=0;i<4&&c.parentElement&&c.parentElement!==document.body;i++)c=c.parentElement;}"
-    L"if(W.__kciCont===c)return 'ya';"
-    L"if(W.__kciCont){W.__kciOcultos.forEach(function(e){e.style.visibility=e.__kciVis||''});W.__kciCont.style.cssText=W.__kciCont.__kciCss||'';}"
-    L"var oc=[];var n=c;while(n&&n!==document.body){var p=n.parentElement;if(!p)break;"
-    L"Array.prototype.forEach.call(p.children,function(h){if(h!==n&&h.tagName!=='SCRIPT'&&h.tagName!=='STYLE'){h.__kciVis=h.style.visibility;h.style.visibility='hidden';oc.push(h)}});n=p;}"
-    L"c.__kciCss=c.style.cssText;"
-    L"c.style.cssText+=';position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;"
-    L"max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;transform:none!important;margin:0!important;border-radius:0!important;z-index:2147483647!important;visibility:visible!important;';"
-    L"W.__kciOcultos=oc;W.__kciCont=c;return 'aislado '+oc.length})";
+    L"if(!c)return '';var r=c.getBoundingClientRect(),d=window.devicePixelRatio;"
+    L"return JSON.stringify({x:r.left*d,y:r.top*d,w:r.width*d,h:r.height*d,cw:r.width,ch:r.height})})()";
 
-void aislar_llamada(bool deshacer) {
+HWND g_ventana = nullptr;  // la ventana propia de la videollamada
+constexpr UINT_PTR TIMER_ENCUADRE = 1;
+bool g_encuadrando = false;
+
+// Acomoda el WebView2 adentro de la ventana de video para que se vea solo el
+// panel de la llamada: zoom para que el panel llene la ventana (manteniendo
+// la proporcion) y desplazamiento para que caiga en (0,0). La pagina no se
+// toca: sigue viendo un viewport de ANCHO_PX x ALTO_PX CSS px.
+void encuadrar() {
     Vista& v = g_llamada.web ? g_llamada : g_principal;
-    if (!v.web) return;
-    ejecutar(v, std::wstring(JS_AISLAR) + (deshacer ? L"(true)" : L"(false)"), [deshacer](const std::wstring& r) {
-        std::string s = resultado_str(r);
-        if (s != "ya" && s != "sin boton") registrar(std::string(deshacer ? "deshacer aislar: " : "aislar: ") + s);
+    if (!g_ventana || !v.web || !v.ctrl || !v.visible || g_encuadrando) return;
+    g_encuadrando = true;
+    ejecutar(v, JS_RECT_PANEL, [&v](const std::wstring& res) {
+        g_encuadrando = false;
+        if (!g_ventana || !v.ctrl) return;
+        std::string s = resultado_str(res);
+        if (s.empty()) return;
+        Json j = Json::parsear(s);
+        double cw = j["cw"].num(), ch = j["ch"].num();
+        if (cw < 10 || ch < 10) return;
+        RECT c;
+        GetClientRect(g_ventana, &c);
+        double Wc = c.right, Hc = c.bottom;
+        double dpi = GetDpiForWindow(g_ventana) / 96.0;
+        double z = std::min(Wc / (cw * dpi), Hc / (ch * dpi));
+        z = std::clamp(z, 0.25, 5.0);
+        double z0 = 1;
+        v.ctrl->get_ZoomFactor(&z0);
+        if (std::abs(z - z0) > 0.02) {
+            // Con el zoom nuevo el panel se mide distinto: se vuelve a medir en el proximo tic.
+            v.ctrl->put_ZoomFactor(z);
+            int w = (int)(ANCHO_PX * z * dpi), h = (int)(ALTO_PX * z * dpi);
+            SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, w, h, SWP_NOZORDER);
+            return;
+        }
+        double x = j["x"].num(), y = j["y"].num(), w = j["w"].num(), h = j["h"].num();
+        int offx = (int)((Wc - w) / 2), offy = (int)((Hc - h) / 2);
+        int pw = (int)(ANCHO_PX * z * dpi), ph = (int)(ALTO_PX * z * dpi);
+        SetWindowPos(v.hwnd, nullptr, (int)(offx - x), (int)(offy - y), pw, ph, SWP_NOZORDER | SWP_SHOWWINDOW);
     });
 }
 
@@ -443,8 +464,6 @@ void sondear() {
             avisar_llamada(en_pagina);
         }
         intentar_llamada_pendiente();
-        Vista& v = g_llamada.web ? g_llamada : g_principal;
-        if (v.visible && g_en_llamada) aislar_llamada(false);
     });
 }
 
@@ -483,15 +502,13 @@ void silenciar(bool si) {
 // La ventana propia de la videollamada: adentro va la vista (reparentada).
 static LRESULT CALLBACK proc_ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-        case WM_SIZE: {
-            Vista& v = g_llamada.web ? g_llamada : g_principal;
-            if (v.hwnd && GetParent(v.hwnd) == h) {
-                RECT c;
-                GetClientRect(h, &c);
-                SetWindowPos(v.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER);
-            }
+        case WM_SIZE:
+            encuadrar();
             return 0;
-        }
+        case WM_TIMER:
+            // El panel se puede mover o cambiar de tamano: se sigue.
+            if (wp == TIMER_ENCUADRE) encuadrar();
+            return 0;
         case WM_SIZING: {
             // Se agranda manteniendo la proporcion del area de la llamada.
             RECT* r = (RECT*)lp;
@@ -549,24 +566,20 @@ void mostrar_llamada(bool si) {
             DwmSetWindowAttribute(g_ventana, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &oscuro, sizeof oscuro);
         }
         if (GetParent(v.hwnd) != g_ventana) SetParent(v.hwnd, g_ventana);
-        RECT c;
-        GetClientRect(g_ventana, &c);
-        SetWindowPos(v.hwnd, nullptr, 0, 0, c.right, c.bottom, SWP_NOZORDER | SWP_SHOWWINDOW);
+        // Hasta que se mida el panel, fuera de la vista (fondo negro).
+        SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER | SWP_SHOWWINDOW);
         ShowWindow(g_ventana, SW_SHOW);
         v.visible = true;
-        aislar_llamada(false);
+        SetTimer(g_ventana, TIMER_ENCUADRE, 400, nullptr);
+        encuadrar();
     } else {
-        if (v.visible) aislar_llamada(true);
+        if (g_ventana) KillTimer(g_ventana, TIMER_ENCUADRE);
         if (GetParent(v.hwnd) != g_padre) SetParent(v.hwnd, g_padre);
+        if (v.ctrl) v.ctrl->put_ZoomFactor(1.0);
         SetWindowPos(v.hwnd, nullptr, ESCONDIDO, ESCONDIDO, ANCHO_PX, ALTO_PX, SWP_NOZORDER);
         v.visible = false;
         if (g_ventana) DestroyWindow(g_ventana);
         g_ventana = nullptr;
-    }
-    if (v.ctrl) {
-        RECT c;
-        GetClientRect(v.hwnd, &c);
-        v.ctrl->put_Bounds(c);
     }
 }
 
