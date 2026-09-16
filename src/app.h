@@ -129,6 +129,12 @@ struct VistaMensaje {
     // las medidas quedan, y se rearman al volver a verse.
     bool liviana = false;
     int album_cols = 0;     // columnas de la grilla (cabeza de album)
+    // Contacto compartido (vCard): nombre, telefono y jid de WhatsApp si lo trae.
+    struct TarjetaContacto {
+        std::wstring nombre, telefono;
+        std::string jid;
+    };
+    std::vector<TarjetaContacto> contactos;
     // Links dentro del texto: rango en el layout y la URL.
     struct Enlace {
         size_t inicio, largo;
@@ -303,6 +309,8 @@ struct App {
     static constexpr float ESCRIBIENDO_H = 46.0f;  // la burbuja de "..." al final del chat
     void dibujar_burbuja_escribiendo(float y);
     void dibujar_pantalla_vacia();
+    void dibujar_tarjeta_contacto(const VistaMensaje& v, float cx, float cy);
+    void abrir_contacto(int i);  // "Message" de la tarjeta
     // Lo nuestro: que estado mandamos por ultima vez y cuando.
     std::string presencia_mandada;
     unsigned long long presencia_ts = 0;

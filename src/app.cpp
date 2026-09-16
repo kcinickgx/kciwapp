@@ -1262,6 +1262,49 @@ void App::armar_vista(size_t i) {
                      [this](const std::string& j) { return nombre_de(j); }, w_conv(), vistas[i]);
 }
 
+// Saca nombre, telefono y jid de cada vCard del texto de un mensaje de
+// contacto ("Nombre\nBEGIN:VCARD...END:VCARD", varios separados por linea vacia).
+static std::vector<VistaMensaje::TarjetaContacto> contactos_de_vcard(const std::wstring& texto) {
+    std::vector<VistaMensaje::TarjetaContacto> r;
+    size_t pos = 0;
+    while ((pos = texto.find(L"BEGIN:VCARD", pos)) != std::wstring::npos) {
+        size_t fin = texto.find(L"END:VCARD", pos);
+        if (fin == std::wstring::npos) fin = texto.size();
+        VistaMensaje::TarjetaContacto t;
+        // El nombre para mostrar es la linea anterior al BEGIN (si hay).
+        if (pos > 0) {
+            size_t a = texto.rfind(L'\n', pos - 2);
+            std::wstring linea = texto.substr(a == std::wstring::npos ? 0 : a + 1, pos - 1 - (a == std::wstring::npos ? 0 : a + 1));
+            while (!linea.empty() && (linea.back() == L'\r' || linea.back() == L' ')) linea.pop_back();
+            if (!linea.empty() && linea.find(L':') == std::wstring::npos) t.nombre = linea;
+        }
+        std::wstring bloque = texto.substr(pos, fin - pos);
+        size_t i = 0;
+        while (i < bloque.size()) {
+            size_t j = bloque.find(L'\n', i);
+            if (j == std::wstring::npos) j = bloque.size();
+            std::wstring l = bloque.substr(i, j - i);
+            while (!l.empty() && l.back() == L'\r') l.pop_back();
+            i = j + 1;
+            if (l.rfind(L"FN:", 0) == 0 && t.nombre.empty()) t.nombre = l.substr(3);
+            else if (l.rfind(L"TEL", 0) == 0 && t.telefono.empty()) {
+                size_t dp = l.rfind(L':');
+                if (dp != std::wstring::npos) t.telefono = l.substr(dp + 1);
+                size_t w = l.find(L"waid=");
+                if (w != std::wstring::npos) {
+                    size_t e = w + 5;
+                    while (e < l.size() && iswdigit(l[e])) e++;
+                    t.jid = angosto(l.substr(w + 5, e - w - 5)) + "@s.whatsapp.net";
+                }
+            }
+        }
+        if (t.nombre.empty()) t.nombre = t.telefono.empty() ? L"Contact" : t.telefono;
+        r.push_back(t);
+        pos = fin;
+    }
+    return r;
+}
+
 void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_grupo,
                            const std::function<std::wstring(const std::string&)>& nombre_de, float W, VistaMensaje& v) {
     v = VistaMensaje();
@@ -1315,8 +1358,21 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
         ancho_contenido = std::max(ancho_contenido, std::min(tm.widthIncludingTrailingWhitespace + 22, interior));
         y += v.ch + 6;
     }
+    // Contacto compartido: tarjeta con avatar, nombre y telefono, y "Message".
+    bool tarjeta = m.tipo == "contacto" && !m.borrado && !m.media;
+    if (tarjeta) {
+        v.contactos = contactos_de_vcard(m.texto);
+        tarjeta = !v.contactos.empty();
+    }
     bool media_visual = m.media && con_imagen(m.tipo) && !m.borrado;
-    if (media_visual) {
+    if (tarjeta) {
+        v.mw = std::min(interior, 280.0f);
+        v.mh = 10 + 50.0f * v.contactos.size() + 36;
+        v.mx = PAD_X;
+        v.my = y;
+        ancho_contenido = std::max(ancho_contenido, v.mw);
+        y += v.mh + 16;
+    } else if (media_visual) {
         if (m.album > 0) {
             // Grilla: 2 columnas con 3 o 4 fotos, 4 de ahi en mas; casilleros cuadrados.
             int cols = m.album <= 4 ? 2 : 4, filas = (m.album + cols - 1) / cols;
@@ -1345,9 +1401,9 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
         y += v.mh + (m.texto.empty() ? 16 : 6);
     }
 
-    std::wstring t = m.texto;
+    std::wstring t = tarjeta ? L"" : m.texto;
     if (m.borrado) t = L"\U0001F6AB This message was deleted";
-    else if (t.empty() && !m.media) t = nombre_tipo(m.tipo);
+    else if (t.empty() && !m.media && !tarjeta) t = nombre_tipo(m.tipo);
     if (!t.empty()) {
         // Solo emojis: grandes (1 = 3x, 2 o 3 = 2x), como WhatsApp.
         float tam = letra_chat;
@@ -1678,6 +1734,8 @@ void App::dibujar_lista() {
             const Mensaje& u = *c.ultimo;
             if (u.borrado) prev = L"\U0001F6AB This message was deleted";
             else if (u.texto.empty()) prev = nombre_tipo(u.tipo);
+            else if (u.tipo == "contacto") prev = nombre_tipo(u.tipo) + L": " + u.texto.substr(0, u.texto.find(L'
+'));
             else if (con_imagen(u.tipo) || u.media) prev = nombre_tipo(u.tipo) + L" " + u.texto;
             else prev = u.texto;
             prev = una_linea(prev);
@@ -1992,6 +2050,45 @@ void App::dibujar_progreso_carga() {
     g.renglon(t, x + 20, y + 11, 14, Color(TXT()));
 }
 
+// La tarjeta de un contacto compartido: por cada uno avatar con inicial,
+// nombre y telefono; abajo el boton "Message".
+void App::dibujar_tarjeta_contacto(const VistaMensaje& v, float cx, float cy) {
+    g.rect_redondo(cx, cy, v.mw, v.mh, 6, Color(0x000000, 0.18f));
+    float y = cy + 10;
+    for (auto& c : v.contactos) {
+        float r = 18, ax = cx + 12 + r, ay = y + 25;
+        g.circulo(ax, ay, r, Color(0x6b7c85));
+        std::wstring inicial = c.nombre.substr(0, 1);
+        float iw = g.medir(inicial, 16);
+        g.renglon(inicial, ax - iw / 2, ay - 10, 16, Color(0xdfe5e7));
+        g.renglon(c.nombre, cx + 12 + 2 * r + 12, y + 6, 14, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD, v.mw - 2 * r - 36);
+        g.renglon(c.telefono, cx + 12 + 2 * r + 12, y + 27, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, v.mw - 2 * r - 36);
+        y += 50;
+    }
+    g.linea(cx, y, cx + v.mw, y, Color(BORDE()));
+    std::wstring b = v.contactos.size() > 1 ? L"Message " + v.contactos.front().nombre : L"Message";
+    float bw = g.medir(b, 13.5f);
+    g.renglon(b, cx + (v.mw - bw) / 2, y + 9, 13.5f, Color(ACCENT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+}
+
+// Abre el chat del contacto compartido (lo crea en la lista si no estaba).
+void App::abrir_contacto(int i) {
+    if (i < 0 || i >= (int)vistas.size() || vistas[i].contactos.empty()) return;
+    const auto& c = vistas[i].contactos.front();
+    if (c.jid.empty()) {
+        aviso_estado = L"This contact is not on WhatsApp";
+        pedir_dibujo();
+        return;
+    }
+    if (!chat_de(c.jid)) {
+        Chat nuevo;
+        nuevo.jid = c.jid;
+        nuevo.nombre = c.nombre;
+        chats.insert(chats.begin(), nuevo);
+    }
+    abrir_chat(c.jid);
+}
+
 void App::dibujar_pantalla_vacia() {
     float x = x_conv(), W = w_conv(), H = g.alto;
     g.rect(x, 0, W, H, Color(BG_SEL()));
@@ -2208,7 +2305,9 @@ void App::dibujar_mensaje(size_t i, float y) {
     if (v.mw > 0) {
         cx = bx + v.mx;
         cy = by + v.my;
-        if (m.album > 0 && v.album_cols > 0) {
+        if (!v.contactos.empty()) {
+            dibujar_tarjeta_contacto(v, cx, cy);
+        } else if (m.album > 0 && v.album_cols > 0) {
             int cols = v.album_cols;
             float gap = 3, lado = (v.mw - gap * (cols - 1)) / cols;
             for (int k = 0; k < m.album && i + k < mensajes.size(); k++) {
@@ -2612,7 +2711,9 @@ void App::raton_abajo(float x, float y, bool shift) {
             const VistaMensaje& v = vistas[i];
             float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
             if (v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh) {
-                if ((mensajes[i].tipo == "audio" || mensajes[i].tipo == "nota") && reproductor_ok)
+                if (!v.contactos.empty())
+                    abrir_contacto(i);
+                else if ((mensajes[i].tipo == "audio" || mensajes[i].tipo == "nota") && reproductor_ok)
                     click_audio(i, x - mx, y - my, v.mw, v.mh);
                 else if (mensajes[i].album > 0 && v.album_cols > 0) {
                     int cols = v.album_cols;
