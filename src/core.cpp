@@ -57,6 +57,10 @@ std::string token_nuevo() {
     return t;
 }
 
+bool disponible(const std::wstring& carpeta_exe) {
+    return GetFileAttributesW((carpeta_exe + L"\\core\\kciwapp-core.exe").c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
 bool iniciar(const std::wstring& carpeta_exe, int puerto, const std::string& token) {
     std::wstring exe = carpeta_exe + L"\\core\\kciwapp-core.exe";
     if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) return false;

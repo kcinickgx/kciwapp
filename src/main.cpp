@@ -207,7 +207,7 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             }
             break;
         case WM_TIMER:
-            if (wp == TIMER_CURSOR && app && (app->campo.foco || app->buscador_chat.foco)) app->pedir_dibujo();
+            if (wp == TIMER_CURSOR && app && (app->campo.foco || app->buscador_chat.foco || app->config_pendiente)) app->pedir_dibujo();
             if (wp == 2 && app) {
                 KillTimer(h, 2);
                 app->cargar_chats();
@@ -324,7 +324,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         return 0;
     }
 
-    if (!configurar_conexion()) return 1;
+    bool hay_config = GetFileAttributesW(ruta_config().c_str()) != INVALID_FILE_ATTRIBUTES;
+    if (hay_config && !configurar_conexion()) return 1;
 
     // Menus contextuales oscuros: SetPreferredAppMode(ForceDark) de uxtheme
     // (ordinal 135, sin documentar pero estable desde 1809).
@@ -358,6 +359,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     cache::abrir(carpeta_datos() + L"\\cache.sqlite3");
     emoji::cargar(carpeta_exe());
     app.iniciar(h);
+    if (!hay_config) app.empezar_configuracion();
     g_app = &app;
     // Bandeja y globos de notificacion; el click en un globo abre ese mensaje.
     toast::al_atender([](const std::string& id) {

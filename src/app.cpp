@@ -334,6 +334,7 @@ bool App::animando() {
 // ---- datos ----------------------------------------------------------------
 
 void App::cargar_chats() {
+    if (!red::configurado()) return;
     // Una recarga en vuelo a lo sumo; si piden otra mientras tanto, queda
     // una sola pendiente para despues.
     if (cargando_chats) {
@@ -1477,6 +1478,11 @@ void App::dibujar() {
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
     aplicar_ajustes();
+    if (config_pendiente) {
+        dibujar_configuracion();
+        g.terminar_frame();
+        return;
+    }
     alto_pie = campo.alto(g) + 16;
     if (respondiendo || editando) alto_pie += BARRA_H;
     if (adjunto) alto_pie += ADJUNTO_H;
@@ -2374,6 +2380,7 @@ void App::raton_mueve(float x, float y) {
 
 void App::raton_abajo(float x, float y, bool shift) {
     SetCapture(hwnd);
+    if (click_configuracion(x, y, shift)) return;
     if (click_menu(x, y)) return;
     if (visor) {
         click_visor(x, y);
@@ -2578,6 +2585,7 @@ void App::rueda(float x, float y, float delta) {
 }
 
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
+    if (tecla_configuracion(vk, shift, ctrl)) return;
     if (vk == VK_F9) {
         // Prueba de notificacion.
         toast::mostrar(L"kciwapp test", L"If you see this, notifications work", chat_actual, "", L"");
@@ -2689,6 +2697,7 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
 }
 
 void App::caracter(wchar_t c) {
+    if (caracter_configuracion(c)) return;
     if (buscador_chat.foco) {
         if (buscador_chat.caracter(c)) pedir_dibujo();
         return;
@@ -2794,7 +2803,7 @@ void App::dibujar_fondo_chat(float x, float y, float w, float h) {
 // tapado por el visor o el menu).
 bool App::sobre_campo(float x, float y) const {
     if (visor || menu_abierto) return false;
-    const Campo* campos[] = {&campo, &buscador, &buscador_chat, &buscador_reenvio, &emoji_buscador};
+    const Campo* campos[] = {&campo, &buscador, &buscador_chat, &buscador_reenvio, &emoji_buscador, &cfg_host, &cfg_puerto, &cfg_token};
     for (const Campo* c : campos) {
         if (c->dibujado_en != ultimo_frame || !c->tiene(x, y)) continue;
         // Con el modal de reenvio abierto solo cuenta su buscador.
@@ -2805,6 +2814,7 @@ bool App::sobre_campo(float x, float y) const {
 }
 
 bool App::sobre_clickeable(float x, float y) {
+    if (config_pendiente) return clickeable_configuracion(x, y);
     if (visor) {
         if (visor_video) return true;
         float ix, iy, iw, ih;

@@ -1,15 +1,18 @@
 # kciwapp — instalar en otra máquina
 
-Un solo cliente (Windows, portable) que se conecta a un server. Hay dos
-maneras, y la decide `portable\servidor.json`:
+Un solo cliente (Windows, portable). La primera vez que se abre (sin
+`servidor.json`) pregunta dónde corre WhatsApp:
 
-- **Local, sin server**: `{"host": "127.0.0.1", "puerto": 8477, "token": ""}`.
-  El cliente lanza `core\kciwapp-core.exe` (el server en Go con SQLite) al
-  lado suyo, inventa el token la primera vez y muestra el QR. Todo queda en
-  `portable\datos\`. WhatsApp está online solo mientras el cliente corre
+- **This computer**: el cliente lanza `core\kciwapp-core.exe` (el server en
+  Go con SQLite) al lado suyo, genera un token y muestra el QR. Todo queda
+  en `portable\datos\`. WhatsApp está online solo mientras el cliente corre
   (si pasa 14 días cerrado, el teléfono desvincula el dispositivo).
-- **Server aparte** (Linux, 24/7, varias cuentas): `{"host": "192.168.1.10",
-  "puerto": 8080, "token": "un-token-largo"}` y el server de abajo.
+- **A kciwapp server**: host, puerto y token (el botón Generate inventa uno;
+  un token nuevo crea una cuenta nueva en el server, el mismo token en otra
+  PC comparte la cuenta).
+
+Lo elegido queda en `portable\servidor.json`; para volver a preguntar,
+borrar ese archivo.
 
 ## 0. Cliente local (lo más simple)
 

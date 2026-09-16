@@ -29,6 +29,7 @@ add_executable(kciwapp2 WIN32
     src/llamadas_ui.cpp
     src/ventana_llamada.cpp
     src/core.cpp
+    src/config_ui.cpp
     src/toast.cpp
     src/app.rc
 )

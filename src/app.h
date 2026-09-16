@@ -339,6 +339,18 @@ struct App {
     std::set<std::string> transcribiendo;  // ids en curso
     bool whisper_disponible() const;
     void transcribir(int i);
+    // Primera vez sin servidor.json: pantalla de configuracion (config_ui.cpp).
+    bool config_pendiente = false;
+    int cfg_modo = 0;  // 0 = esta PC (core local), 1 = server remoto
+    Campo cfg_host, cfg_puerto, cfg_token;
+    std::wstring cfg_error;
+    void empezar_configuracion();
+    void dibujar_configuracion();
+    bool click_configuracion(float x, float y, bool shift);
+    bool clickeable_configuracion(float x, float y) const;
+    bool tecla_configuracion(WPARAM vk, bool shift, bool ctrl);
+    bool caracter_configuracion(wchar_t c);
+    void config_conectar();
     void alternar_transcripcion(int i);
     void dibujar_vinculacion();
     void terminar_llamada_ui();
