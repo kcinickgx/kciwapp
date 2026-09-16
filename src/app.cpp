@@ -1734,8 +1734,7 @@ void App::dibujar_lista() {
             const Mensaje& u = *c.ultimo;
             if (u.borrado) prev = L"\U0001F6AB This message was deleted";
             else if (u.texto.empty()) prev = nombre_tipo(u.tipo);
-            else if (u.tipo == "contacto") prev = nombre_tipo(u.tipo) + L": " + u.texto.substr(0, u.texto.find(L'
-'));
+            else if (u.tipo == "contacto") prev = nombre_tipo(u.tipo) + L": " + u.texto.substr(0, u.texto.find(L'\n'));
             else if (con_imagen(u.tipo) || u.media) prev = nombre_tipo(u.tipo) + L" " + u.texto;
             else prev = u.texto;
             prev = una_linea(prev);
