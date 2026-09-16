@@ -15,6 +15,8 @@
 #include "red.h"
 #include "tema.h"
 #include "ventana_ajustes.h"
+#include "core.h"
+#include "cuentas.h"
 
 namespace {
 
@@ -305,16 +307,41 @@ void App::iniciar(HWND h) {
     buscador.al_escapar = [this] { escapar(); };
     reproductor_ok = reproductor.iniciar(carpeta_exe());
     reproductor.al_cambiar = [this] { red::en_ui([this] { pedir_dibujo(); }); };
-    aviso_estado = L"Connecting...";
+    letra_chat = ajustes::actual().letra_chat;
+    letra_lista = ajustes::actual().letra_lista;
+    campo.tamano = letra_chat + 0.5f;
+}
+
+bool App::conectar_cuenta() {
+    const Cuenta* c = cuentas::actual();
+    if (!c) return false;
+    std::wstring carpeta = cuentas::carpeta_activa();
+    if (c->local() && !core::iniciar(carpeta_exe(), carpeta, c->puerto, c->token)) {
+        aviso_estado = L"core\\kciwapp-core.exe is missing";
+        pedir_dibujo();
+        return false;
+    }
+    red::configurar(ancho(c->host), c->puerto, c->token);
+    cache::abrir(carpeta + L"\\cache.sqlite3");
     // Lo que quedo en la cache se muestra al instante; el server corrige.
     chats = cache::leer_chats();
     contactos = cache::leer_contactos();
     ordenar_chats();
     mi_jid = cache::valor("mi_jid");
-    letra_chat = ajustes::actual().letra_chat;
-    letra_lista = ajustes::actual().letra_lista;
-    campo.tamano = letra_chat + 0.5f;
+    config_pendiente = selector_pendiente = false;
+    campo.foco = true;
+    aviso_estado = L"Connecting...";
     cargar_chats();
+    pedir_dibujo();
+    return true;
+}
+
+void App::cambiar_cuenta(int i) {
+    wchar_t exe[MAX_PATH];
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring args = L"--cuenta " + std::to_wstring(i) + L" --esperar " + std::to_wstring(GetCurrentProcessId());
+    ShellExecuteW(nullptr, L"open", exe, args.c_str(), carpeta_exe().c_str(), SW_SHOWNORMAL);
+    DestroyWindow(hwnd);
 }
 
 void App::redimensionado() {
@@ -381,6 +408,8 @@ void App::cargar_chats() {
             cargando_chats = false;
             mi_jid = je["jid"].str();
             conectado = je["conectado"].bul();
+            // El nombre de la cuenta en cuentas.json: el telefono.
+            if (!mi_jid.empty()) cuentas::poner_nombre(cuentas::activa(), formatear_telefono(mi_jid));
             if (!escuchando) {
                 // El cursor guardado: lo que paso con la app cerrada se aplica
                 // a la cache al arrancar. Sin cursor (primera vez), desde ahora.
@@ -1398,7 +1427,7 @@ static std::wstring ruta_local_de(const std::string& clave) {
     std::string n = clave;
     for (auto& c : n)
         if (c == ':' || c == '@' || c == '/' || c == '?' || c == '=') c = '_';
-    return carpeta_exe() + L"\\datos\\media\\" + ancho(n) + L".bin";
+    return cuentas::carpeta_activa() + L"\\media\\" + ancho(n) + L".bin";
 }
 
 static std::string leer_bytes(const std::wstring& ruta) {
@@ -1418,8 +1447,7 @@ static std::string leer_bytes(const std::wstring& ruta) {
 }
 
 static void escribir_bytes(const std::wstring& ruta, const std::string& datos) {
-    CreateDirectoryW((carpeta_exe() + L"\\datos").c_str(), nullptr);
-    CreateDirectoryW((carpeta_exe() + L"\\datos\\media").c_str(), nullptr);
+    CreateDirectoryW((cuentas::carpeta_activa() + L"\\media").c_str(), nullptr);
     HANDLE h = CreateFileW(ruta.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return;
     DWORD escrito = 0;
@@ -1478,8 +1506,9 @@ void App::dibujar() {
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
     aplicar_ajustes();
-    if (config_pendiente) {
-        dibujar_configuracion();
+    if (config_pendiente || selector_pendiente) {
+        if (config_pendiente) dibujar_configuracion();
+        else dibujar_selector();
         g.terminar_frame();
         return;
     }
@@ -1536,7 +1565,8 @@ void App::dibujar_lista() {
     g.renglon(reenviando ? L"Forward to..." : L"Chats", 16, 17, 20, Color(reenviando ? ACCENT() : TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
     // El engranaje de settings, arriba a la derecha de la lista.
     g.renglon(L"⚙", W - 42, 16, 22, Color(TXT_DIM()));
-    if (!aviso_estado.empty()) g.renglon(aviso_estado, 90, 22, 12, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, W - 100);
+    g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE712", W - 74, 21, 16, Color(TXT_DIM()));
+    if (!aviso_estado.empty()) g.renglon(aviso_estado, 90, 22, 12, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, W - 170);
     g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO()));
     g.lupa(29, 76, 6, Color(TXT_DIM()));
     buscador.dibujar(g, 40, 61, W - 54, 32, ahora);
@@ -2381,6 +2411,7 @@ void App::raton_mueve(float x, float y) {
 void App::raton_abajo(float x, float y, bool shift) {
     SetCapture(hwnd);
     if (click_configuracion(x, y, shift)) return;
+    if (click_selector(x, y)) return;
     if (click_menu(x, y)) return;
     if (visor) {
         click_visor(x, y);
@@ -2414,6 +2445,10 @@ void App::raton_abajo(float x, float y, bool shift) {
     if (x < ancho_lista) {
         if (y < 60 && x > ancho_lista - 56) {
             ventana_ajustes::abrir(hwnd);
+            return;
+        }
+        if (y < 60 && x > ancho_lista - 86) {
+            menu_cuentas(ancho_lista - 86, 52);
             return;
         }
         if (y > top_lista() && lista.max > 0 && x > ancho_lista - 24) {
@@ -2586,6 +2621,7 @@ void App::rueda(float x, float y, float delta) {
 
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
     if (tecla_configuracion(vk, shift, ctrl)) return;
+    if (selector_pendiente) return;
     if (vk == VK_F9) {
         // Prueba de notificacion.
         toast::mostrar(L"kciwapp test", L"If you see this, notifications work", chat_actual, "", L"");
@@ -2698,6 +2734,7 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
 
 void App::caracter(wchar_t c) {
     if (caracter_configuracion(c)) return;
+    if (selector_pendiente) return;
     if (buscador_chat.foco) {
         if (buscador_chat.caracter(c)) pedir_dibujo();
         return;
@@ -2740,7 +2777,7 @@ void App::aplicar_ajustes() {
         if (abajo) bajar_al_final(true);
     }
     if (reproductor_ok) reproductor.salida(a.salida);
-    if (a.llamadas_web && !webwa::activo()) webwa::iniciar(hwnd, carpeta_exe());
+    if (a.llamadas_web && !webwa::activo() && red::configurado()) webwa::iniciar(hwnd, carpeta_exe(), cuentas::carpeta_activa());
     else if (!a.llamadas_web && webwa::activo()) {
         webwa::cerrar();
         terminar_llamada_ui();
@@ -2815,6 +2852,7 @@ bool App::sobre_campo(float x, float y) const {
 
 bool App::sobre_clickeable(float x, float y) {
     if (config_pendiente) return clickeable_configuracion(x, y);
+    if (selector_pendiente) return clickeable_selector(x, y);
     if (visor) {
         if (visor_video) return true;
         float ix, iy, iw, ih;
@@ -2822,7 +2860,7 @@ bool App::sobre_clickeable(float x, float y) {
                (x > g.ancho - 50 && y < 50);
     }
     if (x < ancho_lista) {
-        if (y < 60) return x > ancho_lista - 56;              // engranaje
+        if (y < 60) return x > ancho_lista - 86;              // menu de cuentas y engranaje
         if (y < top_lista()) return false;                     // buscador
         int k = item_en(y);
         return k >= 0 && k < (int)items.size() && items[k].tipo != ItemLista::Titulo;

@@ -12,6 +12,7 @@
 #include "aviso.h"
 #include "cache.h"
 #include "core.h"
+#include "cuentas.h"
 #include "emoji.h"
 #include "red.h"
 #include "tema.h"
@@ -30,53 +31,18 @@ std::wstring carpeta_datos() {
     return r;
 }
 
-// servidor.json al lado del exe: {"host": "...", "puerto": 8080, "token": "..."}
-std::wstring ruta_config() { return carpeta_exe() + L"\\servidor.json"; }
-
-std::string leer_archivo_chico(const std::wstring& ruta) {
-    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (h == INVALID_HANDLE_VALUE) return "";
-    std::string s;
-    char buf[4096];
-    DWORD leido = 0;
-    while (ReadFile(h, buf, sizeof buf, &leido, nullptr) && leido > 0) s.append(buf, leido);
-    CloseHandle(h);
-    return s;
-}
-
-// servidor.json manda: host 127.0.0.1 = se levanta el core local (SQLite en
-// datos\) con ese puerto y token (el token se inventa y se guarda la primera
-// vez); cualquier otro host = un kciwapp-server remoto. Sin archivo = local.
-bool configurar_conexion() {
-    Json j = Json::parsear(leer_archivo_chico(ruta_config()));
-    std::string host = j["host"].str("127.0.0.1");
-    int puerto = (int)j["puerto"].entero(host == "127.0.0.1" ? 8477 : 8080);
-    std::string token = j["token"].str();
-    bool local = host == "127.0.0.1" || host == "localhost";
-    if (local) {
-        host = "127.0.0.1";
-        if (token.size() < 20) {
-            token = core::token_nuevo();
-            std::string s = "{\"host\": \"127.0.0.1\", \"puerto\": " + std::to_string(puerto) + ", \"token\": \"" + token + "\"}\n";
-            HANDLE h = CreateFileW(ruta_config().c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (h != INVALID_HANDLE_VALUE) {
-                DWORD e = 0;
-                WriteFile(h, s.data(), (DWORD)s.size(), &e, nullptr);
-                CloseHandle(h);
-            }
-        }
-        if (!core::iniciar(carpeta_exe(), puerto, token)) {
-            MessageBoxW(nullptr, (L"servidor.json points to 127.0.0.1 but core\\kciwapp-core.exe is missing:\n" + carpeta_exe() + L"\\core").c_str(),
-                        L"kciwapp", MB_ICONERROR);
-            return false;
-        }
-    } else if (token.empty()) {
-        std::wstring m = L"Invalid " + ruta_config() + L"\n\n{\"host\": \"192.168.5.15\", \"puerto\": 8080, \"token\": \"...\"}";
-        MessageBoxW(nullptr, m.c_str(), L"kciwapp", MB_ICONERROR);
-        return false;
+// Argumentos: --cuenta N abre esa cuenta directo (al cambiar de cuenta
+// desde el menu) y --esperar PID espera a que la instancia anterior cierre
+// antes de pelear por el mutex.
+void leer_argumentos(int& cuenta, DWORD& esperar) {
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (!argv) return;
+    for (int i = 1; i + 1 < argc; i++) {
+        if (wcscmp(argv[i], L"--cuenta") == 0) cuenta = _wtoi(argv[++i]);
+        else if (wcscmp(argv[i], L"--esperar") == 0) esperar = (DWORD)_wtoi(argv[++i]);
     }
-    red::configurar(ancho(host), puerto, token);
-    return red::configurado();
+    LocalFree(argv);
 }
 
 float escala(HWND h) { return GetDpiForWindow(h) / 96.0f; }
@@ -292,6 +258,16 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+    int cuenta_arg = -1;
+    DWORD esperar_pid = 0;
+    leer_argumentos(cuenta_arg, esperar_pid);
+    if (esperar_pid) {
+        if (HANDLE p = OpenProcess(SYNCHRONIZE, FALSE, esperar_pid)) {
+            WaitForSingleObject(p, 15000);
+            CloseHandle(p);
+        }
+    }
+
     // Una sola instancia por carpeta (antes del core: dos clientes lanzarian
     // dos cores). Dos portables distintos si pueden convivir.
     std::wstring nombre_mutex = L"Local\\kciwapp2-";
@@ -324,8 +300,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         return 0;
     }
 
-    bool hay_config = GetFileAttributesW(ruta_config().c_str()) != INVALID_FILE_ATTRIBUTES;
-    if (hay_config && !configurar_conexion()) return 1;
+    cuentas::cargar(carpeta_exe());
 
     // Menus contextuales oscuros: SetPreferredAppMode(ForceDark) de uxtheme
     // (ordinal 135, sin documentar pero estable desde 1809).
@@ -356,10 +331,21 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     g_ventana_lista = true;
     red::anotar_ventana(h);
     DragAcceptFiles(h, TRUE);
-    cache::abrir(carpeta_datos() + L"\\cache.sqlite3");
     emoji::cargar(carpeta_exe());
     app.iniciar(h);
-    if (!hay_config) app.empezar_configuracion();
+    // Sin cuentas: la pantalla de configuracion. Una: directo. Varias: elegir.
+    const auto& lista_cuentas = cuentas::lista();
+    if (cuenta_arg >= 0 && cuenta_arg < (int)lista_cuentas.size()) {
+        cuentas::elegir(cuenta_arg);
+        app.conectar_cuenta();
+    } else if (lista_cuentas.empty()) {
+        app.empezar_configuracion();
+    } else if (lista_cuentas.size() == 1) {
+        cuentas::elegir(0);
+        app.conectar_cuenta();
+    } else {
+        app.empezar_selector();
+    }
     g_app = &app;
     // Bandeja y globos de notificacion; el click en un globo abre ese mensaje.
     toast::al_atender([](const std::string& id) {

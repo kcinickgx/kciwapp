@@ -1,7 +1,7 @@
 # kciwapp — instalar en otra máquina
 
 Un solo cliente (Windows, portable). La primera vez que se abre (sin
-`servidor.json`) pregunta dónde corre WhatsApp:
+cuentas) pregunta dónde corre WhatsApp y el token:
 
 - **This computer**: el cliente lanza `core\kciwapp-core.exe` (el server en
   Go con SQLite) al lado suyo, genera un token y muestra el QR. Todo queda
@@ -11,8 +11,11 @@ Un solo cliente (Windows, portable). La primera vez que se abre (sin
   un token nuevo crea una cuenta nueva en el server, el mismo token en otra
   PC comparte la cuenta).
 
-Lo elegido queda en `portable\servidor.json`; para volver a preguntar,
-borrar ese archivo.
+Las cuentas quedan en `cuentas.json` al lado del exe (una por WhatsApp:
+host, puerto, token y su carpeta bajo `datos\`). Con una sola entra
+directo; con varias pregunta cuál al abrir. Desde el menú `⋯` de la
+cabecera se cambia de cuenta o se agrega otra (el cliente se reabre con la
+elegida). Para volver a empezar, borrar `cuentas.json` (y `datos\`).
 
 ## 0. Cliente local (lo más simple)
 
@@ -74,10 +77,14 @@ Logs: `journalctl -u kciwapp-server -f` (cada línea lleva `[N]` con la cuenta).
 ## 2. Cliente contra el server
 
 La misma carpeta `cliente\` (sin `core\` si no se quiere el modo local),
-**sin** `datos\` ni `ajustes.json` de otro usuario. Editar `servidor.json`:
+**sin** `datos\`, `cuentas.json` ni `ajustes.json` de otro usuario. Al abrir,
+elegir **A kciwapp server** y poner host, puerto y token (o editar
+`cuentas.json`):
 
 ```json
-{"host": "192.168.1.10", "puerto": 8080, "token": "un-token-largo-inventado-por-vos"}
+{"cuentas": [
+  {"nombre": "", "host": "192.168.1.10", "puerto": 8080, "token": "un-token-largo-inventado-por-vos", "carpeta": "datos"}
+]}
 ```
 
 Windows 10/11 x64. Las llamadas usan el runtime de WebView2 (Edge), que

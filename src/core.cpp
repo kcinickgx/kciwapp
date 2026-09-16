@@ -61,10 +61,10 @@ bool disponible(const std::wstring& carpeta_exe) {
     return GetFileAttributesW((carpeta_exe + L"\\core\\kciwapp-core.exe").c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
-bool iniciar(const std::wstring& carpeta_exe, int puerto, const std::string& token) {
+bool iniciar(const std::wstring& carpeta_exe, const std::wstring& carpeta_datos, int puerto, const std::string& token) {
     std::wstring exe = carpeta_exe + L"\\core\\kciwapp-core.exe";
     if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-    std::wstring datos = carpeta_exe + L"\\datos";
+    const std::wstring& datos = carpeta_datos;
     CreateDirectoryW(datos.c_str(), nullptr);
     std::wstring ruta_cfg = datos + L"\\core.json";
     std::string cfg = "{\n"

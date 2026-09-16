@@ -339,9 +339,21 @@ struct App {
     std::set<std::string> transcribiendo;  // ids en curso
     bool whisper_disponible() const;
     void transcribir(int i);
-    // Primera vez sin servidor.json: pantalla de configuracion (config_ui.cpp).
+    // Cuenta nueva (primera vez o desde el menu): pantalla de configuracion (config_ui.cpp).
     bool config_pendiente = false;
+    bool cfg_cancelable = false;  // agregando una cuenta con otra ya abierta (o desde el selector)
     int cfg_modo = 0;  // 0 = esta PC (core local), 1 = server remoto
+    // Varias cuentas: el selector al arrancar.
+    bool selector_pendiente = false;
+    void empezar_selector();
+    void dibujar_selector();
+    bool click_selector(float x, float y);
+    bool clickeable_selector(float x, float y) const;
+    // Conecta la cuenta activa (core local si hace falta, cache, chats).
+    bool conectar_cuenta();
+    // Cierra y vuelve a abrir el cliente con otra cuenta.
+    void cambiar_cuenta(int i);
+    void menu_cuentas(float x, float y);
     Campo cfg_host, cfg_puerto, cfg_token;
     std::wstring cfg_error;
     void empezar_configuracion();

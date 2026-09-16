@@ -2,6 +2,8 @@ portable/kciwapp2.exe
 portable/kciwapp2.pdb
 portable/kciwapp2.ilk
 portable/datos/
+portable/cuentas.json
+portable/servidor.json
 portable/debug.log
 portable/mpv/
 build/

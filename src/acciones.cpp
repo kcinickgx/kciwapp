@@ -1,6 +1,7 @@
 // Acciones sobre mensajes y chats: menu contextual, responder, editar,
 // borrar, reaccionar, reenviar, buscar, adjuntar, visor de fotos.
 #include "app.h"
+#include "cuentas.h"
 
 #include <commdlg.h>
 #include <shellapi.h>
@@ -660,8 +661,7 @@ void App::copiar_media(int i) {
 
 std::wstring App::bajar_media(const Mensaje& m) {
     if (!m.media) return L"";
-    std::wstring carpeta = carpeta_exe() + L"\\datos\\media";
-    CreateDirectoryW((carpeta_exe() + L"\\datos").c_str(), nullptr);
+    std::wstring carpeta = cuentas::carpeta_activa() + L"\\media";
     CreateDirectoryW(carpeta.c_str(), nullptr);
     std::wstring ruta = carpeta + L"\\" + std::to_wstring(m.media->id) + extension_de(m.media->mime, m.media->nombre);
     if (GetFileAttributesW(ruta.c_str()) != INVALID_FILE_ATTRIBUTES) return ruta;

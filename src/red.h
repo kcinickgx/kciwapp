@@ -17,7 +17,7 @@ struct Respuesta {
 
 namespace red {
 
-// Direccion y token del server; se leen de %APPDATA%\kciwapp2\servidor.json.
+// Direccion y token del server: la cuenta activa de cuentas.json.
 void configurar(const std::wstring& host, int puerto, const std::string& token);
 bool configurado();
 

@@ -488,7 +488,7 @@ void tic_rapido() {
 
 namespace webwa {
 
-bool iniciar(HWND padre, const std::wstring& carpeta_exe) {
+bool iniciar(HWND padre, const std::wstring& carpeta_exe, const std::wstring& carpeta_datos) {
     if (g_activo) return true;
     g_padre = padre;
     if (!g_dll) g_dll = LoadLibraryW((carpeta_exe + L"\\WebView2Loader.dll").c_str());
@@ -498,8 +498,7 @@ bool iniciar(HWND padre, const std::wstring& carpeta_exe) {
     }
     auto crear = (PFN_CrearEntorno)GetProcAddress(g_dll, "CreateCoreWebView2EnvironmentWithOptions");
     if (!crear) return false;
-    std::wstring datos = carpeta_exe + L"\\datos\\webview2";
-    CreateDirectoryW((carpeta_exe + L"\\datos").c_str(), nullptr);
+    std::wstring datos = carpeta_datos + L"\\webview2";
     CreateDirectoryW(datos.c_str(), nullptr);
     auto opciones = Make<CoreWebView2EnvironmentOptions>();
     // Que no se duerma por estar fuera de la vista, y etiquetas en ingles

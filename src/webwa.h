@@ -14,7 +14,7 @@ namespace webwa {
 // Arranca (carga WebView2Loader.dll de la carpeta del exe y crea el perfil en
 // <datos>\webview2). `padre` es la ventana principal: los WebView2 son hijos
 // suyos, fuera del area visible. Devuelve false si no hay runtime.
-bool iniciar(HWND padre, const std::wstring& carpeta_exe);
+bool iniciar(HWND padre, const std::wstring& carpeta_exe, const std::wstring& carpeta_datos);
 void cerrar();
 bool activo();
 
