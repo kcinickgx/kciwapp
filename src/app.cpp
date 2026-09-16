@@ -2079,10 +2079,20 @@ void App::dibujar_tarjeta_contacto(const VistaMensaje& v, float cx, float cy) {
     float y = cy + 10;
     for (auto& c : v.contactos) {
         float r = 18, ax = cx + 12 + r, ay = y + 25;
-        g.circulo(ax, ay, r, Color(0x6b7c85));
-        std::wstring inicial = c.nombre.substr(0, 1);
-        float iw = g.medir(inicial, 16);
-        g.renglon(inicial, ax - iw / 2, ay - 10, 16, Color(0xdfe5e7));
+        // La foto si es alguien que tenemos (chat o contacto con foto); si no, la inicial.
+        Imagen* foto = nullptr;
+        if (!c.jid.empty()) {
+            const Chat* ch = chat_de(c.jid);
+            if ((ch && ch->tiene_foto) || (contactos.count(c.jid) && contactos[c.jid].tiene_foto))
+                foto = &imagen("foto:" + c.jid, L"/foto/" + ancho(c.jid), false);
+        }
+        if (foto && foto->bmp) g.bitmap_circular(foto->bmp.Get(), ax, ay, r);
+        else {
+            g.circulo(ax, ay, r, Color(0x6b7c85));
+            std::wstring inicial = c.nombre.substr(0, 1);
+            float iw = g.medir(inicial, 16);
+            g.renglon(inicial, ax - iw / 2, ay - 10, 16, Color(0xdfe5e7));
+        }
         g.renglon(c.nombre, cx + 12 + 2 * r + 12, y + 6, 14, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD, v.mw - 2 * r - 36);
         g.renglon(c.telefono, cx + 12 + 2 * r + 12, y + 27, 12.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, v.mw - 2 * r - 36);
         y += 50;
