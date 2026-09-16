@@ -31,9 +31,10 @@ desde el menú `⋯` → Check for updates.
 
 El botón de transcribir en los audios aparece si existe `whisper\` al lado
 del exe, con `whisper-cli.exe` (whisper.cpp con CUDA, para GPU NVIDIA) y el
-modelo `ggml-large-v3-turbo.bin`. Son 2,7 GB de los 3 del paquete; sin GPU
-NVIDIA se puede borrar la carpeta y el botón desaparece (el chequeo de
-actualizaciones la vuelve a bajar si falta: en ese caso, no aceptar).
+modelo `ggml-large-v3-turbo.bin`. Son 2,7 GB de los 3 del paquete: el setup
+la ofrece con un tilde (sin GPU NVIDIA, destildar). Si no está la carpeta,
+el botón no aparece y las actualizaciones tampoco la bajan; borrarla equivale
+a destildarla.
 
 ## 1. Server
 

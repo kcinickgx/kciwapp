@@ -50,6 +50,7 @@ HWND g_hwnd;
 Paso g_paso = ELEGIR;
 std::wstring g_carpeta;
 bool g_acceso_escritorio = true;
+bool g_whisper = true;  // la transcripcion de notas de voz (whisper\, 2,7 GB)
 std::atomic<bool> g_cancelar{false};
 // Progreso (lo escribe el hilo, lo lee la ventana; con el mutex simple de abajo).
 CRITICAL_SECTION g_cs;
@@ -242,7 +243,9 @@ void fallar(const std::wstring& e) {
     avisar(2);
 }
 
-void hilo_bajada(std::wstring carpeta, bool escritorio) {
+bool es_whisper(const std::wstring& ruta) { return ruta.rfind(L"whisper\\", 0) == 0; }
+
+void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper) {
     std::string manifiesto;
     if (!bajar_https(std::wstring(BASE) + MANIFIESTO, [&](const char* d, DWORD n) {
             manifiesto.append(d, n);
@@ -255,6 +258,14 @@ void hilo_bajada(std::wstring carpeta, bool escritorio) {
     if (lista.empty()) {
         fallar(L"Bad manifest from the server");
         return;
+    }
+    if (!whisper) {
+        // Sin transcripcion: la carpeta whisper\ no se baja (el cliente
+        // tampoco la pide despues al actualizar, si no existe).
+        std::vector<Archivo> sin;
+        for (auto& a : lista)
+            if (!es_whisper(a.ruta)) sin.push_back(a);
+        lista = sin;
     }
     long long total = 0;
     for (auto& a : lista) total += a.tamano;
@@ -333,7 +344,7 @@ void hilo_bajada(std::wstring carpeta, bool escritorio) {
 // Geometria (en px logicos, se escala al dibujar).
 const int ANCHO = 560, ALTO = 380, MARGEN = 32;
 struct Geo {
-    RECT campo, examinar, casilla, boton, boton2, barra;
+    RECT campo, examinar, casilla, casilla2, boton, boton2, barra;
 };
 
 Geo geo() {
@@ -342,6 +353,7 @@ Geo geo() {
     q.campo = {x, E(140), x + w - E(110), E(140 + 36)};
     q.examinar = {x + w - E(96), E(140), x + w, E(140 + 36)};
     q.casilla = {x, E(196), x + E(20), E(216)};
+    q.casilla2 = {x, E(228), x + E(20), E(248)};
     q.boton = {x + w - E(140), E(ALTO - MARGEN - 40), x + w, E(ALTO - MARGEN)};
     q.boton2 = {x + w - E(140) - E(12) - E(120), E(ALTO - MARGEN - 40), x + w - E(140) - E(12), E(ALTO - MARGEN)};
     q.barra = {x, E(200), x + w, E(210)};
@@ -405,7 +417,7 @@ void dibujar(HDC dc, const RECT& area) {
     Geo q = geo();
     int x = E(MARGEN);
     texto(dc, L"Install kciwapp", x, E(40), 26, TXT, FW_LIGHT);
-    texto(dc, L"Everything downloads from kcinick.gxzone.com (about 3 GB with voice transcription).", x, E(84), 12, DIM);
+    texto(dc, g_whisper ? L"Everything downloads from kcinick.gxzone.com (about 3 GB)." : L"Everything downloads from kcinick.gxzone.com (about 400 MB).", x, E(84), 12, DIM);
 
     EnterCriticalSection(&g_cs);
     std::wstring actual = g_actual, error = g_error;
@@ -421,13 +433,26 @@ void dibujar(HDC dc, const RECT& area) {
         rc.right -= E(12);
         texto(dc, g_carpeta, 0, 0, 14, TXT, FW_NORMAL, 0, false, &rc);
         boton(dc, q.examinar, L"Browse...", false);
-        // La casilla del acceso directo.
-        borde(dc, q.casilla, g_acceso_escritorio ? ACCENT : DIM, E(5));
-        if (g_acceso_escritorio) {
-            RECT in = {q.casilla.left + E(4), q.casilla.top + E(4), q.casilla.right - E(4), q.casilla.bottom - E(4)};
-            relleno(dc, in, ACCENT, E(3));
-        }
-        texto(dc, L"Desktop shortcut", q.casilla.right + E(10), E(196), 13, TXT);
+        // Las casillas: acceso directo y whisper.
+        auto casilla = [&](const RECT& r, bool marcada, const wchar_t* t, const wchar_t* nota) {
+            borde(dc, r, marcada ? ACCENT : DIM, E(5));
+            if (marcada) {
+                RECT in = {r.left + E(4), r.top + E(4), r.right - E(4), r.bottom - E(4)};
+                relleno(dc, in, ACCENT, E(3));
+            }
+            texto(dc, t, r.right + E(10), r.top, 13, TXT);
+            if (nota) {
+                HFONT f = fuente(13);
+                HGDIOBJ v = SelectObject(dc, f);
+                SIZE tam;
+                GetTextExtentPoint32W(dc, t, (int)wcslen(t), &tam);
+                SelectObject(dc, v);
+                DeleteObject(f);
+                texto(dc, nota, r.right + E(10) + tam.cx + E(8), r.top + E(1), 12, DIM);
+            }
+        };
+        casilla(q.casilla, g_acceso_escritorio, L"Desktop shortcut", nullptr);
+        casilla(q.casilla2, g_whisper, L"Voice note transcription", L"whisper, 2.7 GB, needs an NVIDIA GPU");
         boton(dc, q.boton, L"Install", true);
     } else if (g_paso == BAJANDO) {
         texto(dc, actual.empty() ? L"Getting the file list..." : actual, x, E(150), 13, DIM, FW_NORMAL, E(ANCHO - 2 * MARGEN));
@@ -457,7 +482,9 @@ bool dentro(const RECT& r, int x, int y) { return x >= r.left && x < r.right && 
 
 bool clickeable(int x, int y) {
     Geo q = geo();
-    if (g_paso == ELEGIR) return dentro(q.campo, x, y) || dentro(q.examinar, x, y) || dentro(q.boton, x, y) || (y >= q.casilla.top && y < q.casilla.bottom && x >= q.casilla.left && x < q.casilla.left + E(150));
+    if (g_paso == ELEGIR) return dentro(q.campo, x, y) || dentro(q.examinar, x, y) || dentro(q.boton, x, y) ||
+                              (y >= q.casilla.top && y < q.casilla.bottom && x >= q.casilla.left && x < q.casilla.left + E(150)) ||
+                              (y >= q.casilla2.top && y < q.casilla2.bottom && x >= q.casilla2.left && x < q.casilla2.left + E(200));
     if (g_paso == BAJANDO) return dentro(q.boton, x, y);
     return dentro(q.boton, x, y) || dentro(q.boton2, x, y);
 }
@@ -496,7 +523,7 @@ void empezar() {
     g_total = g_bajado = 0;
     g_hechos = g_cuantos = 0;
     LeaveCriticalSection(&g_cs);
-    std::thread(hilo_bajada, g_carpeta, g_acceso_escritorio).detach();
+    std::thread(hilo_bajada, g_carpeta, g_acceso_escritorio, g_whisper).detach();
     InvalidateRect(g_hwnd, nullptr, FALSE);
 }
 
@@ -505,6 +532,7 @@ void click(int x, int y) {
     if (g_paso == ELEGIR) {
         if (dentro(q.campo, x, y) || dentro(q.examinar, x, y)) elegir_carpeta();
         else if (y >= q.casilla.top && y < q.casilla.bottom && x >= q.casilla.left && x < q.casilla.left + E(150)) g_acceso_escritorio = !g_acceso_escritorio;
+        else if (y >= q.casilla2.top && y < q.casilla2.bottom && x >= q.casilla2.left && x < q.casilla2.left + E(200)) g_whisper = !g_whisper;
         else if (dentro(q.boton, x, y)) empezar();
     } else if (g_paso == BAJANDO) {
         if (dentro(q.boton, x, y)) {
