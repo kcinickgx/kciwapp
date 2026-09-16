@@ -32,15 +32,15 @@ std::wstring carpeta_datos() {
     return r;
 }
 
-// Argumentos: --cuenta N abre esa cuenta directo (al cambiar de cuenta
-// desde el menu) y --esperar PID espera a que la instancia anterior cierre
-// antes de pelear por el mutex.
-void leer_argumentos(int& cuenta, DWORD& esperar) {
+// Argumentos: --cuenta TOKEN abre esa cuenta directo (al cambiar de cuenta
+// desde el menu o al actualizar) y --esperar PID espera a que la instancia
+// anterior cierre antes de pelear por el mutex.
+void leer_argumentos(std::string& cuenta, DWORD& esperar) {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) return;
     for (int i = 1; i + 1 < argc; i++) {
-        if (wcscmp(argv[i], L"--cuenta") == 0) cuenta = _wtoi(argv[++i]);
+        if (wcscmp(argv[i], L"--cuenta") == 0) cuenta = angosto(argv[++i]);
         else if (wcscmp(argv[i], L"--esperar") == 0) esperar = (DWORD)_wtoi(argv[++i]);
     }
     LocalFree(argv);
@@ -263,7 +263,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-    int cuenta_arg = -1;
+    std::string cuenta_arg;
     DWORD esperar_pid = 0;
     leer_argumentos(cuenta_arg, esperar_pid);
     if (esperar_pid) {
@@ -305,7 +305,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         return 0;
     }
 
-    cuentas::cargar(carpeta_exe());
+    cuentas::cargar(carpeta_exe(), cuenta_arg);
     actualizar::limpiar(carpeta_exe());
 
     // Menus contextuales oscuros: SetPreferredAppMode(ForceDark) de uxtheme
@@ -341,8 +341,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     app.iniciar(h);
     // Sin cuentas: la pantalla de configuracion. Una: directo. Varias: elegir.
     const auto& lista_cuentas = cuentas::lista();
-    if (cuenta_arg >= 0 && cuenta_arg < (int)lista_cuentas.size()) {
-        cuentas::elegir(cuenta_arg);
+    if (cuentas::indice_de(cuenta_arg) >= 0) {
+        cuentas::elegir(cuentas::indice_de(cuenta_arg));
         app.conectar_cuenta();
     } else if (lista_cuentas.empty()) {
         app.empezar_configuracion();

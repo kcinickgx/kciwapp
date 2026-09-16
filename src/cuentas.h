@@ -2,6 +2,8 @@
 // Cada cuenta es un server (host/puerto/token; 127.0.0.1 = el core local) y
 // una carpeta propia bajo datos\ con su cache, media, perfil de WebView2 y,
 // si es local, la base del core. Un servidor.json viejo se migra solo.
+// Solo cuentan las vinculadas: una cuenta sin nombre (nunca conecto) se
+// borra al siguiente arranque, con su carpeta.
 #pragma once
 #include <string>
 #include <vector>
@@ -17,7 +19,12 @@ struct Cuenta {
 
 namespace cuentas {
 
-void cargar(const std::wstring& carpeta_exe);
+// Lee cuentas.json. Las cuentas que nunca se vincularon (sin nombre) se
+// descartan con su carpeta, salvo la del token que se pide conservar (la
+// recien agregada, con la que se relanzo el cliente).
+void cargar(const std::wstring& carpeta_exe, const std::string& conservar_token = "");
+// Indice de la cuenta con ese token, o -1.
+int indice_de(const std::string& token);
 const std::vector<Cuenta>& lista();
 // Agrega y guarda; elige carpeta y, si es local, un puerto libre. Devuelve el indice.
 int agregar(Cuenta c);

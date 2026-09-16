@@ -1,6 +1,7 @@
 #include "cuentas.h"
 
 #include <windows.h>
+#include <shellapi.h>
 
 #include "json.h"
 #include "red.h"
@@ -64,16 +65,28 @@ void migrar_servidor_json() {
     red::registrar("cuentas: servidor.json migrado a cuentas.json");
 }
 
+// Borra una carpeta entera (solo las datos\cuenta-N; la datos\ base es de todos).
+void borrar_carpeta(const std::wstring& ruta) {
+    std::wstring doble = ruta;
+    doble.push_back(L'\0');
+    SHFILEOPSTRUCTW op{};
+    op.wFunc = FO_DELETE;
+    op.pFrom = doble.c_str();
+    op.fFlags = FOF_NO_UI;
+    SHFileOperationW(&op);
+}
+
 }  // namespace
 
 namespace cuentas {
 
-void cargar(const std::wstring& carpeta_exe) {
+void cargar(const std::wstring& carpeta_exe, const std::string& conservar_token) {
     g_exe = carpeta_exe;
     g_cuentas.clear();
     g_activa = -1;
     Json j = Json::parsear(leer(ruta_cuentas()));
     const Json& l = j["cuentas"];
+    bool descartada = false;
     for (size_t i = 0; i < l.largo(); i++) {
         const Json& e = l[i];
         Cuenta c;
@@ -82,9 +95,23 @@ void cargar(const std::wstring& carpeta_exe) {
         c.puerto = (int)e["puerto"].entero(c.local() ? 8477 : 8080);
         c.token = e["token"].str();
         c.carpeta = ancho(e["carpeta"].str("datos"));
+        if (c.nombre.empty() && c.token != conservar_token) {
+            // Nunca se vinculo: fuera, con lo que haya dejado en su carpeta.
+            if (c.carpeta.rfind(L"datos\\cuenta-", 0) == 0) borrar_carpeta(g_exe + L"\\" + c.carpeta);
+            red::registrar("cuentas: descartada la cuenta sin vincular " + c.host + " (" + c.token.substr(0, 6) + "...)");
+            descartada = true;
+            continue;
+        }
         g_cuentas.push_back(c);
     }
+    if (descartada) guardar();
     if (g_cuentas.empty()) migrar_servidor_json();
+}
+
+int indice_de(const std::string& token) {
+    for (size_t i = 0; i < g_cuentas.size(); i++)
+        if (g_cuentas[i].token == token) return (int)i;
+    return -1;
 }
 
 const std::vector<Cuenta>& lista() { return g_cuentas; }

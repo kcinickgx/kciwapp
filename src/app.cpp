@@ -339,7 +339,8 @@ bool App::conectar_cuenta() {
 void App::cambiar_cuenta(int i) {
     wchar_t exe[MAX_PATH];
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    std::wstring args = L"--cuenta " + std::to_wstring(i) + L" --esperar " + std::to_wstring(GetCurrentProcessId());
+    std::wstring args = L"--esperar " + std::to_wstring(GetCurrentProcessId());
+    if (i >= 0 && i < (int)cuentas::lista().size()) args += L" --cuenta " + ancho(cuentas::lista()[i].token);
     ShellExecuteW(nullptr, L"open", exe, args.c_str(), carpeta_exe().c_str(), SW_SHOWNORMAL);
     DestroyWindow(hwnd);
 }
