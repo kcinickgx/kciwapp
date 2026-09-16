@@ -197,6 +197,18 @@ bool escribir_archivo(const std::wstring& ruta, const std::string& datos) {
     return e == datos.size();
 }
 
+// icacls <carpeta> /grant *S-1-5-32-545:(OI)(CI)M  (Users: modificar, heredado)
+void permitir_escritura(const std::wstring& carpeta) {
+    std::wstring linea = L"icacls.exe \"" + carpeta + L"\" /grant *S-1-5-32-545:(OI)(CI)M /T /Q";
+    STARTUPINFOW si{sizeof si};
+    PROCESS_INFORMATION pi{};
+    if (CreateProcessW(nullptr, linea.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, 60000);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+}
+
 void acceso_directo(const std::wstring& lnk, const std::wstring& exe, const std::wstring& carpeta) {
     IShellLinkW* sl = nullptr;
     if (FAILED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkW, (void**)&sl))) return;
@@ -301,6 +313,8 @@ void hilo_bajada(std::wstring carpeta, bool escritorio) {
     }
     // El manifiesto instalado, para el check for updates del cliente.
     escribir_archivo(carpeta + L"\\" + MANIFIESTO, manifiesto);
+    // Users puede escribir en la carpeta (datos\, cuentas.json, actualizaciones).
+    permitir_escritura(carpeta);
     // Accesos directos: menu inicio siempre, escritorio si se pidio.
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     std::wstring exe = carpeta + L"\\kciwapp2.exe";
@@ -499,7 +513,8 @@ void click(int x, int y) {
         }
     } else if (g_paso == LISTO) {
         if (dentro(q.boton, x, y)) {
-            ShellExecuteW(nullptr, L"open", (g_carpeta + L"\\kciwapp2.exe").c_str(), nullptr, g_carpeta.c_str(), SW_SHOWNORMAL);
+            // Via explorer, asi abre sin la elevacion del instalador.
+            ShellExecuteW(nullptr, L"open", L"explorer.exe", (L"\"" + g_carpeta + L"\\kciwapp2.exe\"").c_str(), nullptr, SW_SHOWNORMAL);
             PostQuitMessage(0);
         } else if (dentro(q.boton2, x, y)) PostQuitMessage(0);
     } else {
@@ -569,7 +584,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     InitializeCriticalSection(&g_cs);
-    g_carpeta = carpeta_especial(FOLDERID_LocalAppData) + L"\\KciWAPP";
+    // Va a Program Files (el instalador pide elevacion); despues se le da
+    // permiso de escritura a Users sobre la carpeta, porque el cliente guarda
+    // ahi sus datos y corre sin admin.
+    g_carpeta = carpeta_especial(FOLDERID_ProgramFiles) + L"\\KciWAPP";
     // Titulo y menus oscuros.
     if (HMODULE ux = LoadLibraryW(L"uxtheme.dll"))
         if (auto f = (int(WINAPI*)(int))GetProcAddress(ux, MAKEINTRESOURCEA(135))) f(2);

@@ -48,3 +48,5 @@ target_compile_definitions(kciwapp-setup PRIVATE UNICODE _UNICODE NOMINMAX WIN32
 target_compile_options(kciwapp-setup PRIVATE /W3 /utf-8 /EHsc /permissive-)
 set_property(TARGET kciwapp-setup PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 target_link_libraries(kciwapp-setup PRIVATE winhttp bcrypt ole32 shell32 gdi32 user32)
+# Instala en Program Files: pide elevacion al abrirse.
+target_link_options(kciwapp-setup PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
