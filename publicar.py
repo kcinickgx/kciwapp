@@ -1,6 +1,7 @@
 # Publica el cliente en H:\kciwapp (= https://kcinick.gxzone.com/kciwapp/),
 # de donde el cliente se actualiza solo. La fuente es portable\ (mpv, whisper,
-# core con ffmpeg, fondos...) con el exe recien compilado de build\; copia lo
+# ffmpeg, fondos...; solo se lee) con el exe y el core recien compilados de
+# build\; copia lo
 # que cambio, borra lo que sobra y escribe el manifiesto kciwapp.md5 ("md5
 # tamano ruta" por linea). No lleva lo que es del usuario (ajustes.json,
 # cuentas.json, datos\) ni los pdb. Ademas deja INSTALAR.md y, en server\,
@@ -19,8 +20,10 @@ DESTINO = r'H:\kciwapp'
 MANIFIESTO = 'kciwapp.md5'
 EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALAR.md', MANIFIESTO}
 EXCLUIR_DIR = {'datos', 'server'}
-# Archivos que se toman de otro lado que portable\ (el exe, recien compilado).
-FUENTES = {'kciwapp2.exe': os.path.join(RAIZ, 'build', 'kciwapp2.exe')}
+# Lo recien compilado se toma de build\ (en portable\ no se escribe nada:
+# el usuario lo actualiza a mano). Estos van aunque en portable\ no esten.
+FUENTES = {'kciwapp2.exe': os.path.join(RAIZ, 'build', 'kciwapp2.exe'),
+           'core/kciwapp-core.exe': os.path.join(RAIZ, 'build', 'core', 'kciwapp-core.exe')}
 CACHE = os.path.join(RAIZ, '.md5-cache.json')
 
 
@@ -50,7 +53,7 @@ def main():
         cache = {}
     # md5 de lo local, con cache por tamano+mtime (whisper son 2,7 GB).
     lista = []
-    for rel in sorted(archivos_de(ORIGEN)):
+    for rel in sorted(set(archivos_de(ORIGEN)) | {k for k, v in FUENTES.items() if os.path.exists(v)}):
         ruta = FUENTES.get(rel, os.path.join(ORIGEN, rel))
         st = os.stat(ruta)
         c = cache.get(rel)
