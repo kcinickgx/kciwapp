@@ -149,13 +149,14 @@ void App::dibujar_configuracion() {
         g.renglon(etiqueta, ex, y + 9, 13, Color(TXT_DIM()));
         g.rect_redondo(x, y, w, CAMPO_H, 8, Color(BG_CAMPO()));
         if (c.foco) g.borde_redondo(x, y, w, CAMPO_H, 8, Color(ACCENT()), 1.0f);
-        c.dibujar(g, x + 10, y + 1, w - 20, CAMPO_H - 2, ahora);
+        // El Campo mete 9 px arriba del texto; corrido 1,5 px queda centrado en los 34.
+        c.dibujar(g, x + 10, y - 1.5f, w - 20, CAMPO_H + 1, ahora);
     };
     // Server y puerto en una fila; con el core local van fijos y apagados.
     auto campo_fijo = [&](const wchar_t* etiqueta, float ex, const std::wstring& valor, float x, float y, float w) {
         g.renglon(etiqueta, ex, y + 9, 13, Color(TXT_DIM()));
         g.rect_redondo(x, y, w, CAMPO_H, 8, Color(BG_CAMPO(), 0.5f));
-        g.renglon(valor, x + 10, y + 9, 14, Color(TXT_DIM(), 0.6f));
+        g.renglon(valor, x + 22, y + 7.5f, 14, Color(TXT_DIM(), 0.6f));
     };
     if (remoto) {
         campo_fila(L"Server", q.x, cfg_host, q.fx, q.hy, q.hw);
