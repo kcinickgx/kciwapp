@@ -762,7 +762,7 @@ std::wstring App::texto_escribiendo(const std::string& chat) {
     }
     std::wstring t = it->second.grabando ? L"recording audio..." : L"typing...";
     const Chat* c = chat_de(chat);
-    if (c && c->es_grupo) t = nombre_de(it->second.quien) + L" is " + t;
+    if (c && c->varios_remitentes()) t = nombre_de(it->second.quien) + L" is " + t;
     return t;
 }
 
@@ -911,7 +911,7 @@ bool App::aplicar_evento(const Json& e) {
             const Chat* c = chat_de(m.chat);
             std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
             std::wstring texto = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
-            if (c && c->es_grupo) texto = nombre_de(m.remitente) + L": " + texto;
+            if (c && c->varios_remitentes()) texto = nombre_de(m.remitente) + L": " + texto;
             if (ajustes::actual().notificaciones) {
                 bool con_foto = (c && c->tiene_foto) || (contactos.count(m.chat) && contactos[m.chat].tiene_foto);
                 toast::mostrar(titulo, texto, m.chat, m.id, con_foto ? L"/foto/" + ancho(m.chat) : L"");
@@ -1007,7 +1007,7 @@ bool App::aplicar_evento(const Json& e) {
             const Chat* c = chat_de(chat);
             std::wstring titulo = c ? c->nombre : nombre_de(chat);
             std::wstring texto = d["video"].bul() ? L"Incoming video call" : L"Incoming voice call";
-            if (c && c->es_grupo) texto += L" from " + nombre_de(de);
+            if (c && c->varios_remitentes()) texto += L" from " + nombre_de(de);
             bool con_foto = (c && c->tiene_foto) || (contactos.count(chat) && contactos[chat].tiene_foto);
             llamadas_entrantes[id] = {chat, d["video"].bul()};
             toast::puede_atender(llamadas_disponibles());
@@ -1059,7 +1059,7 @@ void App::lanzar_armado() {
     unsigned gen = layout_gen;
     auto copia = std::make_shared<std::vector<Mensaje>>(mensajes.begin(), mensajes.begin() + layout_pendiente);
     const Chat* c = chat_de(chat_actual);
-    bool es_grupo = c && c->es_grupo;
+    bool es_grupo = c && c->varios_remitentes();
     // Los nombres se resuelven aca, en el hilo de UI, para no leer los mapas desde otros hilos.
     auto nombres = std::make_shared<std::unordered_map<std::string, std::wstring>>();
     for (auto& m : *copia) {
@@ -1227,7 +1227,7 @@ void App::dibujar_foto(const Mensaje& m, float x, float y, float w, float h, flo
 
 void App::armar_vista(size_t i) {
     const Chat* c = chat_de(mensajes[i].chat);
-    armar_vista_core(mensajes[i], i > 0 ? &mensajes[i - 1] : nullptr, c && c->es_grupo,
+    armar_vista_core(mensajes[i], i > 0 ? &mensajes[i - 1] : nullptr, c && c->varios_remitentes(),
                      [this](const std::string& j) { return nombre_de(j); }, w_conv(), vistas[i]);
 }
 
@@ -1646,7 +1646,7 @@ void App::dibujar_lista() {
             else prev = u.texto;
             prev = una_linea(prev);
             if (u.propio) prev = L"     " + prev;  // lugar para los tildes
-            else if (c.es_grupo) prev = nombre_de(u.remitente) + L": " + prev;
+            else if (c.varios_remitentes()) prev = nombre_de(u.remitente) + L": " + prev;
         }
         float ancho_prev = W - tx - 16;
         if (c.no_leidos) ancho_prev -= 34;

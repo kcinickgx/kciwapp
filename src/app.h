@@ -63,6 +63,8 @@ struct Chat {
     bool archivado = false;
     std::optional<Mensaje> ultimo;
 
+    // Hay que decir quien escribe cada mensaje: grupos y los estados.
+    bool varios_remitentes() const { return es_grupo || jid == "status@broadcast"; }
     static Chat de_json(const Json& j);
 };
 
