@@ -3,11 +3,12 @@ package main
 // Modo multi-cuenta: este proceso no habla con WhatsApp; escucha en el
 // puerto publico y rutea cada request, por su X-Token, a un proceso hijo
 // (el server normal, en 127.0.0.1:puerto) que tiene su propia base,
-// su store.db y su carpeta de media. Un token desconocido crea una cuenta
-// provisoria: se le arma la base y el config, se levanta el hijo y el cliente
-// ve el QR; recien cuando WhatsApp queda vinculado pasa a cuentas.json. Si
-// nadie la usa por 5 minutos sin vincular, se borra entera (hijo, base,
-// carpeta): generar tokens no deja basura.
+// su store.db y su carpeta de media. Un token desconocido levanta un hijo
+// PROVISORIO en <dir>/provisorias/<puerto>/ con SQLite (nada en MariaDB ni
+// en cuentas/) para que el cliente vea el QR; recien cuando WhatsApp queda
+// vinculado se crea la cuenta de verdad (base, carpeta, cuentas.json), se
+// muda el store.db con la sesion y el hijo arranca en serio. Un provisorio
+// que nadie usa por 5 minutos se borra: generar tokens no deja basura.
 //
 // Config (multi.json):
 //   {"multi": true, "escucha": ":8080", "dir": "/opt/kciwapp-server",
@@ -47,8 +48,10 @@ type cuentaMulti struct {
 	proxy      *httputil.ReverseProxy `json:"-"`
 	lista      bool                   `json:"-"` // el hijo ya respondio /estado
 	proceso    *os.Process            `json:"-"`
-	provisoria bool                   `json:"-"` // todavia sin vincular: no esta en cuentas.json
+	provisoria bool                   `json:"-"` // todavia sin vincular: SQLite en tmp, fuera de cuentas.json
+	tmp        string                 `json:"-"` // la carpeta del provisorio
 	eliminada  bool                   `json:"-"` // se borro: el supervisor no la relanza
+	gen        int                    `json:"-"` // sube al promover: el supervisor viejo se retira
 	ultimoUso  time.Time              `json:"-"`
 }
 
@@ -67,20 +70,28 @@ func guardarCuentas() {
 	os.Rename(tmp, rutaCuentas())
 }
 
-// El config del hijo: el server normal con sus rutas.
+// El config del hijo: el server normal con sus rutas. El provisorio va con
+// SQLite en su carpeta temporal.
 func escribirConfigHijo(c *cuentaMulti) string {
 	dir := filepath.Join(cfg.Dir, "cuentas", fmt.Sprint(c.ID))
+	if c.provisoria {
+		dir = c.tmp
+	}
 	os.MkdirAll(c.Media, 0o755)
 	os.MkdirAll(dir, 0o755)
 	ruta := filepath.Join(dir, "config.json")
 	conf := map[string]any{
 		"escucha":        fmt.Sprintf("127.0.0.1:%d", c.Puerto),
 		"token":          c.Token,
-		"mariadb":        fmt.Sprintf(cfg.MariaDB, c.DB),
 		"store":          c.Store,
 		"media":          c.Media,
 		"historia":       cfg.Historia,
 		"bajar_historia": false,
+	}
+	if c.provisoria {
+		conf["sqlite"] = filepath.Join(dir, "provisoria.sqlite3")
+	} else {
+		conf["mariadb"] = fmt.Sprintf(cfg.MariaDB, c.DB)
 	}
 	crudo, _ := json.MarshalIndent(conf, "", "  ")
 	os.WriteFile(ruta, crudo, 0o600)
@@ -91,6 +102,7 @@ func escribirConfigHijo(c *cuentaMulti) string {
 func supervisarHijo(c *cuentaMulti) {
 	ruta := escribirConfigHijo(c)
 	exe, _ := os.Executable()
+	gen := c.gen
 	for {
 		cmd := exec.Command(exe, ruta)
 		cmd.Stdout = prefijo{fmt.Sprintf("[%d] ", c.ID)}
@@ -102,11 +114,15 @@ func supervisarHijo(c *cuentaMulti) {
 			continue
 		}
 		c.proceso = cmd.Process
-		log.Printf("[%d] hijo pid %d en 127.0.0.1:%d (db %s)", c.ID, cmd.Process.Pid, c.Puerto, c.DB)
+		if c.provisoria {
+			log.Printf("provisorio pid %d en 127.0.0.1:%d", cmd.Process.Pid, c.Puerto)
+		} else {
+			log.Printf("[%d] hijo pid %d en 127.0.0.1:%d (db %s)", c.ID, cmd.Process.Pid, c.Puerto, c.DB)
+		}
 		err := cmd.Wait()
 		c.lista = false
 		c.proceso = nil
-		if multiCerrando || c.eliminada {
+		if multiCerrando || c.eliminada || c.gen != gen {
 			return
 		}
 		log.Printf("[%d] hijo termino: %v", c.ID, err)
@@ -161,34 +177,67 @@ func armarProxy(c *cuentaMulti) {
 
 // Crea la cuenta de un token nuevo: base, config, hijo.
 func crearCuenta(token string) (*cuentaMulti, error) {
-	id := 1
 	puerto := 9000
 	for _, c := range multiCuentas {
-		if c.ID >= id {
-			id = c.ID + 1
-		}
 		if c.Puerto >= puerto {
 			puerto = c.Puerto
 		}
 	}
 	puerto++
-	nombreDB := fmt.Sprintf("whatsapp_%d", id)
-	admin, err := sql.Open("mysql", fmt.Sprintf(cfg.MariaDB, ""))
-	if err != nil {
-		return nil, err
-	}
-	defer admin.Close()
-	if _, err := admin.Exec("CREATE DATABASE IF NOT EXISTS `" + nombreDB + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"); err != nil {
-		return nil, fmt.Errorf("crear base: %w", err)
-	}
-	dir := filepath.Join(cfg.Dir, "cuentas", fmt.Sprint(id))
-	c := &cuentaMulti{ID: id, Token: token, DB: nombreDB, Store: filepath.Join(dir, "store.db"), Media: filepath.Join(dir, "media"),
-		Puerto: puerto, Creada: ahoraMs(), provisoria: true, ultimoUso: time.Now()}
+	tmp := filepath.Join(cfg.Dir, "provisorias", fmt.Sprint(puerto))
+	os.RemoveAll(tmp)
+	c := &cuentaMulti{Token: token, Store: filepath.Join(tmp, "store.db"), Media: filepath.Join(tmp, "media"),
+		Puerto: puerto, Creada: ahoraMs(), provisoria: true, tmp: tmp, ultimoUso: time.Now()}
 	multiCuentas = append(multiCuentas, c)
 	armarProxy(c)
 	go supervisarHijo(c)
-	log.Printf("cuenta provisoria %d para el token %s... (queda si se vincula)", id, token[:6])
+	log.Printf("provisorio en :%d para el token %s... (sin cuenta hasta que se vincule)", puerto, token[:6])
 	return c, nil
+}
+
+// El provisorio se vinculo: recien ahora la cuenta de verdad. Se para el
+// hijo, se crea la base y la carpeta, se muda el store.db (ahi esta la
+// sesion) y el hijo arranca con MariaDB. Con multiMu tomado.
+func promoverCuenta(c *cuentaMulti) error {
+	c.gen++
+	if c.proceso != nil {
+		c.proceso.Signal(syscall.SIGTERM)
+	}
+	for i := 0; i < 50 && c.proceso != nil; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	id := 1
+	for _, x := range multiCuentas {
+		if !x.provisoria && x.ID >= id {
+			id = x.ID + 1
+		}
+	}
+	nombreDB := fmt.Sprintf("whatsapp_%d", id)
+	admin, err := sql.Open("mysql", fmt.Sprintf(cfg.MariaDB, ""))
+	if err != nil {
+		return err
+	}
+	defer admin.Close()
+	if _, err := admin.Exec("CREATE DATABASE IF NOT EXISTS `" + nombreDB + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"); err != nil {
+		return fmt.Errorf("crear base: %w", err)
+	}
+	dir := filepath.Join(cfg.Dir, "cuentas", fmt.Sprint(id))
+	os.MkdirAll(dir, 0o755)
+	// store.db y sus -wal/-shm (ahi esta la sesion recien vinculada).
+	store := filepath.Join(dir, "store.db")
+	partes, _ := filepath.Glob(c.Store + "*")
+	for _, p := range partes {
+		if err := os.Rename(p, store+strings.TrimPrefix(p, c.Store)); err != nil {
+			return fmt.Errorf("mudar %s: %w", filepath.Base(p), err)
+		}
+	}
+	os.RemoveAll(c.tmp)
+	c.ID, c.DB, c.Store, c.Media = id, nombreDB, store, filepath.Join(dir, "media")
+	c.provisoria, c.lista, c.tmp = false, false, ""
+	guardarCuentas()
+	go supervisarHijo(c)
+	log.Printf("[%d] vinculada: cuenta creada (db %s) para el token %s...", id, nombreDB, c.Token[:6])
+	return nil
 }
 
 // El hijo dice si WhatsApp ya esta vinculado.
@@ -206,8 +255,8 @@ func hijoLogueado(c *cuentaMulti) bool {
 	return e.Logueado
 }
 
-// Borra una cuenta entera: hijo, base y carpeta. Con multiMu tomado.
-func destruirCuenta(c *cuentaMulti) {
+// Borra un provisorio: el hijo y su carpeta temporal. Con multiMu tomado.
+func destruirProvisorio(c *cuentaMulti) {
 	c.eliminada = true
 	if c.proceso != nil {
 		c.proceso.Signal(syscall.SIGTERM)
@@ -218,31 +267,30 @@ func destruirCuenta(c *cuentaMulti) {
 			break
 		}
 	}
-	time.Sleep(time.Second)
-	if admin, err := sql.Open("mysql", fmt.Sprintf(cfg.MariaDB, "")); err == nil {
-		admin.Exec("DROP DATABASE IF EXISTS `" + c.DB + "`")
-		admin.Close()
+	for i := 0; i < 50 && c.proceso != nil; i++ {
+		time.Sleep(100 * time.Millisecond)
 	}
-	os.RemoveAll(filepath.Join(cfg.Dir, "cuentas", fmt.Sprint(c.ID)))
+	os.RemoveAll(c.tmp)
 }
 
-// Cada 15 s: las provisorias que se vincularon pasan a cuentas.json; las
-// que nadie usa hace 5 minutos sin vincular, se borran.
+// Cada 3 s: el provisorio que se vinculo pasa a cuenta de verdad; el que
+// nadie usa hace 5 minutos sin vincular, se borra.
 func vigilarProvisorias() {
 	for {
-		time.Sleep(15 * time.Second)
+		time.Sleep(3 * time.Second)
 		multiMu.Lock()
 		for _, c := range append([]*cuentaMulti(nil), multiCuentas...) {
 			if !c.provisoria || !c.lista {
 				continue
 			}
 			if hijoLogueado(c) {
-				c.provisoria = false
-				guardarCuentas()
-				log.Printf("[%d] vinculada: queda como cuenta", c.ID)
+				if err := promoverCuenta(c); err != nil {
+					log.Printf("provisorio :%d vinculado pero no se pudo crear la cuenta: %v", c.Puerto, err)
+					destruirProvisorio(c)
+				}
 			} else if time.Since(c.ultimoUso) > 5*time.Minute {
-				log.Printf("[%d] provisoria sin vincular ni uso: se borra", c.ID)
-				destruirCuenta(c)
+				log.Printf("provisorio :%d sin vincular ni uso: se borra", c.Puerto)
+				destruirProvisorio(c)
 			}
 		}
 		multiMu.Unlock()
@@ -346,6 +394,7 @@ func multiCLI() {
 		json.Unmarshal(crudo, &multiCuentas)
 	}
 	sort.Slice(multiCuentas, func(i, j int) bool { return multiCuentas[i].ID < multiCuentas[j].ID })
+	os.RemoveAll(filepath.Join(cfg.Dir, "provisorias"))
 	limpiarHuerfanas()
 	for _, c := range multiCuentas {
 		armarProxy(c)
