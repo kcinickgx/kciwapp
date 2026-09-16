@@ -1,7 +1,7 @@
 # Publica el cliente en H:\kciwapp (= https://kcinick.gxzone.com/kciwapp/),
-# de donde el cliente se actualiza solo. La fuente es portable\ (mpv, whisper,
-# ffmpeg, fondos...; solo se lee) con el exe y el core recien compilados de
-# build\; copia lo
+# de donde el cliente se actualiza solo. La fuente es la instalacion del
+# usuario (C:\Program Files\KciWAPP: mpv, whisper, ffmpeg, fondos...; solo se
+# lee) con el exe y el core recien compilados de build\; copia lo
 # que cambio, borra lo que sobra y escribe el manifiesto kciwapp.md5 ("md5
 # tamano ruta" por linea). No lleva lo que es del usuario (ajustes.json,
 # cuentas.json, datos\) ni los pdb. Ademas deja INSTALAR.md y, en server\,
@@ -15,13 +15,13 @@ import shutil
 import sys
 
 RAIZ = os.path.dirname(os.path.abspath(__file__))
-ORIGEN = os.path.join(RAIZ, 'portable')
+ORIGEN = r'C:\Program Files\KciWAPP'  # la instalacion del usuario: solo se lee
 DESTINO = r'H:\kciwapp'
 MANIFIESTO = 'kciwapp.md5'
 EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALAR.md', MANIFIESTO}
 EXCLUIR_DIR = {'datos', 'server'}
-# Lo recien compilado se toma de build\ (en portable\ no se escribe nada:
-# el usuario lo actualiza a mano). Estos van aunque en portable\ no esten.
+# Lo recien compilado se toma de build\ (en la instalacion no se escribe
+# nada: el usuario la actualiza a mano). Estos van aunque alla no esten.
 FUENTES = {'kciwapp2.exe': os.path.join(RAIZ, 'build', 'kciwapp2.exe'),
            'core/kciwapp-core.exe': os.path.join(RAIZ, 'build', 'core', 'kciwapp-core.exe')}
 CACHE = os.path.join(RAIZ, '.md5-cache.json')
@@ -45,6 +45,9 @@ def archivos_de(base):
 
 
 def main():
+    if not os.path.isdir(ORIGEN) or len(list(archivos_de(ORIGEN))) < 20:
+        print(f'no esta la instalacion en {ORIGEN}: no se publica nada (para no vaciar H:)')
+        return 1
     if not os.path.isdir(DESTINO):
         os.makedirs(DESTINO)
     try:
