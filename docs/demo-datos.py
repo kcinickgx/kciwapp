@@ -29,7 +29,18 @@ def fuente(tam):
             pass
     return ImageFont.load_default()
 
-def avatar(ruta, inicial, color):
+# Retratos de placeholder (pravatar.cc = fotos libres de Unsplash); si no hay
+# red, un circulo con la inicial.
+import urllib.request
+def avatar(ruta, inicial, color, foto_n=None):
+    if foto_n is not None:
+        try:
+            req = urllib.request.Request('https://i.pravatar.cc/256?img=%d' % foto_n, headers={'User-Agent': 'kciwapp-demo'})
+            datos = urllib.request.urlopen(req, timeout=20).read()
+            Image.open(io.BytesIO(datos)).convert('RGB').save(ruta, 'JPEG', quality=88)
+            return
+        except Exception as e:
+            print('sin foto para', inicial, e)
     im = Image.new('RGB', (256, 256), color)
     d = ImageDraw.Draw(im)
     f = fuente(130)
@@ -165,9 +176,11 @@ con = sqlite3.connect(DB)
 cur = con.cursor()
 for t in ('mensajes', 'reacciones', 'media', 'chats', 'contactos', 'miembros', 'eventos'):
     cur.execute(f'DELETE FROM {t}')
-for jid, nombre, color in contactos:
+# Numeros de retrato de pravatar (elegidos para que coincidan con los nombres).
+retratos = [47, 12, 32, 60, 25, 8, 44, 68]
+for (jid, nombre, color), n_foto in zip(contactos, retratos):
     ruta = os.path.join(FOTOS, jid.split('@')[0] + '.jpg')
-    avatar(ruta, nombre[0], color)
+    avatar(ruta, nombre[0], color, n_foto)
     cur.execute('INSERT INTO contactos (jid, telefono, nombre_agenda, foto) VALUES (?, ?, ?, ?)', (jid, '+' + jid.split('@')[0], nombre, ruta))
 cur.execute('INSERT INTO contactos (jid, telefono, nombre_agenda) VALUES (?, ?, ?)', (YO, '+15550001234', 'You'))
 for jid, nombre, miembros in grupos:
