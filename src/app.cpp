@@ -1982,9 +1982,11 @@ void App::cargar_todo_el_chat() {
 // El cartelito de "Loading...", centrado sobre la conversacion.
 void App::dibujar_progreso_carga() {
     if (!cargando_todo) return;
+    // Modal: la columna del chat entera (cabecera y pie incluidos) en gris.
+    g.rect(x_conv(), 0, w_conv(), g.alto, Color(0x000000, 0.55f));
     std::wstring t = L"Loading all messages...";
     float tw = g.medir(t, 14), W = tw + 40, H = 40;
-    float x = x_conv() + (w_conv() - W) / 2, y = alto_cabecera() + (g.alto - alto_pie - alto_cabecera() - H) / 2;
+    float x = x_conv() + (w_conv() - W) / 2, y = (g.alto - H) / 2;
     g.rect_redondo(x, y, W, H, 10, Color(BG_PANEL()));
     g.borde_redondo(x, y, W, H, 10, Color(BORDE()), 1.0f);
     g.renglon(t, x + 20, y + 11, 14, Color(TXT()));
@@ -2424,6 +2426,7 @@ void App::raton_mueve(float x, float y) {
 
 void App::raton_abajo(float x, float y, bool shift) {
     SetCapture(hwnd);
+    if (cargando_todo && x >= ancho_lista) return;
     if (actualizando) return;
     if (click_modal_actualizacion(x, y)) return;
     if (click_configuracion(x, y, shift)) return;
@@ -2660,6 +2663,7 @@ void App::rueda(float x, float y, float delta) {
     float px = -delta / 120.0f * lineas * 40.0f;
     if (rueda_modal_reenvio(x, y, delta) || rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
     if (x < ancho_lista) lista.rodar(px);
+    else if (cargando_todo) return;
     else if (panel_resultados_chat() && y > alto_cabecera() && y < g.alto - alto_pie) scroll_res_chat.rodar(px);
     else if (y > alto_cabecera() && y < g.alto - alto_pie) conv.rodar(px);
     pedir_dibujo();
