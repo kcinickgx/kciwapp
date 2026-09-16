@@ -1,8 +1,10 @@
 # Publica el cliente en H:\kciwapp (= https://kcinick.gxzone.com/kciwapp/),
-# de donde el cliente se actualiza solo: copia lo que cambio de
-# release\cliente, borra lo que sobra y escribe el manifiesto kciwapp.md5
-# ("md5 tamano ruta" por linea). No lleva lo que es del usuario
-# (ajustes.json, cuentas.json, datos\).
+# de donde el cliente se actualiza solo. La fuente es portable\ (mpv, whisper,
+# core con ffmpeg, fondos...) con el exe recien compilado de build\; copia lo
+# que cambio, borra lo que sobra y escribe el manifiesto kciwapp.md5 ("md5
+# tamano ruta" por linea). No lleva lo que es del usuario (ajustes.json,
+# cuentas.json, datos\) ni los pdb. Ademas deja INSTALAR.md y, en server\,
+# los instaladores (el binario del server lo sube core/build.sh server).
 #
 #   python publicar.py
 import hashlib
@@ -11,12 +13,15 @@ import os
 import shutil
 import sys
 
-ORIGEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'release', 'cliente')
+RAIZ = os.path.dirname(os.path.abspath(__file__))
+ORIGEN = os.path.join(RAIZ, 'portable')
 DESTINO = r'H:\kciwapp'
 MANIFIESTO = 'kciwapp.md5'
-EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', MANIFIESTO}
-EXCLUIR_DIR = {'datos'}
-CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'release', 'md5-cache.json')
+EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALAR.md', MANIFIESTO}
+EXCLUIR_DIR = {'datos', 'server'}
+# Archivos que se toman de otro lado que portable\ (el exe, recien compilado).
+FUENTES = {'kciwapp2.exe': os.path.join(RAIZ, 'build', 'kciwapp2.exe')}
+CACHE = os.path.join(RAIZ, '.md5-cache.json')
 
 
 def md5_de(ruta):
@@ -46,7 +51,7 @@ def main():
     # md5 de lo local, con cache por tamano+mtime (whisper son 2,7 GB).
     lista = []
     for rel in sorted(archivos_de(ORIGEN)):
-        ruta = os.path.join(ORIGEN, rel)
+        ruta = FUENTES.get(rel, os.path.join(ORIGEN, rel))
         st = os.stat(ruta)
         c = cache.get(rel)
         if not c or c['tamano'] != st.st_size or c['mtime'] != st.st_mtime_ns:
@@ -70,7 +75,7 @@ def main():
             continue
         os.makedirs(os.path.dirname(destino), exist_ok=True)
         print(f'copiando {rel} ({tamano // 1024} KB)')
-        shutil.copyfile(os.path.join(ORIGEN, rel), destino)
+        shutil.copyfile(FUENTES.get(rel, os.path.join(ORIGEN, rel)), destino)
         copiados += 1
     nuestros = {rel for rel, _, _ in lista}
     borrados = 0
@@ -79,12 +84,17 @@ def main():
             print(f'borrando {rel}')
             os.remove(os.path.join(DESTINO, rel))
             borrados += 1
-    # El manifiesto al final, cuando ya esta todo; la misma copia va en
-    # release\cliente (el cliente compara contra la suya, sin releer nada).
+    # El manifiesto al final, cuando ya esta todo; la misma copia queda en
+    # portable\ (el cliente compara contra la suya, sin releer nada).
     texto = ''.join(f'{md5} {tamano} {rel}\n' for rel, md5, tamano in lista)
     for carpeta in (DESTINO, ORIGEN):
         with open(os.path.join(carpeta, MANIFIESTO), 'w', encoding='utf-8', newline='\n') as f:
             f.write(texto)
+    # Lo de al lado: instrucciones e instaladores del server.
+    shutil.copyfile(os.path.join(RAIZ, 'docs', 'INSTALAR.md'), os.path.join(DESTINO, 'INSTALAR.md'))
+    os.makedirs(os.path.join(DESTINO, 'server'), exist_ok=True)
+    for f in ('instalar.sh', 'instalar-slackware.sh'):
+        shutil.copyfile(os.path.join(RAIZ, 'core', f), os.path.join(DESTINO, 'server', f))
     total = sum(t for _, _, t in lista)
     print(f'{len(lista)} archivos ({total // (1 << 20)} MB), {copiados} copiados, {borrados} borrados -> {DESTINO}\\{MANIFIESTO}')
 

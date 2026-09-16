@@ -200,11 +200,6 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
             if (wp == 10 && app) app->tic_vinculacion();
-            if (wp == 12 && app) {
-                KillTimer(h, 12);
-                if (!app->banner_instalable) app->banner_actualizacion.clear();
-                app->pedir_dibujo();
-            }
             if (wp == 13 && app) {
                 KillTimer(h, 13);
                 app->verificar_actualizacion(false);

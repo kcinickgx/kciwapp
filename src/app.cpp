@@ -1529,6 +1529,7 @@ void App::dibujar() {
         else if (selector_pendiente) dibujar_selector();
         else dibujar_vinculacion();  // sin sesion: el QR solo, a toda la ventana
         dibujar_menu();
+        dibujar_modal_actualizacion();
         g.terminar_frame();
         return;
     }
@@ -1547,6 +1548,7 @@ void App::dibujar() {
     dibujar_visor();
     dibujar_modal_reenvio();
     dibujar_menu();
+    dibujar_modal_actualizacion();
     g.terminar_frame();
 }
 
@@ -1590,7 +1592,6 @@ void App::dibujar_lista() {
     g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO()));
     g.lupa(29, 76, 6, Color(TXT_DIM()));
     buscador.dibujar(g, 40, 61, W - 54, 32, ahora);
-    dibujar_banner_actualizacion();
 
     armar_items();
     float H = g.alto - top;
@@ -2434,6 +2435,7 @@ void App::raton_mueve(float x, float y) {
 void App::raton_abajo(float x, float y, bool shift) {
     SetCapture(hwnd);
     if (actualizando) return;
+    if (click_modal_actualizacion(x, y)) return;
     if (click_configuracion(x, y, shift)) return;
     if (click_selector(x, y)) return;
     if (click_menu(x, y)) return;
@@ -2479,7 +2481,6 @@ void App::raton_abajo(float x, float y, bool shift) {
             menu_cuentas(ancho_lista - 86, 52);
             return;
         }
-        if (click_banner_actualizacion(x, y)) return;
         if (y > top_lista() && lista.max > 0 && x > ancho_lista - 24) {
             float top = top_lista(), H = g.alto - top;
             arrastrando_lista = true;
@@ -2650,6 +2651,7 @@ void App::rueda(float x, float y, float delta) {
 
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
     if (actualizando) return;
+    if (tecla_modal_actualizacion(vk)) return;
     if (tecla_configuracion(vk, shift, ctrl)) return;
     if (selector_pendiente) return;
     if (vk == VK_F9) {
@@ -2763,7 +2765,7 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
 }
 
 void App::caracter(wchar_t c) {
-    if (actualizando) return;
+    if (actualizando || modal_actualizacion) return;
     if (caracter_configuracion(c)) return;
     if (selector_pendiente) return;
     if (buscador_chat.foco) {
@@ -2883,6 +2885,7 @@ bool App::sobre_campo(float x, float y) const {
 
 bool App::sobre_clickeable(float x, float y) {
     if (actualizando) return false;
+    if (modal_actualizacion) return sobre_modal_actualizacion(x, y);
     if (sin_sesion && !menu_abierto) return y < 50 && x > g.ancho - 56;
     if (config_pendiente) return clickeable_configuracion(x, y);
     if (selector_pendiente) return clickeable_selector(x, y);
@@ -2894,7 +2897,6 @@ bool App::sobre_clickeable(float x, float y) {
     }
     if (x < ancho_lista) {
         if (y < 60) return x > ancho_lista - 86;              // menu de cuentas y engranaje
-        if (sobre_banner_actualizacion(x, y)) return true;
         if (y < top_lista()) return false;                     // buscador
         int k = item_en(y);
         return k >= 0 && k < (int)items.size() && items[k].tipo != ItemLista::Titulo;

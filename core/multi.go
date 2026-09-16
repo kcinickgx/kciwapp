@@ -3,8 +3,11 @@ package main
 // Modo multi-cuenta: este proceso no habla con WhatsApp; escucha en el
 // puerto publico y rutea cada request, por su X-Token, a un proceso hijo
 // (el server normal, en 127.0.0.1:puerto) que tiene su propia base,
-// su store.db y su carpeta de media. Un token desconocido crea la cuenta:
-// se le arma la base y el config, se levanta el hijo, y el cliente ve el QR.
+// su store.db y su carpeta de media. Un token desconocido crea una cuenta
+// provisoria: se le arma la base y el config, se levanta el hijo y el cliente
+// ve el QR; recien cuando WhatsApp queda vinculado pasa a cuentas.json. Si
+// nadie la usa por 5 minutos sin vincular, se borra entera (hijo, base,
+// carpeta): generar tokens no deja basura.
 //
 // Config (multi.json):
 //   {"multi": true, "escucha": ":8080", "dir": "/opt/kciwapp-server",
@@ -41,9 +44,12 @@ type cuentaMulti struct {
 	Puerto int    `json:"puerto"`
 	Creada int64  `json:"creada"`
 
-	proxy   *httputil.ReverseProxy `json:"-"`
-	lista   bool                   `json:"-"` // el hijo ya respondio /estado
-	proceso *os.Process            `json:"-"`
+	proxy      *httputil.ReverseProxy `json:"-"`
+	lista      bool                   `json:"-"` // el hijo ya respondio /estado
+	proceso    *os.Process            `json:"-"`
+	provisoria bool                   `json:"-"` // todavia sin vincular: no esta en cuentas.json
+	eliminada  bool                   `json:"-"` // se borro: el supervisor no la relanza
+	ultimoUso  time.Time              `json:"-"`
 }
 
 var (
@@ -100,7 +106,7 @@ func supervisarHijo(c *cuentaMulti) {
 		err := cmd.Wait()
 		c.lista = false
 		c.proceso = nil
-		if multiCerrando {
+		if multiCerrando || c.eliminada {
 			return
 		}
 		log.Printf("[%d] hijo termino: %v", c.ID, err)
@@ -177,13 +183,113 @@ func crearCuenta(token string) (*cuentaMulti, error) {
 	}
 	dir := filepath.Join(cfg.Dir, "cuentas", fmt.Sprint(id))
 	c := &cuentaMulti{ID: id, Token: token, DB: nombreDB, Store: filepath.Join(dir, "store.db"), Media: filepath.Join(dir, "media"),
-		Puerto: puerto, Creada: ahoraMs()}
+		Puerto: puerto, Creada: ahoraMs(), provisoria: true, ultimoUso: time.Now()}
 	multiCuentas = append(multiCuentas, c)
-	guardarCuentas()
 	armarProxy(c)
 	go supervisarHijo(c)
-	log.Printf("cuenta nueva %d para el token %s...", id, token[:6])
+	log.Printf("cuenta provisoria %d para el token %s... (queda si se vincula)", id, token[:6])
 	return c, nil
+}
+
+// El hijo dice si WhatsApp ya esta vinculado.
+func hijoLogueado(c *cuentaMulti) bool {
+	cl := http.Client{Timeout: 3 * time.Second}
+	r, err := cl.Get(fmt.Sprintf("http://127.0.0.1:%d/estado", c.Puerto))
+	if err != nil {
+		return false
+	}
+	defer r.Body.Close()
+	var e struct {
+		Logueado bool `json:"logueado"`
+	}
+	json.NewDecoder(r.Body).Decode(&e)
+	return e.Logueado
+}
+
+// Borra una cuenta entera: hijo, base y carpeta. Con multiMu tomado.
+func destruirCuenta(c *cuentaMulti) {
+	c.eliminada = true
+	if c.proceso != nil {
+		c.proceso.Signal(syscall.SIGTERM)
+	}
+	for i, x := range multiCuentas {
+		if x == c {
+			multiCuentas = append(multiCuentas[:i], multiCuentas[i+1:]...)
+			break
+		}
+	}
+	time.Sleep(time.Second)
+	if admin, err := sql.Open("mysql", fmt.Sprintf(cfg.MariaDB, "")); err == nil {
+		admin.Exec("DROP DATABASE IF EXISTS `" + c.DB + "`")
+		admin.Close()
+	}
+	os.RemoveAll(filepath.Join(cfg.Dir, "cuentas", fmt.Sprint(c.ID)))
+}
+
+// Cada 15 s: las provisorias que se vincularon pasan a cuentas.json; las
+// que nadie usa hace 5 minutos sin vincular, se borran.
+func vigilarProvisorias() {
+	for {
+		time.Sleep(15 * time.Second)
+		multiMu.Lock()
+		for _, c := range append([]*cuentaMulti(nil), multiCuentas...) {
+			if !c.provisoria || !c.lista {
+				continue
+			}
+			if hijoLogueado(c) {
+				c.provisoria = false
+				guardarCuentas()
+				log.Printf("[%d] vinculada: queda como cuenta", c.ID)
+			} else if time.Since(c.ultimoUso) > 5*time.Minute {
+				log.Printf("[%d] provisoria sin vincular ni uso: se borra", c.ID)
+				destruirCuenta(c)
+			}
+		}
+		multiMu.Unlock()
+	}
+}
+
+// Al arrancar: bases whatsapp_N y carpetas cuentas/N que no son de ninguna
+// cuenta (provisorias que quedaron de un cierre) se borran, si estan vacias.
+func limpiarHuerfanas() {
+	conocidas := map[string]bool{}
+	for _, c := range multiCuentas {
+		conocidas[c.DB] = true
+		conocidas[fmt.Sprint(c.ID)] = true
+	}
+	admin, err := sql.Open("mysql", fmt.Sprintf(cfg.MariaDB, ""))
+	if err != nil {
+		return
+	}
+	defer admin.Close()
+	filas, err := admin.Query("SHOW DATABASES LIKE 'whatsapp\\_%'")
+	if err != nil {
+		return
+	}
+	var huerfanas []string
+	for filas.Next() {
+		var n string
+		if filas.Scan(&n) == nil && !conocidas[n] {
+			huerfanas = append(huerfanas, n)
+		}
+	}
+	filas.Close()
+	for _, n := range huerfanas {
+		var mensajes int
+		if admin.QueryRow("SELECT COUNT(*) FROM `"+n+"`.mensajes").Scan(&mensajes) == nil && mensajes > 0 {
+			log.Printf("base %s sin cuenta pero con %d mensajes: se deja", n, mensajes)
+			continue
+		}
+		admin.Exec("DROP DATABASE IF EXISTS `" + n + "`")
+		log.Printf("base %s sin cuenta: borrada", n)
+	}
+	entradas, _ := os.ReadDir(filepath.Join(cfg.Dir, "cuentas"))
+	for _, e := range entradas {
+		if e.IsDir() && !conocidas[e.Name()] {
+			os.RemoveAll(filepath.Join(cfg.Dir, "cuentas", e.Name()))
+			log.Printf("carpeta cuentas/%s sin cuenta: borrada", e.Name())
+		}
+	}
 }
 
 func multiHTTP(w http.ResponseWriter, r *http.Request) {
@@ -219,6 +325,7 @@ func multiHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	c.ultimoUso = time.Now()
 	multiMu.Unlock()
 	if !esperarHijo(c) {
 		http.Error(w, "account starting, retry", http.StatusServiceUnavailable)
@@ -239,10 +346,12 @@ func multiCLI() {
 		json.Unmarshal(crudo, &multiCuentas)
 	}
 	sort.Slice(multiCuentas, func(i, j int) bool { return multiCuentas[i].ID < multiCuentas[j].ID })
+	limpiarHuerfanas()
 	for _, c := range multiCuentas {
 		armarProxy(c)
 		go supervisarHijo(c)
 	}
+	go vigilarProvisorias()
 	log.Printf("multi: %d cuentas, escuchando en %s", len(multiCuentas), cfg.Escucha)
 	srv := &http.Server{Addr: cfg.Escucha, Handler: http.HandlerFunc(multiHTTP), ReadHeaderTimeout: 10 * time.Second}
 	go func() {

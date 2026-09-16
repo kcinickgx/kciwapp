@@ -1,6 +1,6 @@
-// La parte visible de la actualizacion: el aviso debajo del buscador de la
-// lista ("Update available" / "up to date"), la pantalla de progreso mientras
-// baja, y el relanzado al terminar.
+// La parte visible de la actualizacion: el modal del chequeo (Cancel/Update,
+// u OK si esta al dia), la pantalla de progreso mientras baja, y el relanzado
+// al terminar.
 #include "actualizar.h"
 #include "app.h"
 #include "core.h"
@@ -9,9 +9,6 @@
 #include "tema.h"
 
 namespace {
-
-constexpr float BANNER_Y = 100.0f;
-constexpr float BANNER_H = 30.0f;
 
 std::wstring megas(long long bytes) {
     wchar_t b[32];
@@ -23,46 +20,115 @@ std::wstring megas(long long bytes) {
 
 }  // namespace
 
-float App::alto_banner_actualizacion() const { return banner_actualizacion.empty() ? 0.0f : BANNER_H + 6; }
+// Geometria del modal: la tarjeta centrada y sus botones.
+struct GeoModal {
+    float x, y, w, h;
+    float b1x, b2x, by, bw, bh;  // boton izquierdo (Cancel) y derecho (Update/OK)
+};
 
-// Chequea contra el manifiesto; con a_pedido tambien avisa si no hay nada.
+static GeoModal geo_modal(float W, float H) {
+    GeoModal q;
+    q.w = std::min(420.0f, W - 40);
+    q.h = 160;
+    q.x = (W - q.w) / 2;
+    q.y = (H - q.h) / 2;
+    q.bw = 110;
+    q.bh = 36;
+    q.by = q.y + q.h - 20 - q.bh;
+    q.b2x = q.x + q.w - 20 - q.bw;
+    q.b1x = q.b2x - 12 - q.bw;
+    return q;
+}
+
+// Chequea contra el manifiesto. A pedido abre el modal enseguida ("Checking")
+// y muestra el resultado; automatico, solo si hay algo que bajar.
 void App::verificar_actualizacion(bool a_pedido) {
+    if (modal_actualizacion || actualizando) return;
+    if (a_pedido) {
+        modal_actualizacion = 1;
+        texto_modal_actualizacion = L"Checking for updates...";
+        campo.foco = false;
+        pedir_dibujo();
+    }
     actualizar::verificar(carpeta_exe(), [this, a_pedido] {
         actualizar::Estado e = actualizar::estado();
+        // Cancelado mientras buscaba (o se abrio otro modal): nada.
+        if (a_pedido ? modal_actualizacion != 1 : modal_actualizacion != 0) return;
         if (e.hay) {
-            banner_actualizacion = L"Update available (" + megas(e.total_bytes) + L")  —  click to install";
-            banner_instalable = true;
+            modal_actualizacion = 2;
+            texto_modal_actualizacion = L"A new version is available (" + megas(e.total_bytes) + L", " + std::to_wstring(e.pendientes.size()) + (e.pendientes.size() == 1 ? L" file" : L" files") + L").";
+            campo.foco = false;
         } else if (a_pedido) {
-            banner_actualizacion = e.error.empty() ? L"kciwapp is up to date" : e.error;
-            banner_instalable = false;
-            SetTimer(hwnd, 12, 4000, nullptr);
+            modal_actualizacion = 3;
+            texto_modal_actualizacion = e.error.empty() ? L"kciwapp is up to date." : e.error;
         }
         pedir_dibujo();
     });
 }
 
-void App::dibujar_banner_actualizacion() {
-    if (banner_actualizacion.empty()) return;
-    float W = ancho_lista;
-    bool inst = banner_instalable;
-    g.rect_redondo(12, BANNER_Y, W - 24, BANNER_H, 8, Color(inst ? ACCENT() : BG_CAMPO(), inst ? 0.9f : 1.0f));
-    if (inst) g.renglon_fuente(L"Segoe MDL2 Assets", L"", 24, BANNER_Y + 8, 14, Color(0xffffff));
-    g.renglon(banner_actualizacion, inst ? 46 : 24, BANNER_Y + 7, 12.5f, Color(inst ? 0xffffff : TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, W - 60);
+static void cerrar_modal_actualizacion(App& a) {
+    a.modal_actualizacion = 0;
+    if (!a.config_pendiente && !a.selector_pendiente && !a.sin_sesion) a.campo.foco = true;
+    a.pedir_dibujo();
 }
 
-bool App::click_banner_actualizacion(float x, float y) {
-    if (banner_actualizacion.empty() || x >= ancho_lista || y < BANNER_Y || y >= BANNER_Y + BANNER_H) return false;
-    if (banner_instalable) empezar_actualizacion();
-    else {
-        banner_actualizacion.clear();
-        KillTimer(hwnd, 12);
+void App::dibujar_modal_actualizacion() {
+    if (!modal_actualizacion) return;
+    float W = g.ancho, H = g.alto;
+    GeoModal q = geo_modal(W, H);
+    // Todo lo de abajo apagado.
+    g.rect(0, 0, W, H, Color(0x000000, 0.55f));
+    g.rect_redondo(q.x, q.y, q.w, q.h, 12, Color(BG_PANEL()));
+    g.borde_redondo(q.x, q.y, q.w, q.h, 12, Color(BORDE()), 1.0f);
+    g.renglon(L"Check for updates", q.x + 20, q.y + 18, 16, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    g.renglon(texto_modal_actualizacion, q.x + 20, q.y + 52, 13.5f, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, q.w - 40);
+    auto boton = [&](float x, const wchar_t* t, bool lleno) {
+        if (lleno) g.rect_redondo(x, q.by, q.bw, q.bh, 8, Color(ACCENT()));
+        else g.borde_redondo(x, q.by, q.bw, q.bh, 8, Color(BORDE()), 1.0f);
+        float tw = g.medir(t, 14, lleno ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL);
+        g.renglon(t, x + (q.bw - tw) / 2, q.by + 9, 14, Color(lleno ? 0xffffff : TXT()), lleno ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL);
+    };
+    if (modal_actualizacion == 1) boton(q.b2x, L"Cancel", false);
+    else if (modal_actualizacion == 2) {
+        boton(q.b1x, L"Cancel", false);
+        boton(q.b2x, L"Update", true);
+    } else boton(q.b2x, L"OK", true);
+}
+
+bool App::sobre_modal_actualizacion(float x, float y) const {
+    if (!modal_actualizacion) return false;
+    GeoModal q = geo_modal(g.ancho, g.alto);
+    if (y < q.by || y >= q.by + q.bh) return false;
+    if (x >= q.b2x && x < q.b2x + q.bw) return true;
+    return modal_actualizacion == 2 && x >= q.b1x && x < q.b1x + q.bw;
+}
+
+bool App::click_modal_actualizacion(float x, float y) {
+    if (!modal_actualizacion) return false;
+    GeoModal q = geo_modal(g.ancho, g.alto);
+    bool en_fila = y >= q.by && y < q.by + q.bh;
+    bool derecho = en_fila && x >= q.b2x && x < q.b2x + q.bw;
+    bool izquierdo = en_fila && x >= q.b1x && x < q.b1x + q.bw;
+    if (modal_actualizacion == 2 && derecho) {
+        modal_actualizacion = 0;
+        empezar_actualizacion();
+    } else if (derecho || (modal_actualizacion == 2 && izquierdo)) {
+        // Cancel mientras busca: el chequeo sigue en fondo pero ya no muestra nada.
+        cerrar_modal_actualizacion(*this);
     }
-    pedir_dibujo();
-    return true;
+    return true;  // el modal se come todo lo demas
 }
 
-bool App::sobre_banner_actualizacion(float x, float y) const {
-    return !banner_actualizacion.empty() && x < ancho_lista && y >= BANNER_Y && y < BANNER_Y + BANNER_H;
+bool App::tecla_modal_actualizacion(WPARAM vk) {
+    if (!modal_actualizacion) return false;
+    if (vk == VK_ESCAPE) cerrar_modal_actualizacion(*this);
+    else if (vk == VK_RETURN) {
+        if (modal_actualizacion == 2) {
+            modal_actualizacion = 0;
+            empezar_actualizacion();
+        } else if (modal_actualizacion == 3) cerrar_modal_actualizacion(*this);
+    }
+    return true;
 }
 
 void App::empezar_actualizacion() {
@@ -75,9 +141,8 @@ void App::empezar_actualizacion() {
         [this](bool ok) {
             if (!ok) {
                 actualizando = false;
-                banner_actualizacion = actualizar::estado().error;
-                banner_instalable = false;
-                campo.foco = true;
+                modal_actualizacion = 3;
+                texto_modal_actualizacion = actualizar::estado().error;
                 pedir_dibujo();
                 return;
             }

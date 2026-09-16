@@ -357,14 +357,15 @@ struct App {
     void cambiar_cuenta(int i);
     void menu_cuentas(float x, float y);
     // Actualizacion del cliente (actualizar_ui.cpp): aviso bajo el buscador y pantalla de progreso.
-    std::wstring banner_actualizacion;
-    bool banner_instalable = false;
+    // El modal del chequeo: 0 = nada, 1 = buscando, 2 = hay (Cancel/Update), 3 = al dia o error (OK).
+    int modal_actualizacion = 0;
+    std::wstring texto_modal_actualizacion;
     bool actualizando = false;
-    float alto_banner_actualizacion() const;
     void verificar_actualizacion(bool a_pedido);
-    void dibujar_banner_actualizacion();
-    bool click_banner_actualizacion(float x, float y);
-    bool sobre_banner_actualizacion(float x, float y) const;
+    void dibujar_modal_actualizacion();
+    bool click_modal_actualizacion(float x, float y);
+    bool sobre_modal_actualizacion(float x, float y) const;
+    bool tecla_modal_actualizacion(WPARAM vk);
     void empezar_actualizacion();
     void dibujar_actualizacion();
     Campo cfg_host, cfg_puerto, cfg_token;
@@ -558,7 +559,7 @@ struct App {
     static constexpr float CABECERA_H = 60.0f;
     // La cabecera mas la barra de llamada en curso (si hay).
     float alto_cabecera() const { return CABECERA_H + alto_barra_llamada(); }
-    float top_lista() const { return 104.0f + alto_banner_actualizacion(); }
+    float top_lista() const { return 104.0f; }
     // Alto de una fila de la lista: acompana al tamano de letra.
     float fila_h() const { return std::round(letra_lista * 3.2f + 20.0f); }
     float alto_pie = 0;

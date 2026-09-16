@@ -19,20 +19,25 @@ elegida). Para volver a empezar, borrar `cuentas.json` (y `datos\`).
 
 ## 0. Cliente local (lo más simple)
 
-Copiar la carpeta `cliente\` del paquete y abrir `kciwapp2.exe`. Listo.
-Necesita Windows 10/11 x64 (WebView2 para las llamadas viene con Win11).
+Todo está en https://kcinick.gxzone.com/kciwapp/ (`kciwapp.md5` lista los
+archivos). Bajar la carpeta entera a cualquier lado y abrir `kciwapp2.exe`.
+Listo. Necesita Windows 10/11 x64 (WebView2 para las llamadas viene con
+Win11). Después el cliente se actualiza solo desde ahí: chequea al abrir y
+desde el menú `⋯` → Check for updates.
 
 ### Transcripción de notas de voz (opcional)
 
-El botón de transcribir en los audios aparece si existe `cliente\whisper\`
-con `whisper-cli.exe` (whisper.cpp con CUDA, para GPU NVIDIA) y el modelo
-`ggml-large-v3-turbo.bin`. Viene en el zip (2,7 GB de los 3 del paquete);
-sin GPU NVIDIA se puede borrar la carpeta y el botón desaparece.
+El botón de transcribir en los audios aparece si existe `whisper\` al lado
+del exe, con `whisper-cli.exe` (whisper.cpp con CUDA, para GPU NVIDIA) y el
+modelo `ggml-large-v3-turbo.bin`. Son 2,7 GB de los 3 del paquete; sin GPU
+NVIDIA se puede borrar la carpeta y el botón desaparece (el chequeo de
+actualizaciones la vuelve a bajar si falta: en ese caso, no aceptar).
 
 ## 1. Server
 
 En un Debian/Ubuntu limpio (una VM con 2 GB alcanza), como root, con
-`kciwapp-server` e `instalar.sh` en la misma carpeta:
+`kciwapp-server` e `instalar.sh` (de `server\` del paquete) en la misma
+carpeta:
 
 ```bash
 ./instalar.sh          # o ./instalar.sh 9000 para otro puerto

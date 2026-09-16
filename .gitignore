@@ -8,7 +8,7 @@ portable/servidor.json
 portable/debug.log
 portable/mpv/
 build/
-release/
+.md5-cache.json
 portable/core/*.exe
 portable/core/*.txt
 portable/whisper/
