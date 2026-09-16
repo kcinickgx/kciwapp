@@ -24,10 +24,10 @@ Necesita Windows 10/11 x64 (WebView2 para las llamadas viene con Win11).
 
 ### Transcripción de notas de voz (opcional)
 
-El botón de transcribir en los audios aparece si existe `portable\whisper\`
+El botón de transcribir en los audios aparece si existe `cliente\whisper\`
 con `whisper-cli.exe` (whisper.cpp con CUDA, para GPU NVIDIA) y el modelo
-`ggml-large-v3-turbo.bin`. Son 2,7 GB, no vienen en el zip: copiar la
-carpeta `whisper\` de otra instalación.
+`ggml-large-v3-turbo.bin`. Viene en el zip (2,7 GB de los 3 del paquete);
+sin GPU NVIDIA se puede borrar la carpeta y el botón desaparece.
 
 ## 1. Server
 
