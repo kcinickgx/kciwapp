@@ -532,6 +532,8 @@ struct App {
     void enviar_adjunto();
     void pegar();
     void abrir_media(int i);
+    void guardar_como(int i);
+    void abrir_con_windows(int i);
     void abrir_visor(int i);
     void abrir_video(int i);
     void cerrar_visor();
@@ -631,4 +633,6 @@ std::wstring nombre_tipo(const std::string& tipo);
 std::wstring una_linea(std::wstring s);
 std::wstring plano(const std::wstring& s);
 std::wstring carpeta_exe();
+// Foto, video, gif o sticker: lo que se muestra como imagen.
+bool con_imagen(const std::string& tipo);
 Color color_de_nombre(const std::wstring& nombre);

@@ -244,24 +244,14 @@ void App::menu_contextual(int i) {
             case M_REENVIAR: reenviar(i); break;
             case M_EDITAR: editar(i); break;
             case M_BORRAR: borrar(i); break;
-            case M_ABRIR: abrir_media(i); break;
-            case M_COPIAR_MEDIA: copiar_media(i); break;
-            case M_GUARDAR: {
-                std::wstring origen = bajar_media(mensajes[i]);
-                if (origen.empty()) break;
-                wchar_t nombre[MAX_PATH] = L"";
-                std::wstring sugerido = mensajes[i].media->nombre.empty()
-                                            ? L"whatsapp" + extension_de(mensajes[i].media->mime, "")
-                                            : ancho(mensajes[i].media->nombre);
-                wcsncpy_s(nombre, sugerido.c_str(), MAX_PATH - 1);
-                OPENFILENAMEW ofn = {sizeof ofn};
-                ofn.hwndOwner = hwnd;
-                ofn.lpstrFile = nombre;
-                ofn.nMaxFile = MAX_PATH;
-                ofn.Flags = OFN_OVERWRITEPROMPT;
-                if (GetSaveFileNameW(&ofn)) CopyFileW(origen.c_str(), nombre, FALSE);
+            case M_ABRIR: {
+                const std::string& t = mensajes[i].tipo;
+                if (con_imagen(t) || t == "audio" || t == "nota") abrir_media(i);
+                else abrir_con_windows(i);
                 break;
             }
+            case M_COPIAR_MEDIA: copiar_media(i); break;
+            case M_GUARDAR: guardar_como(i); break;
             case M_MOSTRAR: {
                 std::wstring ruta = bajar_media(mensajes[i]);
                 if (!ruta.empty()) ShellExecuteW(nullptr, nullptr, L"explorer.exe", (L"/select,\"" + ruta + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
@@ -692,8 +682,30 @@ void App::abrir_media(int i) {
         abrir_video(i);
         return;
     }
-    // Lo demas se abre con lo que tenga Windows (video, audio, documentos).
-    Mensaje copia = m;
+    // Un documento: click = guardarlo donde quieras (abrirlo esta en el menu).
+    guardar_como(i);
+}
+
+// "Save as...": baja el archivo (si falta) y pide donde dejarlo.
+void App::guardar_como(int i) {
+    const Mensaje& m = mensajes[i];
+    if (!m.media) return;
+    std::wstring origen = bajar_media(m);
+    if (origen.empty()) return;
+    wchar_t nombre[MAX_PATH] = L"";
+    std::wstring sugerido = m.media->nombre.empty() ? L"whatsapp" + extension_de(m.media->mime, "") : ancho(m.media->nombre);
+    wcsncpy_s(nombre, sugerido.c_str(), MAX_PATH - 1);
+    OPENFILENAMEW ofn = {sizeof ofn};
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFile = nombre;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_OVERWRITEPROMPT;
+    if (GetSaveFileNameW(&ofn)) CopyFileW(origen.c_str(), nombre, FALSE);
+}
+
+// "Open": con lo que tenga Windows para ese tipo de archivo.
+void App::abrir_con_windows(int i) {
+    Mensaje copia = mensajes[i];
     red::en_fondo([this, copia] {
         std::wstring ruta = bajar_media(copia);
         if (!ruta.empty()) ShellExecuteW(nullptr, L"open", ruta.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
