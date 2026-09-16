@@ -59,7 +59,10 @@ Respuesta pedir(const wchar_t* metodo, const std::wstring& ruta, const std::stri
     if (!s) return r;
     WinHttpSetTimeouts(s, 5000, 5000, espera_ms, espera_ms);
     HINTERNET con = WinHttpConnect(s, g_host.c_str(), (INTERNET_PORT)g_puerto, 0);
-    if (!con) return r;
+    if (!con) {
+        registrar("http: sin conexion (winhttp " + std::to_string(GetLastError()) + ")");
+        return r;
+    }
     HINTERNET req = WinHttpOpenRequest(con, metodo, ruta.c_str(), nullptr, WINHTTP_NO_REFERER,
                                        WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
     if (req) {
@@ -68,6 +71,7 @@ Respuesta pedir(const wchar_t* metodo, const std::wstring& ruta, const std::stri
         BOOL ok = WinHttpSendRequest(req, cabeceras.c_str(), (DWORD)-1, (LPVOID)cuerpo.data(), (DWORD)cuerpo.size(),
                                      (DWORD)cuerpo.size(), 0) &&
                   WinHttpReceiveResponse(req, nullptr);
+        if (!ok) registrar("http: fallo " + angosto(ruta).substr(0, 120) + " (winhttp " + std::to_string(GetLastError()) + ")");
         if (ok) {
             DWORD estado = 0, largo = sizeof estado;
             WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,

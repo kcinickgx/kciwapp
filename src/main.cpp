@@ -39,8 +39,10 @@ void leer_argumentos(std::string& cuenta, DWORD& esperar) {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) return;
-    for (int i = 1; i + 1 < argc; i++) {
-        if (wcscmp(argv[i], L"--cuenta") == 0) cuenta = angosto(argv[++i]);
+    for (int i = 1; i < argc; i++) {
+        if (wcscmp(argv[i], L"--demo") == 0) modo_demo = true;
+        else if (i + 1 >= argc) break;
+        else if (wcscmp(argv[i], L"--cuenta") == 0) cuenta = angosto(argv[++i]);
         else if (wcscmp(argv[i], L"--esperar") == 0) esperar = (DWORD)_wtoi(argv[++i]);
     }
     LocalFree(argv);

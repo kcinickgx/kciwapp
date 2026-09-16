@@ -5,6 +5,9 @@
 #include <atomic>
 #include <functional>
 #include <map>
+
+// --demo: capturas con datos inventados (sin sesion de WhatsApp, mutex aparte).
+extern bool modo_demo;
 #include <memory>
 #include <set>
 #include <optional>

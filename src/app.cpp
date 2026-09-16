@@ -109,6 +109,8 @@ int solo_emojis(const std::wstring& t) {
 
 }  // namespace
 
+bool modo_demo = false;
+
 std::wstring una_linea(std::wstring s) {
     for (auto& ch : s)
         if (ch == L'\n') ch = L' ';
@@ -168,7 +170,20 @@ std::wstring formatear_telefono(const std::string& jid) {
              ancho(local.substr(local.size() - 4));
         return w;
     }
-    w += ancho(n.substr(0, 2)) + L" " + ancho(n.substr(2));
+    // Largo del codigo de pais: 1 (EEUU/Canada, Rusia), 3 (los de la lista:
+    // Paraguay 595, Uruguay 598, Bolivia 591, Ecuador 593, Portugal 351...) o 2.
+    size_t cc = 2;
+    if (n[0] == '1' || n[0] == '7') cc = 1;
+    else {
+        static const char* de_tres[] = {"211", "212", "213", "216", "218", "220", "221", "222", "223", "224", "225", "226", "227", "228", "229", "230", "231", "232", "233", "234", "235", "236", "237", "238", "239", "240", "241", "242", "243", "244", "245", "246", "247", "248", "249", "250", "251", "252", "253", "254", "255", "256", "257", "258", "260", "261", "262", "263", "264", "265", "266", "267", "268", "269", "290", "291", "297", "298", "299", "350", "351", "352", "353", "354", "355", "356", "357", "358", "359", "370", "371", "372", "373", "374", "375", "376", "377", "378", "379", "380", "381", "382", "383", "385", "386", "387", "389", "420", "421", "423", "500", "501", "502", "503", "504", "505", "506", "507", "508", "509", "590", "591", "592", "593", "594", "595", "596", "597", "598", "599", "670", "672", "673", "674", "675", "676", "677", "678", "679", "680", "681", "682", "683", "685", "686", "687", "688", "689", "690", "691", "692", "850", "852", "853", "855", "856", "880", "886", "960", "961", "962", "963", "964", "965", "966", "967", "968", "970", "971", "972", "973", "974", "975", "976", "977", "992", "993", "994", "995", "996", "998"};
+        for (auto p : de_tres)
+            if (n.rfind(p, 0) == 0) cc = 3;
+    }
+    std::string resto = n.substr(cc);
+    w += ancho(n.substr(0, cc)) + L" ";
+    // El resto en grupos: los ultimos 4 aparte si hay lugar.
+    if (resto.size() > 6) w += ancho(resto.substr(0, resto.size() - 4)) + L" " + ancho(resto.substr(resto.size() - 4));
+    else w += ancho(resto);
     return w;
 }
 
@@ -419,8 +434,8 @@ void App::cargar_chats() {
                 escuchando = true;
                 escuchar_eventos();
             }
-            aviso_estado = conectado ? L"" : L"Server not connected to WhatsApp";
-            bool logueado = je["logueado"].bul(true);
+            aviso_estado = (conectado || modo_demo) ? L"" : L"Server not connected to WhatsApp";
+            bool logueado = modo_demo || je["logueado"].bul(true);
             if (!logueado && !sin_sesion) {
                 sin_sesion = true;
                 aviso_estado = L"";
@@ -638,11 +653,14 @@ void App::abrir_chat(const std::string& jid) {
             int faltan = std::min(cuantos - total, 20000);
             std::wstring url = L"/mensajes?chat=" + ancho(mio) + L"&limite=" + std::to_wstring(faltan);
             if (mas_viejo > 0) url += L"&antes=" + std::to_wstring(mas_viejo);
+            unsigned long long t1 = GetTickCount64();
             Respuesta r = red::obtener(url, 300000);
-            if (!r.ok()) break;
             std::vector<Mensaje> viejos;
             Json j = Json::parsear(r.cuerpo);
             for (size_t i = 0; i < j.largo(); i++) viejos.push_back(Mensaje::de_json(j[i]));
+            red::registrar("server: " + mio + " limite " + std::to_string(faltan) + " -> estado " + std::to_string(r.estado) + ", " +
+                           std::to_string(viejos.size()) + " mensajes en " + std::to_string(GetTickCount64() - t1) + " ms");
+            if (!r.ok()) break;
             for (size_t i = 0; i < viejos.size(); i += 500)
                 cache::guardar_mensajes(std::vector<Mensaje>(viejos.begin() + i, viejos.begin() + std::min(viejos.size(), i + 500)));
             agotado = (int)viejos.size() < faltan;
@@ -2073,7 +2091,8 @@ void App::dibujar_tarjeta_contacto(const VistaMensaje& v, float cx, float cy) {
 // Abre el chat del contacto compartido (lo crea en la lista si no estaba).
 void App::abrir_contacto(int i) {
     if (i < 0 || i >= (int)vistas.size() || vistas[i].contactos.empty()) return;
-    const auto& c = vistas[i].contactos.front();
+    // Copia, no referencia: abrir_chat vacia `vistas` y la tarjeta muere con ellas.
+    const VistaMensaje::TarjetaContacto c = vistas[i].contactos.front();
     if (c.jid.empty()) {
         aviso_estado = L"This contact is not on WhatsApp";
         pedir_dibujo();
