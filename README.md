@@ -10,6 +10,18 @@ next to the client (`core\`, SQLite) or as a shared server on a Linux box
 WhatsApp's Terms of Service. Accounts using unofficial clients can get
 suspended. Use it knowing that.
 
+## Screenshots
+
+Demo data, not real chats (see `docs/demo-datos.py`).
+
+![Chat](docs/screenshots/chat.png)
+
+![Group](docs/screenshots/group.png)
+
+| Light theme | Blue theme |
+| --- | --- |
+| ![Light](docs/screenshots/light.png) | ![Blue](docs/screenshots/blue.png) |
+
 ## Install
 
 Download and run

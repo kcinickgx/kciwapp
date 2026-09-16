@@ -42,6 +42,7 @@ void leer_argumentos(std::string& cuenta, DWORD& esperar) {
     for (int i = 1; i < argc; i++) {
         if (wcscmp(argv[i], L"--demo") == 0) modo_demo = true;
         else if (i + 1 >= argc) break;
+        else if (wcscmp(argv[i], L"--chat") == 0) chat_inicial = angosto(argv[++i]);
         else if (wcscmp(argv[i], L"--cuenta") == 0) cuenta = angosto(argv[++i]);
         else if (wcscmp(argv[i], L"--esperar") == 0) esperar = (DWORD)_wtoi(argv[++i]);
     }
@@ -204,7 +205,7 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == 10 && app) app->tic_vinculacion();
             if (wp == 13 && app) {
                 KillTimer(h, 13);
-                app->verificar_actualizacion(false);
+                if (!modo_demo) app->verificar_actualizacion(false);
             }
             if (wp == 11 && app) {
                 KillTimer(h, 11);

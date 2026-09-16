@@ -5,13 +5,13 @@
 #include <atomic>
 #include <functional>
 #include <map>
-
-// --demo: capturas con datos inventados (sin sesion de WhatsApp, mutex aparte).
-extern bool modo_demo;
 #include <memory>
 #include <set>
 #include <optional>
 #include <string>
+// --demo: capturas con datos inventados (sin sesion de WhatsApp, mutex aparte).
+extern bool modo_demo;
+extern std::string chat_inicial;  // --chat JID: se abre al cargar la lista
 #include <vector>
 
 #include "campo.h"

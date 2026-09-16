@@ -110,6 +110,7 @@ int solo_emojis(const std::wstring& t) {
 }  // namespace
 
 bool modo_demo = false;
+std::string chat_inicial;
 
 std::wstring una_linea(std::wstring s) {
     for (auto& ch : s)
@@ -480,6 +481,10 @@ void App::cargar_chats() {
             for (size_t i = 0; i < j.largo(); i++) chats.push_back(Chat::de_json(j[i]));
             ordenar_chats();
             pedir_dibujo();
+            if (!chat_inicial.empty()) {
+                if (chat_de(chat_inicial)) abrir_chat(chat_inicial);
+                chat_inicial.clear();
+            }
             if (recarga_pendiente) {
                 recarga_pendiente = false;
                 cargar_chats();
