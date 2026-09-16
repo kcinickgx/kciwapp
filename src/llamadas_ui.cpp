@@ -102,7 +102,7 @@ void App::dibujar_barra_llamada() {}
 // Los botones de llamar en la cabecera (a la izquierda de la lupa).
 void App::dibujar_botones_llamada() {
     const Chat* c = chat_de(chat_actual);
-    if (!c || c->es_grupo || !llamadas_disponibles() || busca_chat_abierta || seleccionando) return;
+    if (!c || c->es_grupo || es_estado() || !llamadas_disponibles() || busca_chat_abierta || seleccionando) return;
     float x = x_conv(), W = w_conv();
     Color col(llamada_activa ? BORDE() : TXT_DIM());
     g.renglon_fuente(L"Segoe MDL2 Assets", L"", x + W - 136, 21, 18, col);
@@ -114,7 +114,7 @@ bool App::click_llamada(float x, float y) {
     float xc = x_conv(), W = w_conv(), top = alto_cabecera();
     // Botones de la cabecera.
     const Chat* c = chat_de(chat_actual);
-    if (y < top && c && !c->es_grupo && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa) {
+    if (y < top && c && !c->es_grupo && !es_estado() && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa) {
         if (x >= xc + W - 144 && x < xc + W - 108) {
             iniciar_llamada(true);
             return true;

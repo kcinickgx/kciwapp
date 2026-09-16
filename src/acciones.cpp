@@ -220,9 +220,10 @@ void App::menu_contextual(int i) {
     // Copy va primero: el de la media (imagen/archivo) si hay, si no el del texto.
     if (m.media && !m.borrado) items.push_back({m.tipo == "imagen" || m.tipo == "figurita" ? L"Copy image" : L"Copy file", M_COPIAR_MEDIA, L"\uE8C8"});
     else if (!m.texto.empty() || sel_msg == i) items.push_back({L"Copy", M_COPIAR, L"\uE8C8"});
-    items.push_back({L"Reply", M_RESPONDER, L"\uE97A"});
+    // A un estado no se le responde ni se lo edita.
+    if (!es_estado()) items.push_back({L"Reply", M_RESPONDER, L"\uE97A"});
     if (!m.borrado) items.push_back({L"Forward", M_REENVIAR, L"\uE72A"});
-    if (m.propio && !m.borrado && !m.media && !m.texto.empty()) items.push_back({L"Edit", M_EDITAR, L"\uE70F"});
+    if (m.propio && !m.borrado && !m.media && !m.texto.empty() && !es_estado()) items.push_back({L"Edit", M_EDITAR, L"\uE70F"});
     if (m.media && !m.borrado) {
         items.push_back({L"", 0, nullptr, true});
         items.push_back({L"Open", M_ABRIR, L"\uE8E5"});
@@ -301,6 +302,7 @@ void App::menu_campo(float x, float y) {
 }
 
 void App::responder(int i) {
+    if (es_estado()) return;  // a un estado no se le responde
     respondiendo = mensajes[i];
     editando.reset();
     campo.foco = true;
@@ -1026,7 +1028,7 @@ void rect_barra(const App& a, int i, float y, float& bx, float& by, float& bw) {
 void App::dibujar_reacciones_de(int i, float y) {
     if (i < 0 || i >= (int)vistas.size() || mensajes[i].borrado) return;
     bool mostrar = i == msg_bajo_mouse || i == reaccion_msg;
-    if (!mostrar || reenviando) return;
+    if (!mostrar || reenviando || es_estado()) return;
     float cx, cy;
     pos_carita(*this, i, y, cx, cy);
     g.circulo(cx, cy, REAC_R, Color(BG_PANEL()));
@@ -1086,7 +1088,7 @@ bool App::click_reacciones(float x, float y) {
         reaccion_msg = -1;
         pedir_dibujo();
     }
-    if (msg_bajo_mouse >= 0 && msg_bajo_mouse < (int)vistas.size() && !mensajes[msg_bajo_mouse].borrado) {
+    if (msg_bajo_mouse >= 0 && msg_bajo_mouse < (int)vistas.size() && !mensajes[msg_bajo_mouse].borrado && !es_estado()) {
         float cx, cy;
         pos_carita(*this, msg_bajo_mouse, y_de((size_t)msg_bajo_mouse), cx, cy);
         if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= (REAC_R + 4) * (REAC_R + 4)) {

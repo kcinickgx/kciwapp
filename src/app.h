@@ -160,6 +160,7 @@ struct ItemMenu {
     bool separador = false;
     bool habilitado = true;
     bool peligroso = false;          // en rojo (borrar)
+    unsigned color = 0;              // si no es 0: un circulo de ese color en vez del icono (RGB)
 };
 
 struct App {
@@ -356,6 +357,11 @@ struct App {
     // Cierra y vuelve a abrir el cliente con otra cuenta.
     void cambiar_cuenta(int i);
     void menu_cuentas(float x, float y);
+    // El chat de estados (status@broadcast): lo que se manda ahi es un estado.
+    bool es_estado() const { return chat_actual == "status@broadcast"; }
+    int estado_color = 0;  // indice en la paleta de fondos
+    int estado_letra = 0;  // 0..5, los tipos de letra de WhatsApp
+    unsigned estado_fondo_argb() const;
     // Actualizacion del cliente (actualizar_ui.cpp): aviso bajo el buscador y pantalla de progreso.
     // El modal del chequeo: 0 = nada, 1 = buscando, 2 = hay (Cancel/Update), 3 = al dia o error (OK).
     int modal_actualizacion = 0;

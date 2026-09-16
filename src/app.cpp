@@ -492,6 +492,8 @@ std::wstring App::nombre_de(const std::string& jid) {
 }
 
 void App::abrir_chat(const std::string& jid) {
+    campo.indicio = jid == "status@broadcast" ? std::wstring(L"Share a status \u00b7 Sans") : std::wstring(L"Type a message");
+    if (jid == "status@broadcast") estado_letra = 0;
     if (jid == chat_actual) return;
     if (seleccionando) terminar_seleccion();
     if (busca_chat_abierta) cerrar_busqueda_chat();
@@ -780,6 +782,7 @@ void App::mandar_presencia(const std::string& estado) {
 }
 
 void App::teclear_presencia() {
+    if (es_estado()) return;
     if (campo.texto.empty()) {
         if (presencia_mandada == "typing") mandar_presencia("");
         return;
@@ -816,6 +819,15 @@ void App::ventana_activada() {
     if (!ids.empty()) marcar_leido(chat_actual, ids);
 }
 
+// Los fondos de los estados de texto (ARGB), como los de WhatsApp.
+static const unsigned PALETA_ESTADO[] = {0xFF37474F, 0xFF1565C0, 0xFF2E7D32, 0xFF6A1B9A, 0xFFAD1457, 0xFFEF6C00,
+                                        0xFF00838F, 0xFFC62828, 0xFF283593, 0xFF00695C, 0xFF9E9D24, 0xFF4E342E};
+static const wchar_t* NOMBRE_COLOR_ESTADO[] = {L"Slate", L"Blue", L"Green", L"Purple", L"Pink", L"Orange",
+                                               L"Teal", L"Red", L"Indigo", L"Dark teal", L"Olive", L"Brown"};
+static const wchar_t* LETRA_ESTADO[] = {L"Sans", L"Serif", L"Norican", L"Bryndan", L"Bebas", L"Oswald"};
+
+unsigned App::estado_fondo_argb() const { return PALETA_ESTADO[estado_color % 12]; }
+
 void App::enviar_texto() {
     std::wstring t = campo.texto;
     while (!t.empty() && (t.back() == L' ' || t.back() == L'\n')) t.pop_back();
@@ -833,7 +845,8 @@ void App::enviar_texto() {
     std::string cita = respondiendo ? respondiendo->id : "";
     respondiendo.reset();
     std::string cuerpo = "{\"chat\":" + json_texto(chat) + ",\"texto\":" + json_texto(angosto(t)) +
-                         (cita.empty() ? "" : ",\"cita_id\":" + json_texto(cita)) + "}";
+                         (cita.empty() ? "" : ",\"cita_id\":" + json_texto(cita)) +
+                         (es_estado() ? ",\"fondo\":" + std::to_string(estado_fondo_argb()) + ",\"letra\":" + std::to_string(estado_letra) : "") + "}";
     red::en_fondo([this, chat, cuerpo, t] {
         Respuesta r = red::mandar_json(L"/enviar", cuerpo);
         Json j = Json::parsear(r.cuerpo);
@@ -1815,8 +1828,21 @@ void App::dibujar_pie() {
     // Emojis y clip a la izquierda, el campo, y el boton de mandar/grabar.
     g.renglon(L"\U0001F642", x + 14, yy + ch / 2 - 12, 20, Color(emojis_abierto ? ACCENT() : TXT_DIM()));
     g.renglon(L"\U0001F4CE", x + 48, yy + ch / 2 - 12, 20, Color(TXT_DIM()));
-    g.rect_redondo(x + 82, yy, W - 82 - 60, ch, 8, Color(BG_CAMPO()));
-    campo.dibujar(g, x + 82, yy, W - 82 - 60, ch, ahora);
+    float cx = x + 82;
+    if (es_estado()) {
+        // Un estado: el color de fondo (click = el siguiente) y la letra, y el
+        // campo pintado del color para ver como va a quedar.
+        unsigned argb = estado_fondo_argb();
+        g.circulo(x + 96, yy + ch / 2, 11, Color(argb & 0xffffff));
+        g.borde_redondo(x + 85, yy + ch / 2 - 11, 22, 22, 11, Color(TXT_DIM(), 0.6f), 1.0f);
+        g.renglon(L"Aa", x + 118, yy + ch / 2 - 11, 15, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        cx = x + 150;
+        g.rect_redondo(cx, yy, x + W - 60 - cx, ch, 8, Color(argb & 0xffffff));
+        campo.dibujar(g, cx, yy, x + W - 60 - cx, ch, ahora);
+    } else {
+        g.rect_redondo(cx, yy, W - 82 - 60, ch, 8, Color(BG_CAMPO()));
+        campo.dibujar(g, cx, yy, W - 82 - 60, ch, ahora);
+    }
     bool hay_texto = !campo.texto.empty() || adjunto;
     g.renglon(hay_texto ? L"➤" : L"\U0001F3A4", x + W - 44, yy + ch / 2 - 12, 22, Color(hay_texto ? ACCENT() : TXT_DIM()));
 }
@@ -2554,6 +2580,32 @@ void App::raton_abajo(float x, float y, bool shift) {
             elegir_archivo();
             return;
         }
+        if (es_estado() && x < x_conv() + 150) {
+            // Desplegables de color y de letra, con el elegido marcado.
+            std::vector<ItemMenu> items;
+            bool de_color = x < x_conv() + 110;
+            if (de_color) {
+                for (int i = 0; i < 12; i++) {
+                    ItemMenu it{std::wstring(NOMBRE_COLOR_ESTADO[i]) + (i == estado_color ? L"  \u2713" : L""), i + 1};
+                    it.color = PALETA_ESTADO[i] & 0xffffff;
+                    items.push_back(it);
+                }
+            } else {
+                for (int i = 0; i < 6; i++) items.push_back({LETRA_ESTADO[i], i + 1, i == estado_letra ? L"\uE73E" : nullptr});
+            }
+            // Abre hacia arriba solo (abrir_menu lo da vuelta si no entra abajo).
+            abrir_menu(std::move(items), de_color ? x_conv() + 82 : x_conv() + 114, g.alto - alto_pie, [this, de_color](int id) {
+                if (id <= 0) return;
+                if (de_color) estado_color = id - 1;
+                else {
+                    estado_letra = id - 1;
+                    campo.indicio = std::wstring(L"Share a status \u00b7 ") + LETRA_ESTADO[estado_letra];
+                }
+                campo.foco = true;
+                pedir_dibujo();
+            });
+            return;
+        }
         if (x > x_conv() + W - 60) {
             if (adjunto) enviar_adjunto();
             else if (!campo.texto.empty()) enviar_texto();
@@ -2918,7 +2970,7 @@ bool App::sobre_clickeable(float x, float y) {
         if (adjunto && y < yy + ADJUNTO_H) return x > x_conv() + W - 56 || (x > x_conv() + W - 180 && y > yy + ADJUNTO_H - 40);
         if (adjunto) yy += ADJUNTO_H;
         if (grab != Grab::Nada) return x < x_conv() + 92 || x > x_conv() + W - 60;
-        return x < x_conv() + 82 || x > x_conv() + W - 60;    // emoji, clip, mandar/mic
+        return x < x_conv() + (es_estado() ? 150 : 82) || x > x_conv() + W - 60;    // emoji, clip, (color, letra), mandar/mic
     }
     if (conv.max - conv.objetivo > 150 && x > x_conv() + W - 68 && x < x_conv() + W - 20 && y > bottom - 60 && y < bottom - 12)
         return true;                                           // ir al final

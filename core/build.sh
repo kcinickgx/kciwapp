@@ -15,7 +15,7 @@ case "${1:-windows}" in
     ssh -p 22122 $VM 'cd /root/kciwapp-server && go mod tidy >/dev/null 2>&1; GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w -H windowsgui" -o /tmp/kciwapp-core.exe .'
     mkdir -p ../build/core
     scp -P 22122 -q $VM:/tmp/kciwapp-core.exe ../build/core/
-    echo "build/core/kciwapp-core.exe listo (publicar.py lo sube a H:)"
+    echo "build/core/kciwapp-core.exe listo (publicar.py lo sube al release)"
     ;;
   actualizar)
     ssh -p 22122 $VM 'cd /root/kciwapp-server && go get -u go.mau.fi/whatsmeow@latest && go get -u ./... && go mod tidy && go build -o /dev/null . && grep whatsmeow go.mod'

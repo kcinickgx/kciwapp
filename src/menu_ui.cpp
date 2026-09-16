@@ -49,7 +49,8 @@ void App::dibujar_menu() {
         bool encima = mouse_x >= menu_x && mouse_x < menu_x + MENU_W && mouse_y >= y && mouse_y < y + ITEM_H;
         if (encima && it.habilitado) g.rect_redondo(menu_x + 4, y, MENU_W - 8, ITEM_H, 6, Color(BG_CAMPO()));
         Color c(it.habilitado ? (it.peligroso ? 0xf15c6d : TXT()) : TXT_DIM());
-        if (it.icono) g.renglon_fuente(L"Segoe MDL2 Assets", it.icono, menu_x + 16, y + 9, 15, Color(it.habilitado ? (it.peligroso ? 0xf15c6d : ACCENT()) : TXT_DIM()));
+        if (it.color) g.circulo(menu_x + 24, y + ITEM_H / 2, 8, Color(it.color));
+        else if (it.icono) g.renglon_fuente(L"Segoe MDL2 Assets", it.icono, menu_x + 16, y + 9, 15, Color(it.habilitado ? (it.peligroso ? 0xf15c6d : ACCENT()) : TXT_DIM()));
         g.renglon(it.texto, menu_x + 44, y + 8, 14, c);
         y += ITEM_H;
     }

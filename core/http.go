@@ -489,6 +489,9 @@ func hEnviar(w http.ResponseWriter, r *http.Request) {
 		Chat   string `json:"chat"`
 		Texto  string `json:"texto"`
 		CitaID string `json:"cita_id"`
+		// Solo para un estado (chat status@broadcast): color de fondo ARGB y letra.
+		Fondo uint32 `json:"fondo"`
+		Letra int32  `json:"letra"`
 	}
 	if err := leerJSON(r, &p); err != nil {
 		fallar(w, 400, err)
@@ -502,7 +505,16 @@ func hEnviar(w http.ResponseWriter, r *http.Request) {
 	}
 	ctxInfo := contextoCita(p.Chat, p.CitaID)
 	var msg *waE2E.Message
-	if ctxInfo == nil {
+	if j == types.StatusBroadcastJID {
+		// Un estado de texto: como lo manda el telefono, con fondo, letra y texto blanco.
+		fondo := p.Fondo
+		if fondo == 0 {
+			fondo = 0xFF37474F
+		}
+		letra := waE2E.ExtendedTextMessage_FontType(p.Letra)
+		msg = &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String(texto), BackgroundArgb: proto.Uint32(fondo), TextArgb: proto.Uint32(0xFFFFFFFF), Font: &letra}}
+	} else if ctxInfo == nil {
 		msg = &waE2E.Message{Conversation: proto.String(texto)}
 	} else {
 		msg = &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{Text: proto.String(texto), ContextInfo: ctxInfo}}
@@ -772,12 +784,15 @@ func hBorrar(w http.ResponseWriter, r *http.Request) {
 	}
 	remitente := cli.Store.ID.ToNonAD()
 	if !m.Propio {
-		// Borrar para todos un mensaje ajeno solo lo puede un admin del grupo.
+		// Borrar para todos un mensaje ajeno solo lo puede un admin del grupo;
+		// en un chat comun o en los estados de otro, se borra aca nomas.
 		remitente, _ = jidDe(m.Remitente)
 	}
-	if _, err := cli.SendMessage(ctx, j, cli.BuildRevoke(j, remitente, p.ID)); err != nil {
-		fallar(w, http.StatusBadGateway, err)
-		return
+	if m.Propio || j.Server == types.GroupServer {
+		if _, err := cli.SendMessage(ctx, j, cli.BuildRevoke(j, remitente, p.ID)); err != nil {
+			fallar(w, http.StatusBadGateway, err)
+			return
+		}
 	}
 	db.Exec("UPDATE mensajes SET borrado = 1 WHERE chat = ? AND id_wa = ?", p.Chat, p.ID)
 	evento("borrado", p.Chat, map[string]any{"id": p.ID})
@@ -885,6 +900,11 @@ func hEscribiendo(w http.ResponseWriter, r *http.Request) {
 	j, ok := jidDe(p.Chat)
 	if !ok {
 		fallar(w, 400, errors.New("chat required"))
+		return
+	}
+	if j.Server == types.BroadcastServer {
+		// A los estados no se les avisa que escribis.
+		responder(w, map[string]any{"ok": true})
 		return
 	}
 	estado, media := types.ChatPresencePaused, types.ChatPresenceMediaText
