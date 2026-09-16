@@ -1902,7 +1902,7 @@ void App::dibujar_pie() {
     }
     // Emojis y clip a la izquierda, el campo, y el boton de mandar/grabar.
     g.renglon(L"\U0001F642", x + 14, yy + ch / 2 - 12, 20, Color(emojis_abierto ? ACCENT() : TXT_DIM()));
-    g.renglon(L"\U0001F4CE", x + 48, yy + ch / 2 - 12, 20, Color(TXT_DIM()));
+    g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE710", x + 50, yy + ch / 2 - 9, 18, Color(TXT_DIM()));
     float cx = x + 82;
     if (es_estado()) {
         // Un estado: el color de fondo (click = el siguiente) y la letra, y el
@@ -2660,7 +2660,7 @@ void App::raton_abajo(float x, float y, bool shift) {
             return;
         }
         if (x < x_conv() + 82) {
-            elegir_archivo();
+            menu_adjuntar();
             return;
         }
         if (es_estado() && x < x_conv() + 150) {

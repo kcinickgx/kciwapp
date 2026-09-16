@@ -147,6 +147,7 @@ bool bajar_https(const std::wstring& url, std::string* cuerpo, const std::wstrin
             }
         }
     }
+    if (!ok) red::registrar("actualizar: fallo GET " + angosto(url) + " (error " + std::to_string(GetLastError()) + ")");
     if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
     if (req) WinHttpCloseHandle(req);
     if (con) WinHttpCloseHandle(con);

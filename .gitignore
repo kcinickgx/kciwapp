@@ -12,3 +12,4 @@ build/
 portable/core/*.exe
 portable/core/*.txt
 portable/whisper/
+demo-run/

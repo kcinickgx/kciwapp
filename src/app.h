@@ -261,6 +261,7 @@ struct App {
     bool seleccionando = false;
     std::set<std::string> seleccionados;   // ids
     bool modal_reenvio = false;
+    bool modal_contactos = false;  // el mismo modal, pero para elegir contactos a mandar
     Campo buscador_reenvio;
     std::set<std::string> destinos;        // jids elegidos en el modal
     Desplazable scroll_reenvio;
@@ -501,6 +502,9 @@ struct App {
     bool click_modal_reenvio(float x, float y);
     bool rueda_modal_reenvio(float x, float y, float delta);
     void enviar_reenvio();
+    void abrir_modal_contactos();
+    void enviar_contactos();
+    void menu_adjuntar();
     void ir_a_mensaje(const std::string& chat, const std::string& id, long long ts);
     // Salto pendiente a un mensaje que todavia no esta cargado.
     std::string salto_chat, salto_id;

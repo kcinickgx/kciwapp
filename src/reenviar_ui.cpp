@@ -33,6 +33,7 @@ void App::terminar_seleccion() {
     seleccionando = false;
     seleccionados.clear();
     modal_reenvio = false;
+    modal_contactos = false;
     destinos.clear();
     pedir_dibujo();
 }
@@ -101,9 +102,63 @@ static std::vector<int> candidatos_de(const App& a) {
     std::vector<int> r;
     std::wstring q = plano(a.buscador_reenvio.texto);
     while (!q.empty() && q.back() == L' ') q.pop_back();
-    for (size_t i = 0; i < a.chats.size(); i++)
-        if (q.empty() || plano(a.chats[i].nombre).find(q) != std::wstring::npos) r.push_back((int)i);
+    for (size_t i = 0; i < a.chats.size(); i++) {
+        const Chat& c = a.chats[i];
+        // Para mandar contactos solo valen personas (ni grupos ni estados).
+        if (a.modal_contactos && (c.es_grupo || c.jid == "status@broadcast")) continue;
+        if (q.empty() || plano(c.nombre).find(q) != std::wstring::npos) r.push_back((int)i);
+    }
     return r;
+}
+
+// El "+" de la barra: mandar un archivo o un contacto.
+void App::menu_adjuntar() {
+    std::vector<ItemMenu> items;
+    items.push_back({L"File", 1, L"\uE8A5"});
+    items.push_back({L"Contact", 2, L"\uE77B"});
+    abrir_menu(std::move(items), x_conv() + 40, g.alto - alto_pie - 8, [this](int id) {
+        if (id == 1) elegir_archivo();
+        else if (id == 2) abrir_modal_contactos();
+    });
+}
+
+void App::abrir_modal_contactos() {
+    if (chat_actual.empty()) return;
+    modal_reenvio = true;
+    modal_contactos = true;
+    destinos.clear();
+    buscador_reenvio.poner(L"");
+    buscador_reenvio.foco = true;
+    campo.foco = false;
+    scroll_reenvio = Desplazable();
+    pedir_dibujo();
+}
+
+// Manda los contactos marcados al chat abierto (una sola vCard o varias).
+void App::enviar_contactos() {
+    std::vector<std::string> jids(destinos.begin(), destinos.end());
+    std::string chat = chat_actual, cita = respondiendo ? respondiendo->id : "";
+    respondiendo.reset();
+    modal_reenvio = false;
+    modal_contactos = false;
+    modal_contactos = false;
+    destinos.clear();
+    campo.foco = true;
+    aviso_estado = L"Sending contact...";
+    pedir_dibujo();
+    red::en_fondo([this, chat, jids, cita] {
+        std::string cuerpo = "{\"chat\":" + json_texto(chat) + ",\"cita_id\":" + json_texto(cita) + ",\"jids\":[";
+        for (size_t i = 0; i < jids.size(); i++) cuerpo += (i ? "," : "") + json_texto(jids[i]);
+        cuerpo += "]}";
+        Respuesta r = red::mandar_json(L"/contacto", cuerpo);
+        Json j = Json::parsear(r.cuerpo);
+        bool ok = r.ok();
+        red::en_ui([this, j, ok] {
+            aviso_estado = ok ? L"" : L"Could not send: " + ancho(j["error"].str("no response"));
+            if (ok) agregar_mensaje(Mensaje::de_json(j));
+            pedir_dibujo();
+        });
+    });
 }
 
 void App::dibujar_modal_reenvio() {
@@ -117,7 +172,7 @@ void App::dibujar_modal_reenvio() {
     Rect m = rect_modal(*this);
     g.rect_redondo(m.x, m.y, m.w, m.h, 12, Color(BG_PANEL()));
     g.borde_redondo(m.x, m.y, m.w, m.h, 12, Color(BORDE()), 1.0f);
-    g.renglon(L"Forward to", m.x + 20, m.y + 18, 18, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    g.renglon(modal_contactos ? L"Send contact" : L"Forward to", m.x + 20, m.y + 18, 18, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
     g.renglon(L"✕", m.x + m.w - 40, m.y + 16, 20, Color(TXT_DIM()));
     // Buscador
     g.rect_redondo(m.x + 16, m.y + 60, m.w - 32, 36, 8, Color(BG_CAMPO()));
@@ -162,8 +217,12 @@ void App::dibujar_modal_reenvio() {
     // Pie: cuantos mensajes y a cuantos, y el boton.
     float by = m.y + m.h - 52;
     g.linea(m.x, by - 12, m.x + m.w, by - 12, Color(BORDE()));
-    std::wstring info = std::to_wstring(seleccionados.size()) + (seleccionados.size() == 1 ? L" message" : L" messages");
-    if (!destinos.empty()) info += L" to " + std::to_wstring(destinos.size()) + (destinos.size() == 1 ? L" chat" : L" chats");
+    std::wstring info;
+    if (modal_contactos) info = destinos.empty() ? L"Pick the contacts to send" : std::to_wstring(destinos.size()) + (destinos.size() == 1 ? L" contact" : L" contacts");
+    else {
+        info = std::to_wstring(seleccionados.size()) + (seleccionados.size() == 1 ? L" message" : L" messages");
+        if (!destinos.empty()) info += L" to " + std::to_wstring(destinos.size()) + (destinos.size() == 1 ? L" chat" : L" chats");
+    }
     g.renglon(info, m.x + 20, by + 10, 13, Color(TXT_DIM()));
     bool listo = !destinos.empty();
     g.rect_redondo(m.x + m.w - 116, by, 100, 36, 18, Color(listo ? ACCENT() : BG_CAMPO()));
@@ -176,11 +235,13 @@ bool App::click_modal_reenvio(float x, float y) {
     Rect m = rect_modal(*this);
     if (!m.tiene(x, y)) {
         modal_reenvio = false;
+        modal_contactos = false;
         pedir_dibujo();
         return true;
     }
     if (y < m.y + 50 && x > m.x + m.w - 50) {
         modal_reenvio = false;
+        modal_contactos = false;
         pedir_dibujo();
         return true;
     }
@@ -203,7 +264,8 @@ bool App::click_modal_reenvio(float x, float y) {
     }
     float by = m.y + m.h - 52;
     if (x >= m.x + m.w - 116 && x < m.x + m.w - 16 && y >= by && y < by + 36 && !destinos.empty()) {
-        enviar_reenvio();
+        if (modal_contactos) enviar_contactos();
+        else enviar_reenvio();
         return true;
     }
     return true;

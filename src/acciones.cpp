@@ -950,6 +950,7 @@ void App::escapar() {
         reaccion_msg = -1;
     } else if (modal_reenvio) {
         modal_reenvio = false;
+        modal_contactos = false;
     } else if (seleccionando) {
         terminar_seleccion();
     } else if (info_abierto) {

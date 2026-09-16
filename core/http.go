@@ -36,6 +36,7 @@ func servirHTTP() {
 	mux.HandleFunc("GET /cantidad", conToken(hCantidad))
 	mux.HandleFunc("POST /transcripcion", conToken(hTranscripcion))
 	mux.HandleFunc("POST /reenviar", conToken(hReenviar))
+	mux.HandleFunc("POST /contacto", conToken(hContacto))
 	mux.HandleFunc("GET /eventos", conToken(hEventos))
 	mux.HandleFunc("GET /media/{id}", conToken(hMedia))
 	mux.HandleFunc("GET /miniatura/{id}", conToken(hMiniatura))
