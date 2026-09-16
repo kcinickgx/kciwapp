@@ -112,7 +112,7 @@ bool bajar_https(const std::wstring& url, std::string* cuerpo, const std::wstrin
     HINTERNET con = WinHttpConnect(s, host, uc.nPort, 0);
     HINTERNET req = con ? WinHttpOpenRequest(con, L"GET", ruta, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : nullptr;
     HANDLE f = INVALID_HANDLE_VALUE;
-    if (req && WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0, nullptr, 0, 0, 0) && WinHttpReceiveResponse(req, nullptr)) {
+    if (req && WinHttpSendRequest(req, L"Cache-Control: no-cache\r\nPragma: no-cache\r\n", (DWORD)-1, nullptr, 0, 0, 0) && WinHttpReceiveResponse(req, nullptr)) {
         DWORD estado = 0, largo = sizeof estado;
         WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &estado, &largo, WINHTTP_NO_HEADER_INDEX);
         if (estado == 200) {
@@ -216,7 +216,8 @@ void verificar(const std::wstring& carpeta_exe, std::function<void()> al_termina
         std::string cuerpo;
         std::vector<Archivo> pendientes;
         std::wstring error;
-        if (!bajar_https(URL_MANIFIESTO, &cuerpo, L"", nullptr)) {
+        std::wstring url = std::wstring(URL_MANIFIESTO) + L"?t=" + std::to_wstring(GetTickCount64() ^ (unsigned long long)time(nullptr));
+        if (!bajar_https(url, &cuerpo, L"", nullptr)) {
             error = L"Could not reach the update server";
         } else {
             auto lista = parsear_manifiesto(cuerpo);
