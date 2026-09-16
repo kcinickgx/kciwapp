@@ -1523,10 +1523,12 @@ void App::dibujar() {
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
     aplicar_ajustes();
-    if (config_pendiente || selector_pendiente || actualizando) {
+    if (config_pendiente || selector_pendiente || actualizando || sin_sesion) {
         if (actualizando) dibujar_actualizacion();
         else if (config_pendiente) dibujar_configuracion();
-        else dibujar_selector();
+        else if (selector_pendiente) dibujar_selector();
+        else dibujar_vinculacion();  // sin sesion: el QR solo, a toda la ventana
+        dibujar_menu();
         g.terminar_frame();
         return;
     }
@@ -1855,9 +1857,11 @@ void App::tic_vinculacion() {
 }
 
 void App::dibujar_vinculacion() {
-    float x = x_conv(), W = w_conv(), H = g.alto;
+    float x = 0, W = g.ancho, H = g.alto;
     g.rect(x, 0, W, H, Color(BG_SEL()));
     g.rect(x, 0, W, 6, Color(ACCENT()));
+    // El menu de cuentas, por si esta no era.
+    g.renglon_fuente(L"Segoe MDL2 Assets", L"", W - 40, 20, 16, Color(TXT_DIM()));
     float cx = x + W / 2;
     float lado = 264, bloque = 40 + 16 + lado + 16 + 24 + 3 * 24;
     float y = std::max(30.0f, (H - bloque) / 2);
@@ -2433,6 +2437,10 @@ void App::raton_abajo(float x, float y, bool shift) {
     if (click_configuracion(x, y, shift)) return;
     if (click_selector(x, y)) return;
     if (click_menu(x, y)) return;
+    if (sin_sesion) {
+        if (y < 50 && x > g.ancho - 56) menu_cuentas(g.ancho - 200, 46);
+        return;
+    }
     if (visor) {
         click_visor(x, y);
         pedir_dibujo();
@@ -2875,6 +2883,7 @@ bool App::sobre_campo(float x, float y) const {
 
 bool App::sobre_clickeable(float x, float y) {
     if (actualizando) return false;
+    if (sin_sesion && !menu_abierto) return y < 50 && x > g.ancho - 56;
     if (config_pendiente) return clickeable_configuracion(x, y);
     if (selector_pendiente) return clickeable_selector(x, y);
     if (visor) {
