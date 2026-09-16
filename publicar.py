@@ -84,12 +84,12 @@ def main():
             print(f'borrando {rel}')
             os.remove(os.path.join(DESTINO, rel))
             borrados += 1
-    # El manifiesto al final, cuando ya esta todo; la misma copia queda en
-    # portable\ (el cliente compara contra la suya, sin releer nada).
+    # El manifiesto al final, cuando ya esta todo. Solo en H: (el del portable
+    # lo escribe el cliente al aplicar una actualizacion; si lo pusieramos aca
+    # el portable creeria que ya tiene lo publicado).
     texto = ''.join(f'{md5} {tamano} {rel}\n' for rel, md5, tamano in lista)
-    for carpeta in (DESTINO, ORIGEN):
-        with open(os.path.join(carpeta, MANIFIESTO), 'w', encoding='utf-8', newline='\n') as f:
-            f.write(texto)
+    with open(os.path.join(DESTINO, MANIFIESTO), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(texto)
     # Lo de al lado: instrucciones e instaladores del server.
     shutil.copyfile(os.path.join(RAIZ, 'docs', 'INSTALAR.md'), os.path.join(DESTINO, 'INSTALAR.md'))
     os.makedirs(os.path.join(DESTINO, 'server'), exist_ok=True)
