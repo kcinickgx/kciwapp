@@ -28,9 +28,6 @@ const float HORA_TAM = 11.0f;
 const float BARRA_H = 48.0f;    // la barra de "respondiendo a" / "editando"
 const float ADJUNTO_H = 130.0f; // la vista previa del adjunto
 
-bool con_imagen(const std::string& tipo) {
-    return tipo == "imagen" || tipo == "video" || tipo == "gif" || tipo == "figurita";
-}
 
 SYSTEMTIME local_de(long long ts) {
     ULARGE_INTEGER u;
@@ -247,6 +244,10 @@ Mensaje Mensaje::de_json(const Json& j) {
     for (size_t i = 0; i < rs.largo(); i++)
         m.reacciones.push_back({rs[i]["remitente"].str(), ancho(rs[i]["emoji"].str())});
     return m;
+}
+
+bool con_imagen(const std::string& tipo) {
+    return tipo == "imagen" || tipo == "video" || tipo == "gif" || tipo == "figurita";
 }
 
 Chat Chat::de_json(const Json& j) {
