@@ -13,6 +13,7 @@
 #include "cache.h"
 #include "core.h"
 #include "cuentas.h"
+#include "actualizar.h"
 #include "emoji.h"
 #include "red.h"
 #include "tema.h"
@@ -199,6 +200,15 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
             if (wp == 10 && app) app->tic_vinculacion();
+            if (wp == 12 && app) {
+                KillTimer(h, 12);
+                if (!app->banner_instalable) app->banner_actualizacion.clear();
+                app->pedir_dibujo();
+            }
+            if (wp == 13 && app) {
+                KillTimer(h, 13);
+                app->verificar_actualizacion(false);
+            }
             if (wp == 11 && app) {
                 KillTimer(h, 11);
                 app->intentar_salto();
@@ -301,6 +311,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     }
 
     cuentas::cargar(carpeta_exe());
+    actualizar::limpiar(carpeta_exe());
 
     // Menus contextuales oscuros: SetPreferredAppMode(ForceDark) de uxtheme
     // (ordinal 135, sin documentar pero estable desde 1809).
@@ -395,6 +406,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         });
     });
     SetTimer(h, TIMER_CURSOR, 250, nullptr);
+    // El chequeo de actualizacion, unos segundos despues de arrancar.
+    SetTimer(h, 13, 5000, nullptr);
     ShowWindow(h, ajustes::actual().ventana_max ? SW_SHOWMAXIMIZED : SW_SHOW);
 
     MSG msg;

@@ -31,6 +31,8 @@ add_executable(kciwapp2 WIN32
     src/core.cpp
     src/config_ui.cpp
     src/cuentas.cpp
+    src/actualizar.cpp
+    src/actualizar_ui.cpp
     src/toast.cpp
     src/app.rc
 )

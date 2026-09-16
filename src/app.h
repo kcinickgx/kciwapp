@@ -356,6 +356,17 @@ struct App {
     // Cierra y vuelve a abrir el cliente con otra cuenta.
     void cambiar_cuenta(int i);
     void menu_cuentas(float x, float y);
+    // Actualizacion del cliente (actualizar_ui.cpp): aviso bajo el buscador y pantalla de progreso.
+    std::wstring banner_actualizacion;
+    bool banner_instalable = false;
+    bool actualizando = false;
+    float alto_banner_actualizacion() const;
+    void verificar_actualizacion(bool a_pedido);
+    void dibujar_banner_actualizacion();
+    bool click_banner_actualizacion(float x, float y);
+    bool sobre_banner_actualizacion(float x, float y) const;
+    void empezar_actualizacion();
+    void dibujar_actualizacion();
     Campo cfg_host, cfg_puerto, cfg_token;
     std::wstring cfg_error;
     void empezar_configuracion();
@@ -547,7 +558,7 @@ struct App {
     static constexpr float CABECERA_H = 60.0f;
     // La cabecera mas la barra de llamada en curso (si hay).
     float alto_cabecera() const { return CABECERA_H + alto_barra_llamada(); }
-    float top_lista() const { return 104.0f; }
+    float top_lista() const { return 104.0f + alto_banner_actualizacion(); }
     // Alto de una fila de la lista: acompana al tamano de letra.
     float fila_h() const { return std::round(letra_lista * 3.2f + 20.0f); }
     float alto_pie = 0;

@@ -1523,8 +1523,9 @@ void App::dibujar() {
     g.empezar_frame();
     g.ctx->Clear(Color(BG_APP()).d2d());
     aplicar_ajustes();
-    if (config_pendiente || selector_pendiente) {
-        if (config_pendiente) dibujar_configuracion();
+    if (config_pendiente || selector_pendiente || actualizando) {
+        if (actualizando) dibujar_actualizacion();
+        else if (config_pendiente) dibujar_configuracion();
         else dibujar_selector();
         g.terminar_frame();
         return;
@@ -1587,6 +1588,7 @@ void App::dibujar_lista() {
     g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO()));
     g.lupa(29, 76, 6, Color(TXT_DIM()));
     buscador.dibujar(g, 40, 61, W - 54, 32, ahora);
+    dibujar_banner_actualizacion();
 
     armar_items();
     float H = g.alto - top;
@@ -2427,6 +2429,7 @@ void App::raton_mueve(float x, float y) {
 
 void App::raton_abajo(float x, float y, bool shift) {
     SetCapture(hwnd);
+    if (actualizando) return;
     if (click_configuracion(x, y, shift)) return;
     if (click_selector(x, y)) return;
     if (click_menu(x, y)) return;
@@ -2468,6 +2471,7 @@ void App::raton_abajo(float x, float y, bool shift) {
             menu_cuentas(ancho_lista - 86, 52);
             return;
         }
+        if (click_banner_actualizacion(x, y)) return;
         if (y > top_lista() && lista.max > 0 && x > ancho_lista - 24) {
             float top = top_lista(), H = g.alto - top;
             arrastrando_lista = true;
@@ -2637,6 +2641,7 @@ void App::rueda(float x, float y, float delta) {
 }
 
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
+    if (actualizando) return;
     if (tecla_configuracion(vk, shift, ctrl)) return;
     if (selector_pendiente) return;
     if (vk == VK_F9) {
@@ -2750,6 +2755,7 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
 }
 
 void App::caracter(wchar_t c) {
+    if (actualizando) return;
     if (caracter_configuracion(c)) return;
     if (selector_pendiente) return;
     if (buscador_chat.foco) {
@@ -2868,6 +2874,7 @@ bool App::sobre_campo(float x, float y) const {
 }
 
 bool App::sobre_clickeable(float x, float y) {
+    if (actualizando) return false;
     if (config_pendiente) return clickeable_configuracion(x, y);
     if (selector_pendiente) return clickeable_selector(x, y);
     if (visor) {
@@ -2878,6 +2885,7 @@ bool App::sobre_clickeable(float x, float y) {
     }
     if (x < ancho_lista) {
         if (y < 60) return x > ancho_lista - 86;              // menu de cuentas y engranaje
+        if (sobre_banner_actualizacion(x, y)) return true;
         if (y < top_lista()) return false;                     // buscador
         int k = item_en(y);
         return k >= 0 && k < (int)items.size() && items[k].tipo != ItemLista::Titulo;
