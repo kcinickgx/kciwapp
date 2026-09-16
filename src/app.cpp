@@ -354,7 +354,7 @@ void App::redimensionado() {
 bool App::animando() {
     return !lista.quieto() || !conv.quieto() ||
            (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
-           alguien_escribe(chat_actual) || cargando_todo ||
+           alguien_escribe(chat_actual) ||
            grab == Grab::Grabando ||
            ((!reproduciendo_id.empty() || grab_escuchando) && !reproductor.pausado() && !reproductor.terminado());
 }
@@ -1916,41 +1916,26 @@ void App::dibujar_vinculacion() {
 }
 
 // Trae el chat entero (lo que falte de la cache y despues del server, de a
-// 20k) mostrando el progreso. Solo tiene sentido con preload parcial.
+// 20k). Solo tiene sentido con preload parcial. Sin barra ni conteo: un
+// "Loading..." y nada que lo frene.
 void App::cargar_todo_el_chat() {
     if (chat_actual.empty() || cargando_todo || cargando_mensajes || !hay_mas_viejos) return;
     cargando_todo = true;
     cargando_mensajes = true;
-    todo_cargado = (long long)mensajes.size();
-    todo_total = 0;
     pedir_dibujo();
     std::string mio = chat_actual;
     long long mas_viejo = mensajes.empty() ? 0 : mensajes.front().ts;
     red::en_fondo([this, mio, mas_viejo] {
         long long viejo = mas_viejo;
-        Respuesta rc = red::obtener(L"/cantidad?chat=" + ancho(mio), 30000);
-        long long total = Json::parsear(rc.cuerpo)["cantidad"].entero();
-        red::en_ui([this, mio, total] {
-            if (mio == chat_actual) todo_total = std::max(total, todo_cargado);
-            pedir_dibujo();
-        });
         // Las tandas (cada una mas vieja que la anterior) se juntan aca y se
-        // meten en la conversacion de una sola vez al final: la barra solo
-        // cuenta. Insertar y rearmar por tanda era lo que lo hacia lento.
+        // meten en la conversacion de una sola vez al final.
         std::vector<std::vector<Mensaje>> tandas;
-        auto avisar = [this, mio](long long n) {
-            red::en_ui([this, mio, n] {
-                if (mio == chat_actual) todo_cargado += n;
-                pedir_dibujo();
-            });
-        };
         // Primero lo que ya tiene la cache.
         while (viejo > 0) {
             std::vector<Mensaje> resto = cache::leer_mensajes(mio, viejo, 20000);
             if (resto.empty()) break;
             viejo = resto.front().ts;
             bool ultimo = resto.size() < 20000;
-            avisar((long long)resto.size());
             tandas.push_back(std::move(resto));
             if (ultimo) break;
         }
@@ -1971,7 +1956,6 @@ void App::cargar_todo_el_chat() {
             agotado = viejos.size() < 20000;
             if (viejos.empty()) break;
             viejo = viejos.front().ts;
-            avisar((long long)viejos.size());
             tandas.push_back(std::move(viejos));
             if (agotado) break;
         }
@@ -1987,44 +1971,23 @@ void App::cargar_todo_el_chat() {
                 cargando_mensajes = false;
                 hay_mas_viejos = fallo ? true : !agotado;
                 if (fallo) aviso_estado = L"Cannot reach the server";
-                if (!fallo) todo_total = todo_cargado;  // 100%
             }
             cargando_todo = false;
-            todo_fin = GetTickCount64();
-            SetTimer(hwnd, 4, 1000, nullptr);
             pedir_dibujo();
             intentar_salto();
         });
     });
 }
 
-// La ventanita de progreso, centrada sobre la conversacion.
+// El cartelito de "Loading...", centrado sobre la conversacion.
 void App::dibujar_progreso_carga() {
     if (!cargando_todo) return;
-    float W = 360, H = 110, x = x_conv() + (w_conv() - W) / 2, y = alto_cabecera() + (g.alto - alto_pie - alto_cabecera() - H) / 2;
-    g.rect_redondo(x, y, W, H, 12, Color(BG_PANEL()));
-    g.borde_redondo(x, y, W, H, 12, Color(BORDE()), 1.0f);
-    g.renglon(L"Loading all messages", x + 20, y + 16, 15, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
-    auto miles = [](long long n) {
-        std::wstring s = std::to_wstring(n), o;
-        int c = 0;
-        for (int i = (int)s.size() - 1; i >= 0; i--) {
-            o.insert(o.begin(), s[i]);
-            if (++c % 3 == 0 && i > 0) o.insert(o.begin(), L',');
-        }
-        return o;
-    };
-    std::wstring t = miles(todo_cargado) + (todo_total > 0 ? L" / " + miles(todo_total) : L"");
-    float tw = g.medir(t, 13);
-    g.renglon(t, x + W - 20 - tw, y + 18, 13, Color(TXT_DIM()));
-    float bx = x + 20, by = y + 56, bw = W - 40, bh = 10;
-    g.rect_redondo(bx, by, bw, bh, 5, Color(BG_CAMPO()));
-    float f = todo_total > 0 ? std::clamp((float)todo_cargado / (float)todo_total, 0.0f, 1.0f) : 0.0f;
-    if (f > 0) g.rect_redondo(bx, by, bw * f, bh, 5, Color(ACCENT()));
-    int pct = (int)(f * 100 + 0.5f);
-    std::wstring p = todo_total > 0 ? std::to_wstring(pct) + L"%" : L"Counting...";
-    float pw = g.medir(p, 12);
-    g.renglon(p, x + (W - pw) / 2, y + 78, 12, Color(TXT_DIM()));
+    std::wstring t = L"Loading all messages...";
+    float tw = g.medir(t, 14), W = tw + 40, H = 40;
+    float x = x_conv() + (w_conv() - W) / 2, y = alto_cabecera() + (g.alto - alto_pie - alto_cabecera() - H) / 2;
+    g.rect_redondo(x, y, W, H, 10, Color(BG_PANEL()));
+    g.borde_redondo(x, y, W, H, 10, Color(BORDE()), 1.0f);
+    g.renglon(t, x + 20, y + 11, 14, Color(TXT()));
 }
 
 void App::dibujar_pantalla_vacia() {
