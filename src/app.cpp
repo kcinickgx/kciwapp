@@ -850,6 +850,8 @@ void App::enviar_texto() {
     });
 }
 
+static std::wstring ruta_local_de(const std::string& clave);
+
 void App::escuchar_eventos() {
     red::en_fondo([this] {
         for (;;) {
@@ -981,6 +983,9 @@ bool App::aplicar_evento(const Json& e) {
         if (estado == 1) {
             imagenes.erase("media:" + std::to_string(id));
             imagenes.erase("mini:" + std::to_string(id));
+            // La miniatura nueva (la de ffmpeg reemplaza a la chiquita de WA):
+            // fuera tambien la copia en disco.
+            if (mini) DeleteFileW(ruta_local_de("mini:" + std::to_string(id)).c_str());
         }
     } else if (tipo == "historia") {
         // El server cambio la historia de ese chat: lo cacheado no alcanza.
