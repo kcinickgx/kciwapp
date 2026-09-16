@@ -668,6 +668,18 @@ bool hay_mensaje(const std::string& chat, const std::string& id) {
     return st.fila();
 }
 
+std::optional<Mensaje> mensaje_por_id(const std::string& chat, const std::string& id) {
+    std::lock_guard<std::mutex> l(g_mu);
+    if (!g_db) return std::nullopt;
+    std::string sql = std::string("SELECT ") + COLUMNAS_MENSAJE + " FROM mensajes WHERE chat=? AND id=? LIMIT 1;";
+    Stmt st(sql.c_str());
+    if (!st.ok) return std::nullopt;
+    st.bind_texto(1, chat);
+    st.bind_texto(2, id);
+    if (!st.fila()) return std::nullopt;
+    return fila_a_mensaje(st);
+}
+
 void borrar_mensajes() {
     std::lock_guard<std::mutex> l(g_mu);
     if (!g_db) return;

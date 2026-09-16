@@ -119,6 +119,9 @@ struct VistaMensaje {
     float nh = 0;
     ComPtr<IDWriteTextLayout> cita;
     float ch = 0;
+    float cita_y = 0;            // la caja de la cita, relativa a la burbuja (para el click)
+    long long cita_media = 0;    // media de lo citado si es foto/video/sticker (miniatura al lado)
+    bool cita_mini = false;
     float mx = 0, my = 0, mw = 0, mh = 0;   // media, relativo a la burbuja
     float hora_x = 0, hora_y = 0;
     bool hora_abajo = false;
@@ -347,6 +350,7 @@ struct App {
     void aliviar_vistas(size_t visible_desde, size_t visible_hasta);
     void marcar_albumes(size_t desde = 0);
     void dibujar_foto(const Mensaje& m, float x, float y, float w, float h, float radio);
+    void dibujar_miniatura(long long media_id, bool mini, float x, float y, float w, float h, float radio);
     void rearmar_si_liviana(size_t i);
     // Transcripcion de notas de voz con whisper.cpp (portable\whisper\), a pedido.
     std::set<std::string> transcribiendo;  // ids en curso

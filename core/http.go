@@ -443,6 +443,13 @@ func anotarEnviado(chat string, resp whatsmeow.SendResponse, c contenido, ctxInf
 		m.CitaID = ctxInfo.GetStanzaID()
 		m.CitaRemitente = ctxInfo.GetParticipant()
 		m.CitaTexto = ctxInfo.GetQuotedMessage().GetConversation()
+		// Lo citado es una foto, un audio...: el mismo texto que al recibir.
+		if q := mensajePorID(chat, m.CitaID); q != nil {
+			m.CitaTexto = q.Texto
+			if m.CitaTexto == "" && q.Tipo != "" && q.Tipo != "texto" {
+				m.CitaTexto = nombreTipo(q.Tipo)
+			}
+		}
 	}
 	if c.media != nil {
 		var crudo []byte

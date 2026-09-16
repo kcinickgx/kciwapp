@@ -1260,11 +1260,16 @@ void App::marcar_albumes(size_t desde) {
 // Una foto cubriendo el rectangulo (la completa si esta bajada, si no la miniatura).
 void App::dibujar_foto(const Mensaje& m, float x, float y, float w, float h, float radio) {
     if (!m.media) return;
-    std::string clave_media = "media:" + std::to_string(m.media->id);
-    Imagen& im = imagen(clave_media, L"/media/" + std::to_wstring(m.media->id), false);
+    dibujar_miniatura(m.media->id, m.media->miniatura, x, y, w, h, radio);
+}
+
+// Una imagen cubriendo el rectangulo: la completa si esta bajada, si no la miniatura.
+void App::dibujar_miniatura(long long media_id, bool mini_disponible, float x, float y, float w, float h, float radio) {
+    std::string clave_media = "media:" + std::to_string(media_id);
+    Imagen& im = imagen(clave_media, L"/media/" + std::to_wstring(media_id), false);
     ID2D1Bitmap1* b = im.cuadro_actual(g, ahora);
-    if (!b && m.media->miniatura) {
-        Imagen& mini = imagen("mini:" + std::to_string(m.media->id), L"/miniatura/" + std::to_wstring(m.media->id), false);
+    if (!b && mini_disponible) {
+        Imagen& mini = imagen("mini:" + std::to_string(media_id), L"/miniatura/" + std::to_wstring(media_id), false);
         b = mini.bmp.Get();
     }
     g.recortar_redondo(x, y, w, h, radio);
@@ -1368,8 +1373,16 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
         std::wstring ct = m.cita_texto.empty() ? L"Message" : m.cita_texto;
         size_t corte = ct.find(L'\n');
         if (corte != std::wstring::npos) ct = ct.substr(0, corte) + L"…";
+        // Si lo citado es una foto/video/sticker que esta en la cache, va
+        // con su miniatura a la derecha (y se puede hacer click para ir).
+        v.cita_media = 0;
+        if (auto q = cache::mensaje_por_id(m.chat, m.cita_id); q && q->media && con_imagen(q->tipo) && !q->borrado) {
+            v.cita_media = q->media->id;
+            v.cita_mini = q->media->miniatura;
+        }
+        const float MINI = 52;
         std::wstring todo = autor + L"\n" + ct;
-        v.cita = g.texto(todo, letra_chat - 1.5f, interior - 20);
+        v.cita = g.texto(todo, letra_chat - 1.5f, interior - 20 - (v.cita_media ? MINI + 6 : 0));
         DWRITE_TEXT_RANGE rango = {0, (UINT32)autor.size()};
         v.cita->SetFontWeight(DWRITE_FONT_WEIGHT_SEMI_BOLD, rango);
         v.cita->SetMaxHeight(60);
@@ -1378,7 +1391,9 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
         DWRITE_TEXT_METRICS tm;
         v.cita->GetMetrics(&tm);
         v.ch = std::min(tm.height, 60.0f) + 10;
-        ancho_contenido = std::max(ancho_contenido, std::min(tm.widthIncludingTrailingWhitespace + 22, interior));
+        if (v.cita_media) v.ch = std::max(v.ch, MINI);
+        ancho_contenido = std::max(ancho_contenido, std::min(tm.widthIncludingTrailingWhitespace + 22 + (v.cita_media ? MINI + 6 : 0), interior));
+        v.cita_y = y;
         y += v.ch + 6;
     }
     // Contacto compartido: tarjeta con avatar, nombre y telefono, y "Message".
@@ -2333,6 +2348,7 @@ void App::dibujar_mensaje(size_t i, float y) {
         g.recortar(cx, cy, ancho_cita, v.ch);
         g.dibujar_texto(v.cita.Get(), cx + 12, cy + 5, Color(TXT_DIM()));
         g.destapar();
+        if (v.cita_media) dibujar_miniatura(v.cita_media, v.cita_mini, cx + ancho_cita - v.ch, cy, v.ch, v.ch, 5);
         cy += v.ch + 6;
     }
     if (v.mw > 0) {
@@ -2743,7 +2759,11 @@ void App::raton_abajo(float x, float y, bool shift) {
         } else {
             const VistaMensaje& v = vistas[i];
             float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
-            if (v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh) {
+            float qx = x_conv() + v.bx + PAD_X, qy = ym + v.by + v.cita_y;
+            if (v.cita && x >= qx && x <= qx + v.bw - 2 * PAD_X && y >= qy && y <= qy + v.ch) {
+                // Click en la cita: al mensaje citado.
+                ir_a_mensaje(mensajes[i].chat, mensajes[i].cita_id, 0);
+            } else if (v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh) {
                 if (!v.contactos.empty())
                     abrir_contacto(i);
                 else if ((mensajes[i].tipo == "audio" || mensajes[i].tipo == "nota") && reproductor_ok)
@@ -3082,6 +3102,8 @@ bool App::sobre_clickeable(float x, float y) {
     if (!enlace_en(i, ym, x, y).empty()) return true;
     const VistaMensaje& v = vistas[i];
     float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
+    float qx = x_conv() + v.bx + PAD_X, qy = ym + v.by + v.cita_y;
+    if (v.cita && x >= qx && x <= qx + v.bw - 2 * PAD_X && y >= qy && y <= qy + v.ch) return true;  // la cita
     return v.mw > 0 && x >= mx && x <= mx + v.mw && y >= my && y <= my + v.mh;  // foto, video, audio, documento
 }
 
