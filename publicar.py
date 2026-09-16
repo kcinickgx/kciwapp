@@ -18,7 +18,8 @@ RAIZ = os.path.dirname(os.path.abspath(__file__))
 ORIGEN = r'C:\Program Files\KciWAPP'  # la instalacion del usuario: solo se lee
 DESTINO = r'H:\kciwapp'
 MANIFIESTO = 'kciwapp.md5'
-EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALAR.md', MANIFIESTO}
+INSTALADOR = 'kciwapp-instalar.exe'
+EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALAR.md', MANIFIESTO, INSTALADOR}
 EXCLUIR_DIR = {'datos', 'server'}
 # Lo recien compilado se toma de build\ (en la instalacion no se escribe
 # nada: el usuario la actualiza a mano). Estos van aunque alla no esten.
@@ -96,7 +97,8 @@ def main():
     texto = ''.join(f'{md5} {tamano} {rel}\n' for rel, md5, tamano in lista)
     with open(os.path.join(DESTINO, MANIFIESTO), 'w', encoding='utf-8', newline='\n') as f:
         f.write(texto)
-    # Lo de al lado: instrucciones e instaladores del server.
+    # Lo de al lado: el instalador (fuera del manifiesto), instrucciones e instaladores del server.
+    shutil.copyfile(os.path.join(RAIZ, 'build', INSTALADOR), os.path.join(DESTINO, INSTALADOR))
     shutil.copyfile(os.path.join(RAIZ, 'docs', 'INSTALAR.md'), os.path.join(DESTINO, 'INSTALAR.md'))
     os.makedirs(os.path.join(DESTINO, 'server'), exist_ok=True)
     for f in ('instalar.sh', 'instalar-slackware.sh'):

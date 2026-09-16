@@ -41,4 +41,10 @@ target_compile_definitions(kciwapp2 PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN
 target_compile_options(kciwapp2 PRIVATE /W3 /utf-8 /EHsc /permissive-)
 target_link_libraries(kciwapp2 PRIVATE d3d11 d2d1 dwrite dxgi windowscodecs winhttp dwmapi shell32 ole32 uxtheme comctl32 shlwapi comdlg32 mmdevapi avrt bcrypt)
 
-# La salida va a portable\: exe + servidor.json + datos\.
+# El instalador: un exe chico y autonomo (CRT estatica) que baja todo de
+# kcinick.gxzone.com/kciwapp. publicar.py lo sube como kciwapp-instalar.exe.
+add_executable(kciwapp-instalar WIN32 src/instalador/instalador.cpp src/app.rc)
+target_compile_definitions(kciwapp-instalar PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_options(kciwapp-instalar PRIVATE /W3 /utf-8 /EHsc /permissive-)
+set_property(TARGET kciwapp-instalar PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+target_link_libraries(kciwapp-instalar PRIVATE winhttp bcrypt ole32 shell32 gdi32 user32)

@@ -19,8 +19,9 @@ elegida). Para volver a empezar, borrar `cuentas.json` (y `datos\`).
 
 ## 0. Cliente local (lo más simple)
 
-Todo está en https://kcinick.gxzone.com/kciwapp/ (`kciwapp.md5` lista los
-archivos). Bajar la carpeta entera a cualquier lado y abrir `kciwapp2.exe`.
+Bajar https://kcinick.gxzone.com/kciwapp/kciwapp-instalar.exe y abrirlo: pregunta
+dónde instalar (por defecto `%LOCALAPPDATA%\KciWAPP`), baja todo de ahí mismo
+(`kciwapp.md5` lista los archivos), crea los accesos directos y abre kciwapp.
 Listo. Necesita Windows 10/11 x64 (WebView2 para las llamadas viene con
 Win11). Después el cliente se actualiza solo desde ahí: chequea al abrir y
 desde el menú `⋯` → Check for updates.
