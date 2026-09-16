@@ -112,7 +112,7 @@ struct Md5 {
 
 // GET https://HOST<ruta>: cada pedazo va a recibir(). false si fallo.
 bool bajar_https(const std::wstring& ruta, const std::function<bool(const char*, DWORD)>& recibir) {
-    HINTERNET s = WinHttpOpen(L"kciwapp-instalar", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    HINTERNET s = WinHttpOpen(L"kciwapp-setup", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!s) return false;
     WinHttpSetTimeouts(s, 10000, 10000, 60000, 60000);
     bool ok = false;
@@ -576,7 +576,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     WNDCLASSEXW wc = {sizeof wc};
     wc.lpfnWndProc = ventana;
     wc.hInstance = inst;
-    wc.lpszClassName = L"kciwapp-instalar";
+    wc.lpszClassName = L"kciwapp-setup";
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
     wc.hIconSm = wc.hIcon;

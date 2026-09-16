@@ -2,7 +2,7 @@
 # Instala kciwapp-server en un Debian/Ubuntu limpio (como root):
 #   MariaDB + ffmpeg, la base "whatsapp", el binario en /opt/kciwapp-server,
 #   config.json con token nuevo, unit de systemd, y arranca.
-# Uso: ./instalar.sh [puerto]     (el binario kciwapp-server tiene que estar al lado)
+# Uso: ./install.sh [puerto]     (el binario kciwapp-server tiene que estar al lado)
 set -euo pipefail
 cd "$(dirname "$0")"
 PUERTO="${1:-8080}"

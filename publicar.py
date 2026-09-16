@@ -4,7 +4,7 @@
 # lee) con el exe y el core recien compilados de build\; copia lo
 # que cambio, borra lo que sobra y escribe el manifiesto kciwapp.md5 ("md5
 # tamano ruta" por linea). No lleva lo que es del usuario (ajustes.json,
-# cuentas.json, datos\) ni los pdb. Ademas deja INSTALAR.md y, en server\,
+# cuentas.json, datos\) ni los pdb. Ademas deja INSTALL.md y, en server\,
 # los instaladores (el binario del server lo sube core/build.sh server).
 #
 #   python publicar.py
@@ -18,8 +18,8 @@ RAIZ = os.path.dirname(os.path.abspath(__file__))
 ORIGEN = r'C:\Program Files\KciWAPP'  # la instalacion del usuario: solo se lee
 DESTINO = r'H:\kciwapp'
 MANIFIESTO = 'kciwapp.md5'
-INSTALADOR = 'kciwapp-instalar.exe'
-EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALAR.md', MANIFIESTO, INSTALADOR}
+INSTALADOR = 'kciwapp-setup.exe'
+EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALL.md', MANIFIESTO, INSTALADOR}
 EXCLUIR_DIR = {'datos', 'server'}
 # Lo recien compilado se toma de build\ (en la instalacion no se escribe
 # nada: el usuario la actualiza a mano). Estos van aunque alla no esten.
@@ -99,9 +99,9 @@ def main():
         f.write(texto)
     # Lo de al lado: el instalador (fuera del manifiesto), instrucciones e instaladores del server.
     shutil.copyfile(os.path.join(RAIZ, 'build', INSTALADOR), os.path.join(DESTINO, INSTALADOR))
-    shutil.copyfile(os.path.join(RAIZ, 'docs', 'INSTALAR.md'), os.path.join(DESTINO, 'INSTALAR.md'))
+    shutil.copyfile(os.path.join(RAIZ, 'docs', 'INSTALL.md'), os.path.join(DESTINO, 'INSTALL.md'))
     os.makedirs(os.path.join(DESTINO, 'server'), exist_ok=True)
-    for f in ('instalar.sh', 'instalar-slackware.sh'):
+    for f in ('install.sh', 'install-slackware.sh'):
         shutil.copyfile(os.path.join(RAIZ, 'core', f), os.path.join(DESTINO, 'server', f))
     total = sum(t for _, _, t in lista)
     print(f'{len(lista)} archivos ({total // (1 << 20)} MB), {copiados} copiados, {borrados} borrados -> {DESTINO}\\{MANIFIESTO}')

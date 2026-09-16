@@ -19,7 +19,7 @@ elegida). Para volver a empezar, borrar `cuentas.json` (y `datos\`).
 
 ## 0. Cliente local (lo más simple)
 
-Bajar https://kcinick.gxzone.com/kciwapp/kciwapp-instalar.exe y abrirlo: pregunta
+Bajar https://kcinick.gxzone.com/kciwapp/kciwapp-setup.exe y abrirlo: pregunta
 dónde instalar (por defecto `%LOCALAPPDATA%\KciWAPP`), baja todo de ahí mismo
 (`kciwapp.md5` lista los archivos), crea los accesos directos y abre kciwapp.
 Listo. Necesita Windows 10/11 x64 (WebView2 para las llamadas viene con
@@ -37,18 +37,18 @@ actualizaciones la vuelve a bajar si falta: en ese caso, no aceptar).
 ## 1. Server
 
 En un Debian/Ubuntu limpio (una VM con 2 GB alcanza), como root, con
-`kciwapp-server` e `instalar.sh` (de `server\` del paquete) en la misma
+`kciwapp-server` e `install.sh` (de `server\` del paquete) en la misma
 carpeta:
 
 ```bash
-./instalar.sh          # o ./instalar.sh 9000 para otro puerto
+./install.sh          # o ./install.sh 9000 para otro puerto
 ```
 
 Instala MariaDB y ffmpeg, crea el usuario de base, deja el binario y
 `multi.json` en `/opt/kciwapp-server`, un servicio `kciwapp-server` y lo
 arranca. Escucha solo en la IP de la LAN.
 
-**Slackware 15**: `./instalar-slackware.sh` hace lo mismo con la MariaDB que
+**Slackware 15**: `./install-slackware.sh` hace lo mismo con la MariaDB que
 trae Slackware y un `/etc/rc.d/rc.kciwapp-server` (start/stop/restart/status)
 enganchado en `rc.local`; log en `/var/log/kciwapp-server.log`. ffmpeg hay que
 ponerlo antes desde SlackBuilds (`sbopkg -i ffmpeg`); sin él anda igual pero

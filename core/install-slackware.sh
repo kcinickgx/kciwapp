@@ -7,7 +7,7 @@
 # ffmpeg no viene con Slackware: instalarlo antes desde SlackBuilds.org
 # (sbopkg -i ffmpeg) o el script avisa y sigue (sin ffmpeg no hay notas de
 # voz convertidas, stickers ni miniaturas de video; lo demas anda).
-# Uso: ./instalar-slackware.sh [puerto]
+# Uso: ./install-slackware.sh [puerto]
 set -euo pipefail
 cd "$(dirname "$0")"
 PUERTO="${1:-8080}"
