@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr float PANEL_W = 560.0f;
+constexpr float PANEL_W = 620.0f;
 constexpr float TARJETA_H = 116.0f;
 constexpr float CAMPO_H = 34.0f;
 
@@ -90,10 +90,10 @@ void App::dibujar_configuracion() {
         if (elegida) g.circulo(cx, cy, 4.5f, Color(ACCENT()));
     };
     bool hay_core = core::disponible(carpeta_exe());
-    tarjeta(q.t1x, !remoto, L"This computer", L"Runs WhatsApp right here, nothing else needed.",
+    tarjeta(q.t1x, !remoto, L"This computer", L"WhatsApp runs right here.",
             hay_core ? L"Online only while kciwapp is open." : L"core\\kciwapp-core.exe is missing.", hay_core);
-    tarjeta(q.t2x, remoto, L"A kciwapp server", L"Always on, on your LAN, several people.",
-            L"Needs its address and your token.", true);
+    tarjeta(q.t2x, remoto, L"A kciwapp server", L"Always on, on your LAN.",
+            L"Needs its address and a token.", true);
 
     if (remoto) {
         auto campo_fila = [&](const wchar_t* etiqueta, Campo& c, float y, float w) {
