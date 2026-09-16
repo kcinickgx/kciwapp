@@ -14,8 +14,10 @@
 
 namespace {
 
-const wchar_t* HOST = L"kcinick.gxzone.com";
-const wchar_t* BASE = L"/kciwapp/";
+// El manifiesto vive en el release "current" de GitHub; cada linea trae la
+// URL completa de su archivo (los del release, y el modelo de whisper desde
+// Hugging Face), asi que aca no hace falta ninguna base.
+const wchar_t* URL_MANIFIESTO = L"https://github.com/kcinickgx/kciwapp/releases/download/current/kciwapp.md5";
 const wchar_t* MANIFIESTO = L"kciwapp.md5";
 
 std::mutex g_mu;
@@ -92,15 +94,23 @@ std::string g_manifiesto_remoto;  // el texto bajado, para guardarlo al aplicar
 
 // ---- https ------------------------------------------------------------------
 
-// GET https://HOST<ruta>. Con destino, escribe ahi de a pedazos y avisa los
-// bytes; sin destino, devuelve el cuerpo. Devuelve false si fallo.
-bool bajar_https(const std::wstring& ruta, std::string* cuerpo, const std::wstring& destino, const std::function<void(long long)>& avance) {
+// GET de una URL https completa (sigue las redirecciones, que GitHub y
+// Hugging Face usan para mandar al CDN). Con destino, escribe ahi de a
+// pedazos y avisa los bytes; sin destino, devuelve el cuerpo. false si fallo.
+bool bajar_https(const std::wstring& url, std::string* cuerpo, const std::wstring& destino, const std::function<void(long long)>& avance) {
+    wchar_t host[256] = L"", ruta[2048] = L"";
+    URL_COMPONENTSW uc{sizeof uc};
+    uc.lpszHostName = host;
+    uc.dwHostNameLength = 256;
+    uc.lpszUrlPath = ruta;
+    uc.dwUrlPathLength = 2048;
+    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &uc)) return false;
     HINTERNET s = WinHttpOpen(L"kciwapp2", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!s) return false;
     WinHttpSetTimeouts(s, 10000, 10000, 60000, 60000);
     bool ok = false;
-    HINTERNET con = WinHttpConnect(s, HOST, INTERNET_DEFAULT_HTTPS_PORT, 0);
-    HINTERNET req = con ? WinHttpOpenRequest(con, L"GET", ruta.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : nullptr;
+    HINTERNET con = WinHttpConnect(s, host, uc.nPort, 0);
+    HINTERNET req = con ? WinHttpOpenRequest(con, L"GET", ruta, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : nullptr;
     HANDLE f = INVALID_HANDLE_VALUE;
     if (req && WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0, nullptr, 0, 0, 0) && WinHttpReceiveResponse(req, nullptr)) {
         DWORD estado = 0, largo = sizeof estado;
@@ -144,18 +154,7 @@ bool bajar_https(const std::wstring& ruta, std::string* cuerpo, const std::wstri
     return ok;
 }
 
-// La ruta web de un archivo: / en vez de \ y espacios escapados.
-std::wstring ruta_web(const std::wstring& rel) {
-    std::wstring r = BASE;
-    for (wchar_t c : rel) {
-        if (c == L'\\') r += L'/';
-        else if (c == L' ') r += L"%20";
-        else r += c;
-    }
-    return r;
-}
-
-// Parsea el manifiesto: "md5 tamano ruta" por linea (ruta con /).
+// Parsea el manifiesto: "md5 tamano url ruta" por linea (ruta con /).
 std::vector<actualizar::Archivo> parsear_manifiesto(const std::string& s) {
     std::vector<actualizar::Archivo> lista;
     std::istringstream in(s);
@@ -164,12 +163,13 @@ std::vector<actualizar::Archivo> parsear_manifiesto(const std::string& s) {
         if (linea.empty() || linea[0] == '#') continue;
         std::istringstream l(linea);
         actualizar::Archivo a;
-        std::string ruta;
-        if (!(l >> a.md5 >> a.tamano)) continue;
+        std::string ruta, url;
+        if (!(l >> a.md5 >> a.tamano >> url)) continue;
+        a.url = ancho(url);
         std::getline(l, ruta);
         while (!ruta.empty() && ruta.front() == ' ') ruta.erase(ruta.begin());
         while (!ruta.empty() && (ruta.back() == '\r' || ruta.back() == ' ')) ruta.pop_back();
-        if (ruta.empty() || a.md5.size() != 32) continue;
+        if (ruta.empty() || a.md5.size() != 32 || url.rfind("https://", 0) != 0) continue;
         for (auto& c : ruta)
             if (c == '/') c = '\\';
         a.ruta = ancho(ruta);
@@ -216,7 +216,7 @@ void verificar(const std::wstring& carpeta_exe, std::function<void()> al_termina
         std::string cuerpo;
         std::vector<Archivo> pendientes;
         std::wstring error;
-        if (!bajar_https(std::wstring(BASE) + MANIFIESTO, &cuerpo, L"", nullptr)) {
+        if (!bajar_https(URL_MANIFIESTO, &cuerpo, L"", nullptr)) {
             error = L"Could not reach the update server";
         } else {
             auto lista = parsear_manifiesto(cuerpo);
@@ -280,7 +280,7 @@ void bajar(const std::wstring& carpeta_exe, std::function<void()> progreso, std:
                 if (destino[i] == L'\\') CreateDirectoryW(destino.substr(0, i).c_str(), nullptr);
             con_estado([&](Estado& e) { e.actual = a.ruta; });
             ULONGLONG ultimo_aviso = 0;
-            bool bien = bajar_https(ruta_web(a.ruta), nullptr, destino, [&](long long bytes) {
+            bool bien = bajar_https(a.url, nullptr, destino, [&](long long bytes) {
                 con_estado([&](Estado& e) { e.bajados = acumulado + bytes; });
                 ULONGLONG t = GetTickCount64();
                 if (t - ultimo_aviso > 100) {

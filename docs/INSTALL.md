@@ -19,10 +19,12 @@ elegida). Para volver a empezar, borrar `cuentas.json` (y `datos\`).
 
 ## 0. Cliente local (lo más simple)
 
-Bajar https://kcinick.gxzone.com/kciwapp/kciwapp-setup.exe y abrirlo: pregunta
+Bajar https://github.com/kcinickgx/kciwapp/releases/download/current/kciwapp-setup.exe
+y abrirlo: pregunta
 dónde instalar (por defecto `C:\Program Files\KciWAPP`; pide permiso de admin y
-deja la carpeta escribible para el usuario), baja todo de ahí mismo
-(`kciwapp.md5` lista los archivos), crea los accesos directos y abre kciwapp.
+deja la carpeta escribible para el usuario), baja todo del release `current`
+de GitHub (`kciwapp.md5` lista los archivos; el modelo de whisper viene del
+repo oficial en Hugging Face), crea los accesos directos y abre kciwapp.
 Listo. Necesita Windows 10/11 x64 (WebView2 para las llamadas viene con
 Win11). Después el cliente se actualiza solo desde ahí: chequea al abrir y
 desde el menú `⋯` → Check for updates.
@@ -39,7 +41,7 @@ a destildarla.
 ## 1. Server
 
 En un Debian/Ubuntu limpio (una VM con 2 GB alcanza), como root, con
-`kciwapp-server` e `install.sh` (de `server\` del paquete) en la misma
+`kciwapp-server` e `install.sh` (assets del mismo release) en la misma
 carpeta:
 
 ```bash

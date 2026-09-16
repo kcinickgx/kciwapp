@@ -1,6 +1,6 @@
 // El instalador de kciwapp: un exe chico, propio (GDI, sin dialogos de
 // Windows salvo el de elegir carpeta), que pregunta donde instalar, baja todo
-// de https://kcinick.gxzone.com/kciwapp/ segun el manifiesto kciwapp.md5
+// del release "current" de GitHub segun el manifiesto kciwapp.md5
 // (verificando cada md5), deja el manifiesto al lado del exe (para el
 // "check for updates" del cliente), crea los accesos directos y abre kciwapp.
 #include <windows.h>
@@ -27,8 +27,7 @@
 
 namespace {
 
-const wchar_t* HOST = L"kcinick.gxzone.com";
-const wchar_t* BASE = L"/kciwapp/";
+const wchar_t* URL_MANIFIESTO = L"https://github.com/kcinickgx/kciwapp/releases/download/current/kciwapp.md5";
 const wchar_t* MANIFIESTO = L"kciwapp.md5";
 const UINT WM_AVANCE = WM_APP + 1;  // el hilo de bajada avisa (wp: 0 progreso, 1 listo, 2 error)
 
@@ -40,6 +39,7 @@ struct Archivo {
     std::wstring ruta;  // relativa, con \ (mpv\libmpv-2.dll)
     std::string md5;
     long long tamano = 0;
+    std::wstring url;   // completa
 };
 
 // ---- estado -----------------------------------------------------------------
@@ -111,14 +111,22 @@ struct Md5 {
     }
 };
 
-// GET https://HOST<ruta>: cada pedazo va a recibir(). false si fallo.
-bool bajar_https(const std::wstring& ruta, const std::function<bool(const char*, DWORD)>& recibir) {
+// GET de una URL https completa (siguiendo redirecciones al CDN): cada
+// pedazo va a recibir(). false si fallo.
+bool bajar_https(const std::wstring& url, const std::function<bool(const char*, DWORD)>& recibir) {
+    wchar_t host[256] = L"", ruta[2048] = L"";
+    URL_COMPONENTSW uc{sizeof uc};
+    uc.lpszHostName = host;
+    uc.dwHostNameLength = 256;
+    uc.lpszUrlPath = ruta;
+    uc.dwUrlPathLength = 2048;
+    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &uc)) return false;
     HINTERNET s = WinHttpOpen(L"kciwapp-setup", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!s) return false;
     WinHttpSetTimeouts(s, 10000, 10000, 60000, 60000);
     bool ok = false;
-    HINTERNET con = WinHttpConnect(s, HOST, INTERNET_DEFAULT_HTTPS_PORT, 0);
-    HINTERNET req = con ? WinHttpOpenRequest(con, L"GET", ruta.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : nullptr;
+    HINTERNET con = WinHttpConnect(s, host, uc.nPort, 0);
+    HINTERNET req = con ? WinHttpOpenRequest(con, L"GET", ruta, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : nullptr;
     if (req && WinHttpSendRequest(req, WINHTTP_NO_ADDITIONAL_HEADERS, 0, nullptr, 0, 0, 0) && WinHttpReceiveResponse(req, nullptr)) {
         DWORD estado = 0, largo = sizeof estado;
         WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &estado, &largo, WINHTTP_NO_HEADER_INDEX);
@@ -151,16 +159,7 @@ bool bajar_https(const std::wstring& ruta, const std::function<bool(const char*,
     return ok;
 }
 
-std::wstring ruta_web(const std::wstring& rel) {
-    std::wstring r = BASE;
-    for (wchar_t c : rel) {
-        if (c == L'\\') r += L'/';
-        else if (c == L' ') r += L"%20";
-        else r += c;
-    }
-    return r;
-}
-
+// "md5 tamano url ruta" por linea.
 std::vector<Archivo> parsear_manifiesto(const std::string& s) {
     std::vector<Archivo> lista;
     std::istringstream in(s);
@@ -169,12 +168,13 @@ std::vector<Archivo> parsear_manifiesto(const std::string& s) {
         if (linea.empty() || linea[0] == '#') continue;
         std::istringstream l(linea);
         Archivo a;
-        std::string ruta;
-        if (!(l >> a.md5 >> a.tamano)) continue;
+        std::string ruta, url;
+        if (!(l >> a.md5 >> a.tamano >> url)) continue;
+        a.url = ancho(url);
         std::getline(l, ruta);
         while (!ruta.empty() && ruta.front() == ' ') ruta.erase(ruta.begin());
         while (!ruta.empty() && (ruta.back() == '\r' || ruta.back() == ' ')) ruta.pop_back();
-        if (ruta.empty() || a.md5.size() != 32) continue;
+        if (ruta.empty() || a.md5.size() != 32 || url.rfind("https://", 0) != 0) continue;
         for (auto& c : ruta)
             if (c == '/') c = '\\';
         a.ruta = ancho(ruta);
@@ -247,11 +247,11 @@ bool es_whisper(const std::wstring& ruta) { return ruta.rfind(L"whisper\\", 0) =
 
 void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper) {
     std::string manifiesto;
-    if (!bajar_https(std::wstring(BASE) + MANIFIESTO, [&](const char* d, DWORD n) {
+    if (!bajar_https(URL_MANIFIESTO, [&](const char* d, DWORD n) {
             manifiesto.append(d, n);
             return true;
         })) {
-        fallar(L"Could not reach kcinick.gxzone.com");
+        fallar(L"Could not reach github.com");
         return;
     }
     auto lista = parsear_manifiesto(manifiesto);
@@ -289,7 +289,7 @@ void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper) {
         Md5 md5;
         long long bytes = 0;
         ULONGLONG ultimo = 0;
-        bool ok = bajar_https(ruta_web(a.ruta), [&](const char* d, DWORD n) {
+        bool ok = bajar_https(a.url, [&](const char* d, DWORD n) {
             if (g_cancelar) return false;
             DWORD e = 0;
             if (!WriteFile(f, d, n, &e, nullptr) || e != n) return false;
@@ -417,7 +417,7 @@ void dibujar(HDC dc, const RECT& area) {
     Geo q = geo();
     int x = E(MARGEN);
     texto(dc, L"Install kciwapp", x, E(40), 26, TXT, FW_LIGHT);
-    texto(dc, g_whisper ? L"Everything downloads from kcinick.gxzone.com (about 3 GB)." : L"Everything downloads from kcinick.gxzone.com (about 400 MB).", x, E(84), 12, DIM);
+    texto(dc, g_whisper ? L"Everything downloads from GitHub and Hugging Face (about 3 GB)." : L"Everything downloads from GitHub (about 400 MB).", x, E(84), 12, DIM);
 
     EnterCriticalSection(&g_cs);
     std::wstring actual = g_actual, error = g_error;

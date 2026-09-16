@@ -1,6 +1,7 @@
-// Actualizacion del cliente: en https://kcinick.gxzone.com/kciwapp/ estan
-// los archivos del cliente y un manifiesto kciwapp.md5 ("md5 tamano ruta"
-// por linea, generado por publicar.py). Se compara texto contra texto con el
+// Actualizacion del cliente: el release "current" de GitHub tiene los
+// archivos del cliente y un manifiesto kciwapp.md5 ("md5 tamano url ruta"
+// por linea, generado por publicar.py; el modelo de whisper apunta a
+// Hugging Face). Se compara texto contra texto con el
 // kciwapp.md5 instalado (al lado del exe; no se relee ningun archivo) y lo
 // distinto se baja a <archivo>.nuevo; al aplicar, lo viejo pasa a
 // <archivo>.viejo (un exe/dll en uso se puede renombrar), el manifiesto nuevo
@@ -18,6 +19,7 @@ struct Archivo {
     std::wstring ruta;  // relativa al exe, con \ (kciwapp2.exe, mpv\libmpv-2.dll)
     std::string md5;
     long long tamano = 0;
+    std::wstring url;   // de donde se baja (completa)
 };
 
 struct Estado {
