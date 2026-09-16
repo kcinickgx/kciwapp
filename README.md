@@ -1,5 +1,10 @@
 # kciwapp
 
+<p align="center">
+  <a href="https://github.com/kcinickgx/kciwapp/releases/download/current/kciwapp-setup.exe"><img alt="Download kciwapp-setup.exe" src="https://img.shields.io/badge/%E2%AC%87%20Download-kciwapp--setup.exe-25D366?style=for-the-badge&logo=windows&logoColor=white"></a>
+</p>
+<p align="center"><b>Windows 10/11 x64 &middot; free &middot; run it and it installs everything</b></p>
+
 A native WhatsApp client for Windows: C++20, Win32 + Direct2D/DirectWrite, no
 frameworks, every control drawn by hand. The WhatsApp side is a Go program
 built on [whatsmeow](https://github.com/tulir/whatsmeow) that runs either
