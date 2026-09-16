@@ -21,6 +21,8 @@ void cargar(const std::wstring& carpeta_exe);
 const std::vector<Cuenta>& lista();
 // Agrega y guarda; elige carpeta y, si es local, un puerto libre. Devuelve el indice.
 int agregar(Cuenta c);
+// El puerto que le toca a la proxima cuenta local (8477 en adelante).
+int puerto_local_libre();
 void elegir(int i);
 int activa();              // -1 si todavia no se eligio
 const Cuenta* actual();

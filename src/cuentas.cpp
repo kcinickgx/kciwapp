@@ -98,20 +98,20 @@ int agregar(Cuenta c) {
         if (o.carpeta.rfind(L"datos\\cuenta-", 0) == 0) n_max = std::max(n_max, _wtoi(o.carpeta.c_str() + 13));
     }
     c.carpeta = usada_base ? L"datos\\cuenta-" + std::to_wstring(n_max + 1) : L"datos";
-    if (c.local()) {
-        // Un puerto por cuenta local, por si dos quedan abiertas a la vez.
-        int p = 8477;
-        for (bool libre = false; !libre; p++) {
-            libre = true;
-            for (const Cuenta& o : g_cuentas)
-                if (o.local() && o.puerto == p) libre = false;
-            if (libre) break;
-        }
-        c.puerto = p;
-    }
+    if (c.local()) c.puerto = puerto_local_libre();
     g_cuentas.push_back(c);
     guardar();
     return (int)g_cuentas.size() - 1;
+}
+
+// Un puerto por cuenta local, por si dos quedan abiertas a la vez.
+int puerto_local_libre() {
+    for (int p = 8477;; p++) {
+        bool libre = true;
+        for (const Cuenta& o : g_cuentas)
+            if (o.local() && o.puerto == p) libre = false;
+        if (libre) return p;
+    }
 }
 
 void elegir(int i) { g_activa = (i >= 0 && i < (int)g_cuentas.size()) ? i : -1; }

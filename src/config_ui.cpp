@@ -20,7 +20,8 @@ struct Geo {
     float x, y, w;          // panel
     float t1x, t2x, ty, tw; // tarjetas
     float fx, fw;           // campos
-    float hy, py, ky;       // host, puerto, token
+    float hy, ky;           // fila server+puerto, token
+    float hw, plx, px, pw;  // ancho del host; etiqueta y campo del puerto
     float gx, gw;           // boton Generate
     float bx, by, bw, bh;   // boton Connect
     float cx, cw;           // boton Cancel
@@ -30,8 +31,7 @@ Geo geo(float W, float H, bool remoto) {
     Geo g;
     g.w = std::min(PANEL_W, W - 40);
     g.x = (W - g.w) / 2;
-    int filas = remoto ? 3 : 1;
-    float alto = 60 + 30 + TARJETA_H + 24 + filas * (CAMPO_H + 14) + 10 + 24 + 40;
+    float alto = 60 + 30 + TARJETA_H + 24 + 2 * (CAMPO_H + 14) + 10 + 24 + 40;
     g.y = std::max(20.0f, (H - alto) / 2);
     g.tw = (g.w - 16) / 2;
     g.t1x = g.x;
@@ -40,15 +40,18 @@ Geo geo(float W, float H, bool remoto) {
     g.fx = g.x + 110;
     g.fw = g.w - 110;
     g.hy = g.ty + TARJETA_H + 30;
-    g.py = g.hy + CAMPO_H + 14;
-    g.ky = remoto ? g.py + CAMPO_H + 14 : g.hy;
+    g.ky = g.hy + CAMPO_H + 14;
+    g.pw = 100;
+    g.px = g.x + g.w - g.pw;
+    g.plx = g.px - 48;
+    g.hw = g.plx - 12 - g.fx;
     g.gw = 90;
     g.gx = g.x + g.w - g.gw;
     g.bw = 140;
     g.bh = 40;
     g.bx = g.x + g.w - g.bw;
     g.by = g.ky + CAMPO_H + 14 + 10;
-    g.cw = 100;
+    g.cw = g.bw;
     g.cx = g.bx - g.cw - 12;
     return g;
 }
@@ -142,17 +145,26 @@ void App::dibujar_configuracion() {
     tarjeta(q.t2x, remoto, L"A kciwapp server", L"Always on, on your LAN.",
             L"Needs its address and a token.", true);
 
-    auto campo_fila = [&](const wchar_t* etiqueta, Campo& c, float y, float w) {
-        g.renglon(etiqueta, q.x, y + 9, 13, Color(TXT_DIM()));
-        g.rect_redondo(q.fx, y, w, CAMPO_H, 8, Color(BG_CAMPO()));
-        if (c.foco) g.borde_redondo(q.fx, y, w, CAMPO_H, 8, Color(ACCENT()), 1.0f);
-        c.dibujar(g, q.fx + 10, y + 1, w - 20, CAMPO_H - 2, ahora);
+    auto campo_fila = [&](const wchar_t* etiqueta, float ex, Campo& c, float x, float y, float w) {
+        g.renglon(etiqueta, ex, y + 9, 13, Color(TXT_DIM()));
+        g.rect_redondo(x, y, w, CAMPO_H, 8, Color(BG_CAMPO()));
+        if (c.foco) g.borde_redondo(x, y, w, CAMPO_H, 8, Color(ACCENT()), 1.0f);
+        c.dibujar(g, x + 10, y + 1, w - 20, CAMPO_H - 2, ahora);
+    };
+    // Server y puerto en una fila; con el core local van fijos y apagados.
+    auto campo_fijo = [&](const wchar_t* etiqueta, float ex, const std::wstring& valor, float x, float y, float w) {
+        g.renglon(etiqueta, ex, y + 9, 13, Color(TXT_DIM()));
+        g.rect_redondo(x, y, w, CAMPO_H, 8, Color(BG_CAMPO(), 0.5f));
+        g.renglon(valor, x + 10, y + 9, 14, Color(TXT_DIM(), 0.6f));
     };
     if (remoto) {
-        campo_fila(L"Server", cfg_host, q.hy, q.fw);
-        campo_fila(L"Port", cfg_puerto, q.py, 120);
+        campo_fila(L"Server", q.x, cfg_host, q.fx, q.hy, q.hw);
+        campo_fila(L"Port", q.plx, cfg_puerto, q.px, q.hy, q.pw);
+    } else {
+        campo_fijo(L"Server", q.x, L"127.0.0.1", q.fx, q.hy, q.hw);
+        campo_fijo(L"Port", q.plx, std::to_wstring(cuentas::puerto_local_libre()), q.px, q.hy, q.pw);
     }
-    campo_fila(L"Token", cfg_token, q.ky, q.fw - q.gw - 10);
+    campo_fila(L"Token", q.x, cfg_token, q.fx, q.ky, q.fw - q.gw - 10);
     g.rect_redondo(q.gx, q.ky + 2, q.gw, CAMPO_H - 4, 8, Color(BG_PANEL()));
     g.borde_redondo(q.gx, q.ky + 2, q.gw, CAMPO_H - 4, 8, Color(BORDE()), 1.0f);
     float gw = g.medir(L"Generate", 13);
@@ -192,11 +204,11 @@ bool App::click_configuracion(float x, float y, bool shift) {
     }
     struct F {
         Campo* c;
-        float y, w;
-        bool visible;
-    } filas[] = {{&cfg_host, q.hy, q.fw, remoto}, {&cfg_puerto, q.py, 120, remoto}, {&cfg_token, q.ky, q.fw - q.gw - 10, true}};
+        float x, y, w;
+        bool activo;
+    } filas[] = {{&cfg_host, q.fx, q.hy, q.hw, remoto}, {&cfg_puerto, q.px, q.hy, q.pw, remoto}, {&cfg_token, q.fx, q.ky, q.fw - q.gw - 10, true}};
     for (auto& f : filas)
-        if (f.visible && x >= q.fx && x < q.fx + f.w && y >= f.y && y < f.y + CAMPO_H) {
+        if (f.activo && x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + CAMPO_H) {
             f.c->foco = true;
             f.c->click(g, x, y, shift);
             pedir_dibujo();
