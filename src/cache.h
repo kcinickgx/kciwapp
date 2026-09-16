@@ -34,6 +34,8 @@ bool hay_mensaje(const std::string& chat, const std::string& id);
 // Tira todos los mensajes guardados (tras una importacion masiva en el server).
 void borrar_mensajes();
 void marcar_borrado(const std::string& chat, const std::string& id);
+// El server cambio el tipo del mensaje (video "foto con musica" -> imagen).
+void cambiar_tipo(const std::string& chat, const std::string& id, const std::string& tipo, const std::string& mime);
 void editar_texto(const std::string& chat, const std::string& id, const std::wstring& texto);
 // El estado solo sube (nunca pisa un estado mas alto con uno mas bajo).
 void poner_estado(const std::string& chat, const std::string& id, int estado);

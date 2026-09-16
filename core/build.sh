@@ -3,6 +3,8 @@
 # en Windows). Desde Git Bash en Windows:
 #   core/build.sh windows   -> portable/core/kciwapp-core.exe (cliente local, SQLite)
 #   core/build.sh server    -> binario estatico Linux en release/server/ y deploy en la VM
+#   core/build.sh actualizar -> sube whatsmeow (y el resto) a la ultima version: go.mod/go.sum
+#                              vuelven actualizados; despues build.sh server y windows
 set -e
 cd "$(dirname "$0")"
 VM=root@192.168.5.15
@@ -14,6 +16,11 @@ case "${1:-windows}" in
     mkdir -p ../release/cliente/core
     scp -P 22122 -q $VM:/tmp/kciwapp-core.exe ../release/cliente/core/
     echo "release/cliente/core/kciwapp-core.exe listo"
+    ;;
+  actualizar)
+    ssh -p 22122 $VM 'cd /root/kciwapp-server && go get -u go.mau.fi/whatsmeow@latest && go get -u ./... && go mod tidy && go build -o /dev/null . && grep whatsmeow go.mod'
+    scp -P 22122 -q $VM:/root/kciwapp-server/go.mod $VM:/root/kciwapp-server/go.sum .
+    echo "go.mod actualizado; ahora: core/build.sh server && core/build.sh windows"
     ;;
   server)
     ssh -p 22122 $VM 'cd /root/kciwapp-server && go mod tidy >/dev/null 2>&1; CGO_ENABLED=0 go build -ldflags "-s -w" -o /tmp/kciwapp-server-static . && go build -o /tmp/kciwapp-server . && systemctl stop kciwapp-server && cp /tmp/kciwapp-server /opt/kciwapp-server/kciwapp-server && systemctl start kciwapp-server && sleep 3 && systemctl is-active kciwapp-server && git add -A && git commit -qm "build desde kciwapp2/core" || true'

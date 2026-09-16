@@ -975,11 +975,23 @@ bool App::aplicar_evento(const Json& e) {
         long long id = d["id"].entero();
         int estado = (int)d["estado"].entero();
         bool mini = d["miniatura"].bul();
-        for (auto& x : mensajes)
-            if (x.media && x.media->id == id) {
-                x.media->estado = estado;
-                if (mini) x.media->miniatura = true;
+        // El server puede cambiarle el tipo (un video "foto con musica" pasa a imagen).
+        std::string tipo_nuevo = d["tipo"].str();
+        if (!tipo_nuevo.empty()) cache::cambiar_tipo(chat, d["mensaje"].str(), tipo_nuevo, d["mime"].str());
+        for (size_t i = 0; i < mensajes.size(); i++) {
+            Mensaje& x = mensajes[i];
+            if (!x.media || x.media->id != id) continue;
+            x.media->estado = estado;
+            if (mini) x.media->miniatura = true;
+            if (!tipo_nuevo.empty() && x.tipo != tipo_nuevo) {
+                x.tipo = tipo_nuevo;
+                x.media->mime = d["mime"].str(x.media->mime.c_str());
+                x.media->segundos = 0;
+                for (auto& c : chats)
+                    if (c.jid == x.chat && c.ultimo && c.ultimo->id == x.id) c.ultimo->tipo = tipo_nuevo;
+                armar_vista((int)i);
             }
+        }
         if (estado == 1) {
             imagenes.erase("media:" + std::to_string(id));
             imagenes.erase("mini:" + std::to_string(id));

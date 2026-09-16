@@ -160,6 +160,7 @@ func main() {
 	go buscadorFotos()
 	go rellenarOndas()
 	go rellenarMiniaturas()
+	go rellenarFotosConMusica()
 
 	if cli.Store.ID == nil {
 		// Sin sesion: no se hace nada hasta que un cliente pida vincular

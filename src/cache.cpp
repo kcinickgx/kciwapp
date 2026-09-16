@@ -674,6 +674,18 @@ void borrar_mensajes() {
     ejecutar("DELETE FROM mensajes;");
 }
 
+void cambiar_tipo(const std::string& chat, const std::string& id, const std::string& tipo, const std::string& mime) {
+    std::lock_guard<std::mutex> l(g_mu);
+    if (!g_db) return;
+    Stmt st("UPDATE mensajes SET tipo=?, media_json=json_set(media_json,'$.mime',?,'$.segundos',0) WHERE chat=? AND id=? AND media_json IS NOT NULL;");
+    if (!st.ok) return;
+    st.bind_texto(1, tipo);
+    st.bind_texto(2, mime);
+    st.bind_texto(3, chat);
+    st.bind_texto(4, id);
+    st.correr();
+}
+
 void marcar_borrado(const std::string& chat, const std::string& id) {
     std::lock_guard<std::mutex> l(g_mu);
     if (!g_db) return;

@@ -217,10 +217,14 @@ func bajar(id int64, pedirAlTelefono bool) (string, error) {
 		return "", err
 	}
 	db.Exec("UPDATE media SET ruta = ?, estado = 1, bytes = ? WHERE id = ?", ruta, len(datos), id)
-	asegurarMiniatura(id, chat, msgID, tipo, ruta)
 	pausaMu.Lock()
 	pausaLargo = 15 * time.Minute
 	pausaMu.Unlock()
+	// Un estado "foto con musica" es una foto: queda como imagen (avisa solo).
+	if tipo == "video" && convertirFotoConMusica(id, chat, msgID, ruta) {
+		return strings.TrimSuffix(ruta, ".mp4") + ".jpg", nil
+	}
+	asegurarMiniatura(id, chat, msgID, tipo, ruta)
 	evento("media", chat, map[string]any{"id": id, "mensaje": msgID, "estado": 1})
 	return ruta, nil
 }
