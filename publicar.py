@@ -14,7 +14,7 @@ import sys
 ORIGEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'release', 'cliente')
 DESTINO = r'H:\kciwapp'
 MANIFIESTO = 'kciwapp.md5'
-EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log'}
+EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', MANIFIESTO}
 EXCLUIR_DIR = {'datos'}
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'release', 'md5-cache.json')
 
@@ -79,10 +79,12 @@ def main():
             print(f'borrando {rel}')
             os.remove(os.path.join(DESTINO, rel))
             borrados += 1
-    # El manifiesto al final, cuando ya esta todo.
-    with open(os.path.join(DESTINO, MANIFIESTO), 'w', encoding='utf-8', newline='\n') as f:
-        for rel, md5, tamano in lista:
-            f.write(f'{md5} {tamano} {rel}\n')
+    # El manifiesto al final, cuando ya esta todo; la misma copia va en
+    # release\cliente (el cliente compara contra la suya, sin releer nada).
+    texto = ''.join(f'{md5} {tamano} {rel}\n' for rel, md5, tamano in lista)
+    for carpeta in (DESTINO, ORIGEN):
+        with open(os.path.join(carpeta, MANIFIESTO), 'w', encoding='utf-8', newline='\n') as f:
+            f.write(texto)
     total = sum(t for _, _, t in lista)
     print(f'{len(lista)} archivos ({total // (1 << 20)} MB), {copiados} copiados, {borrados} borrados -> {DESTINO}\\{MANIFIESTO}')
 

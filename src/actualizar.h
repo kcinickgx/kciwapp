@@ -1,8 +1,10 @@
 // Actualizacion del cliente: en https://kcinick.gxzone.com/kciwapp/ estan
 // los archivos del cliente y un manifiesto kciwapp.md5 ("md5 tamano ruta"
-// por linea, generado por release/publicar.py). Se compara con lo local y
-// lo distinto se baja a <archivo>.nuevo; al aplicar, lo viejo pasa a
-// <archivo>.viejo (un exe/dll en uso se puede renombrar) y se relanza.
+// por linea, generado por publicar.py). Se compara texto contra texto con el
+// kciwapp.md5 instalado (al lado del exe; no se relee ningun archivo) y lo
+// distinto se baja a <archivo>.nuevo; al aplicar, lo viejo pasa a
+// <archivo>.viejo (un exe/dll en uso se puede renombrar), el manifiesto nuevo
+// queda como local y se relanza.
 #pragma once
 #include <windows.h>
 

@@ -64,57 +64,31 @@ std::string md5_de(const std::wstring& ruta) {
     return r;
 }
 
-// La cache de md5 locales (datos\md5.txt: "md5 tamano mtime ruta"), para no
-// releer 2,7 GB de whisper en cada chequeo.
-struct Cacheado {
-    std::string md5;
-    long long tamano = 0, mtime = 0;
-};
+// El manifiesto instalado (kciwapp.md5 al lado del exe): lo que hay ahora.
+// Se compara texto contra texto con el del server, sin releer archivos.
+std::wstring ruta_manifiesto(const std::wstring& carpeta) { return carpeta + L"\\" + MANIFIESTO; }
 
-std::wstring ruta_cache(const std::wstring& carpeta) { return carpeta + L"\\datos\\md5.txt"; }
-
-std::map<std::wstring, Cacheado> leer_cache(const std::wstring& carpeta) {
-    std::map<std::wstring, Cacheado> m;
-    HANDLE h = CreateFileW(ruta_cache(carpeta).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (h == INVALID_HANDLE_VALUE) return m;
+std::string leer_archivo(const std::wstring& ruta) {
     std::string s;
+    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return s;
     char buf[4096];
     DWORD leido = 0;
     while (ReadFile(h, buf, sizeof buf, &leido, nullptr) && leido > 0) s.append(buf, leido);
     CloseHandle(h);
-    std::istringstream in(s);
-    std::string linea;
-    while (std::getline(in, linea)) {
-        std::istringstream l(linea);
-        Cacheado c;
-        std::string ruta;
-        if (!(l >> c.md5 >> c.tamano >> c.mtime)) continue;
-        std::getline(l, ruta);
-        while (!ruta.empty() && ruta.front() == ' ') ruta.erase(ruta.begin());
-        while (!ruta.empty() && (ruta.back() == '\r' || ruta.back() == ' ')) ruta.pop_back();
-        if (!ruta.empty()) m[ancho(ruta)] = c;
-    }
-    return m;
+    return s;
 }
 
-void guardar_cache(const std::wstring& carpeta, const std::map<std::wstring, Cacheado>& m) {
-    CreateDirectoryW((carpeta + L"\\datos").c_str(), nullptr);
-    std::string s;
-    for (auto& [ruta, c] : m) s += c.md5 + " " + std::to_string(c.tamano) + " " + std::to_string(c.mtime) + " " + angosto(ruta) + "\n";
-    HANDLE h = CreateFileW(ruta_cache(carpeta).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (h == INVALID_HANDLE_VALUE) return;
+bool escribir_archivo(const std::wstring& ruta, const std::string& datos) {
+    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
     DWORD e = 0;
-    WriteFile(h, s.data(), (DWORD)s.size(), &e, nullptr);
+    WriteFile(h, datos.data(), (DWORD)datos.size(), &e, nullptr);
     CloseHandle(h);
+    return e == datos.size();
 }
 
-bool datos_de(const std::wstring& ruta, long long& tamano, long long& mtime) {
-    WIN32_FILE_ATTRIBUTE_DATA a{};
-    if (!GetFileAttributesExW(ruta.c_str(), GetFileExInfoStandard, &a)) return false;
-    tamano = ((long long)a.nFileSizeHigh << 32) | a.nFileSizeLow;
-    mtime = ((long long)a.ftLastWriteTime.dwHighDateTime << 32) | a.ftLastWriteTime.dwLowDateTime;
-    return true;
-}
+std::string g_manifiesto_remoto;  // el texto bajado, para guardarlo al aplicar
 
 // ---- https ------------------------------------------------------------------
 
@@ -247,27 +221,23 @@ void verificar(const std::wstring& carpeta_exe, std::function<void()> al_termina
         } else {
             auto lista = parsear_manifiesto(cuerpo);
             if (lista.empty()) error = L"Bad update manifest";
-            auto cache = leer_cache(carpeta_exe);
-            bool cache_cambio = false;
-            for (const Archivo& a : lista) {
-                std::wstring ruta = carpeta_exe + L"\\" + a.ruta;
-                long long tamano = 0, mtime = 0;
-                if (!datos_de(ruta, tamano, mtime)) {
-                    pendientes.push_back(a);
-                    continue;
-                }
-                auto it = cache.find(a.ruta);
-                std::string md5;
-                if (it != cache.end() && it->second.tamano == tamano && it->second.mtime == mtime) {
-                    md5 = it->second.md5;
-                } else {
-                    md5 = md5_de(ruta);
-                    cache[a.ruta] = {md5, tamano, mtime};
-                    cache_cambio = true;
-                }
-                if (md5 != a.md5) pendientes.push_back(a);
+            // Lo instalado segun el manifiesto local; sin manifiesto, todo
+            // lo que exista se da por bueno y solo se baja lo que falta.
+            std::map<std::wstring, std::string> local;
+            bool hay_local = false;
+            for (const Archivo& a : parsear_manifiesto(leer_archivo(ruta_manifiesto(carpeta_exe)))) {
+                local[a.ruta] = a.md5;
+                hay_local = true;
             }
-            if (cache_cambio) guardar_cache(carpeta_exe, cache);
+            for (const Archivo& a : lista) {
+                bool existe = GetFileAttributesW((carpeta_exe + L"\\" + a.ruta).c_str()) != INVALID_FILE_ATTRIBUTES;
+                if (!existe) pendientes.push_back(a);
+                else if (hay_local && local[a.ruta] != a.md5) pendientes.push_back(a);
+            }
+            {
+                std::lock_guard<std::mutex> l(g_mu);
+                g_manifiesto_remoto = cuerpo;
+            }
         }
         long long total = 0;
         for (auto& a : pendientes) total += a.tamano;
@@ -360,6 +330,14 @@ bool aplicar(const std::wstring& carpeta_exe) {
         }
     }
     red::registrar(std::string("actualizar: aplicado ") + (ok ? "bien" : "con errores"));
+    if (ok) {
+        std::string m;
+        {
+            std::lock_guard<std::mutex> l(g_mu);
+            m = g_manifiesto_remoto;
+        }
+        if (!m.empty()) escribir_archivo(ruta_manifiesto(carpeta_exe), m);
+    }
     con_estado([&](Estado& e) {
         e.hay = false;
         e.pendientes.clear();
