@@ -130,6 +130,13 @@ var esquemaSQLite = []string{
 		chat  TEXT NOT NULL DEFAULT '',
 		datos TEXT NOT NULL
 	)`,
+	`CREATE TABLE IF NOT EXISTS botones (
+		chat    TEXT NOT NULL,
+		mensaje TEXT NOT NULL,
+		datos   TEXT NOT NULL,
+		proto   BLOB NULL,
+		PRIMARY KEY (chat, mensaje)
+	)`,
 	`CREATE TABLE IF NOT EXISTS valores (
 		clave TEXT PRIMARY KEY,
 		valor TEXT NOT NULL

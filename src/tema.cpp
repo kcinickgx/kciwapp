@@ -77,6 +77,9 @@ Paleta paleta_de_json(const Json& j, Paleta base) {
     return base;
 }
 
+
+}  // namespace
+
 std::string serializar(const Json& j) {
     switch (j.tipo) {
         case Json::Nulo: return "null";
@@ -104,8 +107,6 @@ std::string serializar(const Json& j) {
     }
     return "null";
 }
-
-}  // namespace
 
 namespace ajustes {
 

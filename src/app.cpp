@@ -240,6 +240,10 @@ Mensaje Mensaje::de_json(const Json& j) {
         for (size_t k = 0; k < onda.largo(); k++) x.onda.push_back((unsigned char)onda[k].entero());
         m.media = x;
     }
+    if (j.esta("botones")) {
+        m.botones = Botones::de_json(j["botones"]);
+        m.botones_json = serializar(j["botones"]);
+    }
     const Json& rs = j["reacciones"];
     for (size_t i = 0; i < rs.largo(); i++)
         m.reacciones.push_back({rs[i]["remitente"].str(), ancho(rs[i]["emoji"].str())});
@@ -1482,6 +1486,14 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
     } else {
         ancho_contenido = std::max(ancho_contenido, hora_w + 8);
     }
+    // Botones de un bot: debajo de todo, de borde a borde.
+    v.botones_n = 0;
+    if (m.botones && !m.borrado && m.botones->filas() > 0) {
+        v.botones_n = m.botones->filas();
+        v.botones_y = y + PAD_Y;
+        ancho_contenido = std::max(ancho_contenido, std::min(interior, 260.0f));
+        y += PAD_Y + alto_botones(m) - PAD_Y;
+    }
     v.bw = ancho_contenido + 2 * PAD_X;
     v.bh = y + PAD_Y;
     if (v.texto) {
@@ -2419,6 +2431,7 @@ void App::dibujar_mensaje(size_t i, float y) {
             }
         }
     }
+    if (v.botones_n > 0 && m.botones) dibujar_botones(m, v, bx, by);
     if (v.texto) {
         float tx = bx + PAD_X, ty = by + v.ty;
         if (sel_msg == (int)i && sel_a != sel_b) {
@@ -2748,6 +2761,11 @@ void App::raton_abajo(float x, float y, bool shift) {
     sel_msg = -1;
     float ym = 0;
     int i = mensaje_en(y, &ym);
+    if (i >= 0 && boton_en(i, ym, x, y) >= 0) {
+        click_boton(i, boton_en(i, ym, x, y));
+        pedir_dibujo();
+        return;
+    }
     if (i >= 0) {
         size_t idx = 0;
         if (en_texto(i, ym, x, y, &idx)) {
@@ -3101,6 +3119,7 @@ bool App::sobre_clickeable(float x, float y) {
     int i = mensaje_en(y, &ym);
     if (i < 0) return false;
     if (!enlace_en(i, ym, x, y).empty()) return true;
+    if (boton_en(i, ym, x, y) >= 0) return true;
     const VistaMensaje& v = vistas[i];
     float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
     float qx = x_conv() + v.bx + PAD_X, qy = ym + v.by + v.cita_y;

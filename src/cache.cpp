@@ -379,7 +379,7 @@ std::string mensaje_a_json(const Mensaje& m) {
 // cita_remitente,cita_texto,editado,borrado,reenviado,estado,media_json.
 const char* COLUMNAS_MENSAJE =
     "chat,id,remitente,propio,ts,tipo,texto,cita_id,cita_remitente,cita_texto,editado,borrado,reenviado,estado,"
-    "media_json,reacciones_json";
+    "media_json,reacciones_json,botones_json";
 
 Mensaje fila_a_mensaje(Stmt& st) {
     Mensaje m;
@@ -408,6 +408,11 @@ Mensaje fila_a_mensaje(Stmt& st) {
         Json rs = Json::parsear(rj);
         for (size_t i = 0; i < rs.largo(); i++)
             m.reacciones.push_back({rs[i]["remitente"].str(), ancho(rs[i]["emoji"].str())});
+    }
+    std::string bj = st.col_texto(16);
+    if (!bj.empty()) {
+        m.botones = Botones::de_json(Json::parsear(bj));
+        m.botones_json = bj;
     }
     return m;
 }
@@ -502,6 +507,7 @@ bool abrir(const std::wstring& ruta) {
     ejecutar(ESQUEMA);
     // Columna agregada despues: si ya existe, el ALTER falla y no pasa nada.
     ejecutar("ALTER TABLE mensajes ADD COLUMN reacciones_json TEXT;");
+    ejecutar("ALTER TABLE mensajes ADD COLUMN botones_json TEXT;");
     return true;
 }
 
@@ -612,7 +618,7 @@ void guardar_mensajes(const std::vector<Mensaje>& mensajes) {
         Stmt st(
             "INSERT OR REPLACE INTO "
             "mensajes(chat,id,remitente,propio,ts,tipo,texto,texto_plano,cita_id,cita_remitente,cita_texto,"
-            "editado,borrado,reenviado,estado,media_json,reacciones_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);");
+            "editado,borrado,reenviado,estado,media_json,reacciones_json,botones_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);");
         if (st.ok) {
             for (const Mensaje& m : mensajes) {
                 std::string texto_utf8 = angosto(m.texto);
@@ -633,6 +639,7 @@ void guardar_mensajes(const std::vector<Mensaje>& mensajes) {
                 st.bind_int(15, m.estado);
                 st.bind_texto(16, m.media ? media_a_json(*m.media) : std::string());
                 st.bind_texto(17, reacciones_a_json(m));
+                st.bind_texto(18, m.botones_json);
                 st.correr();
                 p_reset(st.st);
             }

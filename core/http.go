@@ -48,6 +48,7 @@ func servirHTTP() {
 	mux.HandleFunc("POST /leido", conToken(hLeido))
 	mux.HandleFunc("POST /escribiendo", conToken(hEscribiendo))
 	mux.HandleFunc("POST /presencia", conToken(hPresencia))
+	mux.HandleFunc("POST /boton", conToken(hBoton))
 	mux.HandleFunc("POST /llamada/rechazar", conToken(hRechazarLlamada))
 	srv := &http.Server{Addr: cfg.Escucha, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("http en %s", cfg.Escucha)
@@ -261,8 +262,10 @@ func hMensajes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reacs := reaccionesDe(chat, ids)
+	bots := botonesDe(chat, ids)
 	for _, m := range lista {
 		m.Reacciones = reacs[m.ID]
+		m.Botones = bots[m.ID]
 	}
 	responder(w, lista)
 }

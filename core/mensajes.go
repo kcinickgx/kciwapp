@@ -264,6 +264,23 @@ func clasificar(msg *waE2E.Message) (c contenido) {
 		i := msg.GetInteractiveMessage()
 		c.tipo, c.ctx = "texto", i.GetContextInfo()
 		c.texto = strings.TrimSpace(i.GetHeader().GetTitle() + "\n" + i.GetBody().GetText())
+	case msg.GetProductMessage() != nil:
+		pm := msg.GetProductMessage()
+		p := pm.GetProduct()
+		c.tipo, c.ctx = "texto", pm.GetContextInfo()
+		c.texto = strings.TrimSpace("*" + p.GetTitle() + "*\n" + precio(p.GetCurrencyCode(), p.GetPriceAmount1000()) + "\n" + p.GetDescription())
+		if pm.GetBody() != "" {
+			c.texto += "\n\n" + pm.GetBody()
+		}
+		if im := p.GetProductImage(); im != nil && im.GetURL() != "" {
+			c.tipo = "imagen"
+			c.media = &Media{Mime: im.GetMimetype(), Bytes: int64(im.GetFileLength()), Ancho: int(im.GetWidth()), Alto: int(im.GetHeight())}
+			c.proto, c.mini = im, im.GetJPEGThumbnail()
+		}
+	case msg.GetOrderMessage() != nil:
+		o := msg.GetOrderMessage()
+		c.tipo, c.ctx = "texto", o.GetContextInfo()
+		c.texto = strings.TrimSpace(fmt.Sprintf("\U0001F6D2 Order: %s\n%d items · %s\n%s", o.GetOrderTitle(), o.GetItemCount(), precio(o.GetTotalCurrencyCode(), o.GetTotalAmount1000()), o.GetMessage()))
 	case msg.GetCallLogMesssage() != nil:
 		c.tipo, c.texto = "sistema", "Call"
 	}
@@ -366,6 +383,9 @@ func guardarMensaje(evt *events.Message, deHistoria bool, estadoInicial int) boo
 		}
 	}
 	nuevo := insertarMensaje(m, deHistoria, evt.Info.PushName)
+	if nuevo {
+		guardarBotones(chat, m.ID, msg)
+	}
 	if nuevo && m.Media != nil && !deHistoria {
 		pedirBajada(m.Media.ID)
 	}

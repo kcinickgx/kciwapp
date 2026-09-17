@@ -35,6 +35,29 @@ struct Reaccion {
     std::wstring emoji;
 };
 
+// Mensaje interactivo (bots): lo que hay que dibujar y con que responder.
+struct Boton {
+    std::string id, tipo;  // responder | url | llamar | copiar | otro
+    std::wstring texto;
+    std::string url, telefono, codigo;
+};
+struct FilaLista {
+    std::string id;
+    std::wstring titulo, descripcion;
+};
+struct SeccionLista {
+    std::wstring titulo;
+    std::vector<FilaLista> filas;
+};
+struct Botones {
+    std::string tipo;  // botones | lista | plantilla | interactivo | producto | pedido
+    std::wstring titulo, pie, boton_lista, respondido;
+    std::vector<Boton> botones;
+    std::vector<SeccionLista> secciones;
+    int filas() const;
+    static std::shared_ptr<Botones> de_json(const Json& j);
+};
+
 struct Mensaje {
     std::string id, chat, remitente;
     bool propio = false;
@@ -52,6 +75,8 @@ struct Mensaje {
     int estado = 0;
     std::optional<Media> media;
     std::vector<Reaccion> reacciones;
+    std::shared_ptr<Botones> botones;  // si es interactivo
+    std::string botones_json;          // tal cual vino, para la cache
 
     static Mensaje de_json(const Json& j);
 };
@@ -135,6 +160,8 @@ struct VistaMensaje {
     // las medidas quedan, y se rearman al volver a verse.
     bool liviana = false;
     int album_cols = 0;     // columnas de la grilla (cabeza de album)
+    float botones_y = 0;    // filas de boton (interactivos), relativo a la burbuja
+    int botones_n = 0;
     // Contacto compartido (vCard): nombre, telefono y jid de WhatsApp si lo trae.
     struct TarjetaContacto {
         std::wstring nombre, telefono;
@@ -318,6 +345,12 @@ struct App {
     void dibujar_pantalla_vacia();
     void dibujar_tarjeta_contacto(const VistaMensaje& v, float cx, float cy);
     void abrir_contacto(int i);  // "Message" de la tarjeta
+    // Mensajes interactivos (botones_ui.cpp).
+    float alto_botones(const Mensaje& m) const;
+    void dibujar_botones(const Mensaje& m, const VistaMensaje& v, float bx, float by);
+    int boton_en(int i, float ym, float x, float y) const;
+    void click_boton(int i, int k);
+    void responder_boton(const std::string& chat, const std::string& id, const std::string& boton, const std::string& fila, const std::wstring& texto);
     // Lo nuestro: que estado mandamos por ultima vez y cuando.
     std::string presencia_mandada;
     unsigned long long presencia_ts = 0;

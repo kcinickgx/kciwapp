@@ -29,3 +29,5 @@ struct Json {
 
 // Escapa un texto UTF-8 para meterlo entre comillas en un JSON.
 std::string json_texto(const std::string& s);
+// JSON compacto de un valor (lo inverso de parsear).
+std::string serializar(const Json& j);

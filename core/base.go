@@ -91,6 +91,13 @@ var esquema = []string{
 		chat  VARCHAR(64) NOT NULL DEFAULT '',
 		datos MEDIUMTEXT NOT NULL
 	)`,
+	`CREATE TABLE IF NOT EXISTS botones (
+		chat    VARCHAR(64) NOT NULL,
+		mensaje VARCHAR(64) NOT NULL,
+		datos   MEDIUMTEXT NOT NULL,
+		proto   MEDIUMBLOB NULL,
+		PRIMARY KEY (chat, mensaje)
+	)`,
 	`CREATE TABLE IF NOT EXISTS valores (
 		clave VARCHAR(64) PRIMARY KEY,
 		valor TEXT NOT NULL
@@ -170,6 +177,7 @@ type Mensaje struct {
 	Reenviado     bool       `json:"reenviado"`
 	Media         *Media     `json:"media,omitempty"`
 	Reacciones    []Reaccion `json:"reacciones,omitempty"`
+	Botones       *Botones   `json:"botones,omitempty"`
 }
 
 const columnasMensaje = `m.id_wa, m.chat, m.remitente, m.propio, m.ts, m.tipo, m.texto,
@@ -222,6 +230,7 @@ func mensajePorID(chat, id string) *Mensaje {
 		return nil
 	}
 	m.Reacciones = reaccionesDe(chat, []string{id})[id]
+	m.Botones = botonesDe(chat, []string{id})[id]
 	return m
 }
 
