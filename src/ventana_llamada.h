@@ -15,5 +15,7 @@ bool abierta();
 // "Calling...", "Connecting...", o vacio (= se muestra el tiempo desde `desde`).
 void estado(const std::wstring& texto, unsigned long long desde);
 void al_colgar(std::function<void()> f);
+// Redibujar (cambio el mute, por ejemplo).
+void refrescar();
 
 }  // namespace vllamada

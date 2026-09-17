@@ -254,6 +254,10 @@ void cerrar() {
 
 bool abierta() { return g_hwnd != nullptr; }
 
+void refrescar() {
+    if (g_hwnd) InvalidateRect(g_hwnd, nullptr, FALSE);
+}
+
 void estado(const std::wstring& texto, unsigned long long desde) {
     // "Calling..." / "Connecting..." hasta que atienden; desde ahi, el tiempo.
     g_estado = texto;

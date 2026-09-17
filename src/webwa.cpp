@@ -1,4 +1,5 @@
 #include "webwa.h"
+#include "ventana_llamada.h"
 
 #include <dwmapi.h>
 
@@ -633,13 +634,28 @@ void colgar() {
     g_pendiente.hay = false;
 }
 
+// El boton del microfono de la llamada: cualquier boton cuya etiqueta
+// (aria-label, title, texto o data-icon) hable de mic/mute/silenciar. Para
+// silenciar se descarta el que ya dice unmute/activar/off; para activar, al
+// reves. Si no hay, se anotan las etiquetas que si habia, para saber.
+const wchar_t* JS_MIC =
+    L"(function(si){var bs=document.querySelectorAll('button,[role=button]');var vistas=[],cand=[];"
+    L"for(var i=0;i<bs.length;i++){var b=bs[i];var ic=b.querySelector('[data-icon]');"
+    L"var t=((b.getAttribute('aria-label')||'')+' '+(b.getAttribute('title')||'')+' '+(b.getAttribute('data-icon')||'')+' '+(ic?ic.getAttribute('data-icon'):'')+' '+(b.innerText||'')).toLowerCase().trim();"
+    L"if(!t)continue;var r=b.getBoundingClientRect();if(r.width<8||r.height<8)continue;"
+    L"if(/mic|mute|silenc/.test(t)){vistas.push(t.slice(0,40));var apagado=/unmute|turn on|activar|off|muted/.test(t);"
+    L"if(si?!apagado:apagado)cand.push(b);}}"
+    L"if(cand.length){cand[0].click();return 'ok'}return 'no:'+vistas.join('|')})(";
+
 void silenciar(bool si) {
     if (!g_activo) return;
-    std::wstring js = js_click(si ? std::vector<std::wstring>{L"Mute", L"Silenciar", L"mic-on"} : std::vector<std::wstring>{L"Unmute", L"Activar micrófono", L"mic-off"});
+    std::wstring js = std::wstring(JS_MIC) + (si ? L"true)" : L"false)");
     Vista& v = g_llamada.web ? g_llamada : g_principal;
     ejecutar(v, js, [si](const std::wstring& r) {
-        if (resultado_str(r) == "ok") g_silenciado = si;
-        registrar(std::string(si ? "mute: " : "unmute: ") + resultado_str(r));
+        std::string res = resultado_str(r);
+        if (res == "ok") g_silenciado = si;
+        registrar(std::string(si ? "mute: " : "unmute: ") + res);
+        vllamada::refrescar();
     });
 }
 
