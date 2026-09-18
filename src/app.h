@@ -416,6 +416,7 @@ struct App {
     bool actualizando = false;
     void verificar_actualizacion(bool a_pedido);
     void dibujar_modal_actualizacion();
+    void abrir_about();  // modal_actualizacion == 4
     bool click_modal_actualizacion(float x, float y);
     bool sobre_modal_actualizacion(float x, float y) const;
     bool tecla_modal_actualizacion(WPARAM vk);

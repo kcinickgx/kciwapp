@@ -821,6 +821,13 @@ void App::teclear_presencia() {
 }
 
 void App::marcar_leido(const std::string& jid, const std::vector<std::string>& ids) {
+    // Los estados no se marcan vistos por entrar al chat: el que los publico
+    // no se entera de que los miramos (mas adelante, un boton "visto" por estado).
+    if (jid == "status@broadcast") {
+        for (auto& c : chats)
+            if (c.jid == jid) c.no_leidos = 0;
+        return;
+    }
     bool habia = false;
     for (auto& c : chats)
         if (c.jid == jid && c.no_leidos > 0) {
@@ -2855,6 +2862,10 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
     }
     if (vk == VK_F10) {
         webwa::volcar_dom();
+        return;
+    }
+    if (vk == VK_F1) {
+        abrir_about();
         return;
     }
     if (vk == VK_F11) {

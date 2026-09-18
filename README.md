@@ -55,6 +55,10 @@ Server setup (Debian/Ubuntu or Slackware) is in [docs/INSTALL.md](docs/INSTALL.m
 - Several accounts per client; a shared server can host several people.
 - Optional full history import from an iPhone backup (server side).
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). The version, build date and commit are in `⋯` → About.
+
 ## Build
 
 Client: Visual Studio 2022+ (MSVC), CMake, Ninja. `build.cmd` builds

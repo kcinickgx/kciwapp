@@ -23,6 +23,10 @@ import tempfile
 import urllib.request
 
 RAIZ = os.path.dirname(os.path.abspath(__file__))
+# La version publicada tiene que estar en el CHANGELOG (el About la muestra).
+VERSION = open(os.path.join(RAIZ, 'VERSION'), encoding='utf-8').read().strip()
+if ('## ' + VERSION) not in open(os.path.join(RAIZ, 'CHANGELOG.md'), encoding='utf-8').read():
+    raise SystemExit('CHANGELOG.md no tiene una seccion "## %s": anotala antes de publicar' % VERSION)
 ORIGEN = r'C:\Program Files\KciWAPP'  # la instalacion del usuario: solo se lee
 REPO = 'kcinickgx/kciwapp'
 TAG = 'current'
