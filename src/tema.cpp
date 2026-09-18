@@ -146,7 +146,19 @@ void cargar(const std::wstring& carpeta_exe) {
     a.segundos_aviso = (int)j["segundos_aviso"].num(6);
     a.volumen_video = (int)j["volumen_video"].num(100);
     a.velocidad = j["velocidad"].num(1.0);
-    a.idioma_traduccion = ancho(j["idioma_traduccion"].str("English"));
+    a.idioma_traduccion = ancho(j["idioma_traduccion"].str(""));
+    if (a.idioma_traduccion.empty()) {
+        // Por defecto, el idioma de Windows del usuario.
+        static const struct { LANGID id; const wchar_t* nombre; } IDIOMAS[] = {
+            {LANG_SPANISH, L"Spanish"}, {LANG_ENGLISH, L"English"}, {LANG_PORTUGUESE, L"Portuguese"}, {LANG_ITALIAN, L"Italian"},
+            {LANG_FRENCH, L"French"}, {LANG_GERMAN, L"German"}, {LANG_RUSSIAN, L"Russian"}, {LANG_CHINESE, L"Chinese"},
+            {LANG_JAPANESE, L"Japanese"}, {LANG_KOREAN, L"Korean"}, {LANG_ARABIC, L"Arabic"}, {LANG_HEBREW, L"Hebrew"},
+            {LANG_TURKISH, L"Turkish"}, {LANG_POLISH, L"Polish"}, {LANG_DUTCH, L"Dutch"}};
+        LANGID mio = PRIMARYLANGID(GetUserDefaultUILanguage());
+        a.idioma_traduccion = L"English";
+        for (auto& x : IDIOMAS)
+            if (x.id == mio) a.idioma_traduccion = x.nombre;
+    }
     a.ventana_x = (int)j["ventana_x"].num(0);
     a.ventana_y = (int)j["ventana_y"].num(0);
     a.ventana_w = (int)j["ventana_w"].num(0);

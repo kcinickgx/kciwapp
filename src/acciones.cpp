@@ -228,7 +228,7 @@ void App::menu_contextual(int i) {
     // A un estado no se le responde ni se lo edita.
     if (!es_estado()) items.push_back({L"Reply", M_RESPONDER, L"\uE97A"});
     if (!m.borrado && (!m.texto.empty() || !m.texto_oculto.empty()) && traductor_disponible()) {
-        if (m.traduccion.empty()) items.push_back({L"Translate", M_TRADUCIR, L"\uE8C1"});
+        if (m.traduccion.empty()) items.push_back({L"Translate to " + ajustes::actual().idioma_traduccion, M_TRADUCIR, L"\uE8C1"});
         else items.push_back({m.traduccion_oculta ? L"Show translation" : L"Hide translation", M_TRADUCCION, L"\uE8C1"});
     }
     if (!m.borrado) items.push_back({L"Forward", M_REENVIAR, L"\uE72A"});
