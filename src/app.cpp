@@ -3086,6 +3086,17 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
         pedir_dibujo();
         return;
     }
+    // Flecha arriba con el campo vacio: editar el ultimo mensaje mio.
+    if (campo.foco && vk == VK_UP && !shift && !ctrl && campo.texto.empty() && !editando && !es_estado()) {
+        for (int i = (int)mensajes.size() - 1; i >= 0; i--) {
+            const Mensaje& m = mensajes[i];
+            if (m.propio && !m.borrado && !m.media && !m.texto.empty() && m.tipo == "texto") {
+                editar(i);
+                ir_a_mensaje(m.chat, m.id, m.ts);
+                return;
+            }
+        }
+    }
     if (campo.foco && campo.tecla(g, vk, shift, ctrl)) {
         pedir_dibujo();
         return;
