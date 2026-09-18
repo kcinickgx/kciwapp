@@ -32,8 +32,11 @@ REPO = 'kcinickgx/kciwapp'
 TAG = 'current'
 BASE = f'https://github.com/{REPO}/releases/download/{TAG}/'
 MANIFIESTO = 'kciwapp.md5'
+# Lo opcional que llego despues de los primeros clientes va en un manifiesto
+# aparte: un cliente viejo no lo ve y no se lo baja sin querer.
+MANIFIESTO_TRADUCTOR = 'translate.md5'
 INSTALADOR = 'kciwapp-setup.exe'
-EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALL.md', MANIFIESTO, INSTALADOR}
+EXCLUIR = {'ajustes.json', 'cuentas.json', 'servidor.json', 'debug.log', 'kciwapp2.pdb', 'kciwapp2.ilk', 'INSTALL.md', MANIFIESTO, MANIFIESTO_TRADUCTOR, INSTALADOR}
 EXCLUIR_DIR = {'datos', 'server'}
 # Lo recien compilado se toma de build\ (en la instalacion no se escribe
 # nada: el usuario la actualiza a mano). Estos van aunque alla no esten.
@@ -155,21 +158,22 @@ def main():
                 print(r.stderr)
                 return 1
         # Assets que sobran.
-        nuestros = {asset_de(rel) for rel, _, _, _ in lista if rel not in EXTERNOS} | {n for n, _ in EXTRAS} | {MANIFIESTO}
+        nuestros = {asset_de(rel) for rel, _, _, _ in lista if rel not in EXTERNOS} | {n for n, _ in EXTRAS} | {MANIFIESTO, MANIFIESTO_TRADUCTOR}
         borrados = 0
         for a in sorted(assets - nuestros):
             print(f'borrando asset {a}')
             gh('release', 'delete-asset', TAG, a, '-R', REPO, '-y')
             borrados += 1
         # El manifiesto al final, cuando ya esta todo.
-        texto = ''.join(f'{md5} {tamano} {EXTERNOS.get(rel, BASE + asset_de(rel))} {rel}\n' for rel, md5, tamano, _ in lista)
-        copia = os.path.join(tmp, MANIFIESTO)
-        with open(copia, 'w', encoding='utf-8', newline='\n') as f:
-            f.write(texto)
-        r = gh('release', 'upload', TAG, copia, '-R', REPO, '--clobber')
-        if r.returncode != 0:
-            print(r.stderr)
-            return 1
+        for nombre, filtro in ((MANIFIESTO, lambda rel: not rel.startswith('translate/')), (MANIFIESTO_TRADUCTOR, lambda rel: rel.startswith('translate/'))):
+            texto = ''.join(f'{md5} {tamano} {EXTERNOS.get(rel, BASE + asset_de(rel))} {rel}\n' for rel, md5, tamano, _ in lista if filtro(rel))
+            copia = os.path.join(tmp, nombre)
+            with open(copia, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(texto)
+            r = gh('release', 'upload', TAG, copia, '-R', REPO, '--clobber')
+            if r.returncode != 0:
+                print(r.stderr)
+                return 1
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     total = sum(t for _, _, t, _ in lista)

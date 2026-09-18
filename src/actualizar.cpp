@@ -18,6 +18,7 @@ namespace {
 // URL completa de su archivo (los del release, y el modelo de whisper desde
 // Hugging Face), asi que aca no hace falta ninguna base.
 const wchar_t* URL_MANIFIESTO = L"https://github.com/kcinickgx/kciwapp/releases/download/current/kciwapp.md5";
+const wchar_t* URL_MANIFIESTO_TRADUCTOR = L"https://github.com/kcinickgx/kciwapp/releases/download/current/translate.md5";
 const wchar_t* MANIFIESTO = L"kciwapp.md5";
 
 std::mutex g_mu;
@@ -221,6 +222,16 @@ void verificar(const std::wstring& carpeta_exe, std::function<void()> al_termina
         if (!bajar_https(url, &cuerpo, L"", nullptr)) {
             error = L"Could not reach the update server";
         } else {
+            // La traduccion tiene su propio manifiesto (translate.md5): solo
+            // cuenta si esta instalada.
+            if (GetFileAttributesW((carpeta_exe + L"\\translate").c_str()) != INVALID_FILE_ATTRIBUTES) {
+                std::string extra;
+                std::wstring url2 = std::wstring(URL_MANIFIESTO_TRADUCTOR) + L"?t=" + std::to_wstring(GetTickCount64());
+                if (bajar_https(url2, &extra, L"", nullptr)) {
+                    if (!cuerpo.empty() && cuerpo.back() != '\n') cuerpo += '\n';
+                    cuerpo += extra;
+                }
+            }
             auto lista = parsear_manifiesto(cuerpo);
             if (lista.empty()) error = L"Bad update manifest";
             // Lo instalado segun el manifiesto local; sin manifiesto, todo

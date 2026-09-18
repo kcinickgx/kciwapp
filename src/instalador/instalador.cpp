@@ -28,6 +28,7 @@
 namespace {
 
 const wchar_t* URL_MANIFIESTO = L"https://github.com/kcinickgx/kciwapp/releases/download/current/kciwapp.md5";
+const wchar_t* URL_MANIFIESTO_TRADUCTOR = L"https://github.com/kcinickgx/kciwapp/releases/download/current/translate.md5";
 const wchar_t* MANIFIESTO = L"kciwapp.md5";
 const UINT WM_AVANCE = WM_APP + 1;  // el hilo de bajada avisa (wp: 0 progreso, 1 listo, 2 error)
 
@@ -255,6 +256,19 @@ void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper, bool tradu
         })) {
         fallar(L"Could not reach github.com");
         return;
+    }
+    if (traductor) {
+        // La traduccion viene en su propio manifiesto.
+        std::string extra;
+        if (!bajar_https(URL_MANIFIESTO_TRADUCTOR, [&](const char* d, DWORD n) {
+                extra.append(d, n);
+                return true;
+            })) {
+            fallar(L"Could not get the translation file list");
+            return;
+        }
+        if (!manifiesto.empty() && manifiesto.back() != '\n') manifiesto += '\n';
+        manifiesto += extra;
     }
     auto lista = parsear_manifiesto(manifiesto);
     if (lista.empty()) {
