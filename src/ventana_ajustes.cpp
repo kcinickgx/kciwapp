@@ -647,8 +647,8 @@ float seccion_traduccion(Gfx& g, float x, float y, float ancho_contenido) {
                      [](int v) { ajustes::cambiar([v](Ajustes& a) { a.idioma_traduccion = IDIOMAS[v]; }); });
     y += FILA;
     bool hay = GetFileAttributesW((carpeta_exe() + L"\\translate\\llama-server.exe").c_str()) != INVALID_FILE_ATTRIBUTES;
-    g.renglon(hay ? L"Local model (llama.cpp + Qwen2.5-3B in translate\\). Right-click a message \u2192 Translate."
-                  : L"Not installed: re-run the setup and tick Translation (translate\\, 3.1 GB, NVIDIA GPU).",
+    g.renglon(hay ? L"Local model (llama.cpp + Qwen2.5-7B in translate\\). Hover a message and click the translate icon."
+                  : L"Not installed: re-run the setup and tick Translation (translate\\, 5.3 GB, NVIDIA GPU).",
               x, y + 4, 12, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, ancho_contenido);
     return y + 22;
 }

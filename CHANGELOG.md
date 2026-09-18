@@ -12,7 +12,7 @@ First public release.
   icons) lists My status, Recent and Viewed per contact with segmented rings, and
   a viewer on the right with progress bar, auto-advance, reply field and delete
   for your own. Read receipts are sent only for the status being viewed.
-- Message translation with a local model (llama.cpp + Qwen2.5-3B, optional
+- Message translation with a local model (llama.cpp + Qwen2.5-7B, optional
   in the setup like whisper): right-click a message → Translate; the target
   language is in Settings → Translation.
 - About dialog (version, build date, commit, links) and a version number;

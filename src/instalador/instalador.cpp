@@ -51,7 +51,7 @@ Paso g_paso = ELEGIR;
 std::wstring g_carpeta;
 bool g_acceso_escritorio = true;
 bool g_whisper = true;  // la transcripcion de notas de voz (whisper\, 2,7 GB)
-bool g_traductor = true;  // la traduccion de mensajes (translate\, 3,1 GB)
+bool g_traductor = true;  // la traduccion de mensajes (translate\, 5,3 GB)
 std::atomic<bool> g_cancelar{false};
 // Progreso (lo escribe el hilo, lo lee la ventana; con el mutex simple de abajo).
 CRITICAL_SECTION g_cs;
@@ -421,7 +421,7 @@ void dibujar(HDC dc, const RECT& area) {
     int x = E(MARGEN);
     texto(dc, L"Install kciwapp", x, E(40), 26, TXT, FW_LIGHT);
     {
-        int mb = 400 + (g_whisper ? 2700 : 0) + (g_traductor ? 3100 : 0);
+        int mb = 400 + (g_whisper ? 2700 : 0) + (g_traductor ? 5300 : 0);
         wchar_t t[160];
         if (mb >= 1000) swprintf(t, 160, L"Everything downloads from GitHub%s (about %.1f GB).", (g_whisper || g_traductor) ? L" and Hugging Face" : L"", mb / 1000.0);
         else swprintf(t, 160, L"Everything downloads from GitHub (about %d MB).", mb);
@@ -462,7 +462,7 @@ void dibujar(HDC dc, const RECT& area) {
         };
         casilla(q.casilla, g_acceso_escritorio, L"Desktop shortcut", nullptr);
         casilla(q.casilla2, g_whisper, L"Voice note transcription", L"whisper, 2.7 GB, needs an NVIDIA GPU");
-        casilla(q.casilla3, g_traductor, L"Message translation", L"llama.cpp + Qwen 3B, 3.1 GB, needs an NVIDIA GPU");
+        casilla(q.casilla3, g_traductor, L"Message translation", L"llama.cpp + Qwen 7B, 5.3 GB, needs an NVIDIA GPU");
         boton(dc, q.boton, L"Install", true);
     } else if (g_paso == BAJANDO) {
         texto(dc, actual.empty() ? L"Getting the file list..." : actual, x, E(150), 13, DIM, FW_NORMAL, E(ANCHO - 2 * MARGEN));

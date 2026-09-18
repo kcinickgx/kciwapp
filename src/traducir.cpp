@@ -1,4 +1,4 @@
-// Traduccion de mensajes con un modelo local (llama.cpp + Qwen2.5-3B en
+// Traduccion de mensajes con un modelo local (llama.cpp + Qwen2.5-7B en
 // translate\), como la transcripcion con whisper: opcional en el setup. El
 // llama-server se levanta escondido la primera vez que hace falta y se queda
 // mientras la app vive (job object); se le pide por HTTP en 127.0.0.1.
@@ -137,9 +137,20 @@ void App::traducir(int i) {
         std::string traduccion;
         if (!esperar_listo()) error = L"The translation model did not start";
         else {
-            std::string sistema = "You are a translator. Translate the user's message into " + idioma +
-                                  ". Reply with the translation only: no quotes, no notes, no explanations. Keep emojis, line breaks and names as they are. It is an informal chat message: translate idioms and slang by meaning and keep the casual tone. If the message is already in " + idioma + ", reply with it unchanged.";
-            std::string cuerpo = "{\"messages\":[{\"role\":\"system\",\"content\":" + json_texto(sistema) + "},{\"role\":\"user\",\"content\":" + json_texto(original) + "}],\"temperature\":0,\"max_tokens\":1024}";
+            // El registro se respeta (lo grosero queda grosero) y hay un
+            // ejemplo: sin el, el modelo tiende a suavizar o a explicar.
+            std::string sistema = "You are a professional translator for chat messages. Translate the user's message into " + idioma +
+                                  ". Rules: output ONLY the translation, nothing else. Keep the register: casual stays casual, rude stays rude, vulgar or sexual content is translated faithfully and never softened, censored or reinterpreted. Translate slang and idioms by meaning. Keep emojis, line breaks and names. If the message is already in " + idioma + ", reply with it unchanged.";
+            std::string ejemplo = idioma == "English" ? "hey dude, in the end the meeting got moved to Thursday"
+                                : idioma == "Spanish" ? "che boludo, al final la reunion se paso para el jueves"
+                                : idioma == "Portuguese" ? "e ai cara, no final a reuniao foi pra quinta"
+                                : "";
+            std::string cuerpo = "{\"messages\":[{\"role\":\"system\",\"content\":" + json_texto(sistema) + "}";
+            // El ejemplo va del otro idioma al destino (para ingles, desde castellano).
+            std::string ej_usuario = idioma == "English" ? "che boludo, al final la reunion se paso para el jueves" : "hey dude, in the end the meeting got moved to Thursday";
+            if (!ejemplo.empty())
+                cuerpo += ",{\"role\":\"user\",\"content\":" + json_texto(ej_usuario) + "},{\"role\":\"assistant\",\"content\":" + json_texto(ejemplo) + "}";
+            cuerpo += ",{\"role\":\"user\",\"content\":" + json_texto(original) + "}],\"temperature\":0,\"max_tokens\":1024}";
             Respuesta r = red::pedir_a(L"127.0.0.1", g_puerto, L"POST", L"/v1/chat/completions", cuerpo, L"application/json", 120000);
             if (r.estado != 200) error = L"Translation failed (" + std::to_wstring(r.estado) + L")";
             else {

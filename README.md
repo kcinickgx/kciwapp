@@ -52,7 +52,7 @@ Server setup (Debian/Ubuntu or Slackware) is in [docs/INSTALL.md](docs/INSTALL.m
 - Typing/recording presence both ways, read receipts, calls (voice and video,
   through a hidden WhatsApp Web in WebView2, with an own call window).
 - Voice note transcription on demand (whisper.cpp large-v3-turbo).
-- Message translation on demand with a local model (llama.cpp + Qwen2.5-3B).
+- Message translation on demand with a local model (llama.cpp + Qwen2.5-7B).
 - Several accounts per client; a shared server can host several people.
 - Optional full history import from an iPhone backup (server side).
 
