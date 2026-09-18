@@ -303,6 +303,7 @@ struct App {
     std::map<std::string, std::optional<Adjunto>> borradores_adjunto;
     std::optional<Adjunto> adjunto;
     bool visor = false;        // foto (o video) a pantalla completa
+    int visor_msg = -1;        // el mensaje del que se abrio (menu contextual en el visor)
     bool visor_video = false;
     HWND ventana_video = nullptr;  // ventana hija donde mpv dibuja
     std::string visor_clave;

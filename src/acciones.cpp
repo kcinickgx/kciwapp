@@ -202,6 +202,11 @@ void App::raton_derecho(float x, float y) {
         cerrar_menu();
         return;
     }
+    if (visor && !visor_video) {
+        // Sobre la foto abierta: el mismo menu que en la burbuja (Copy image, Save as...).
+        if (visor_msg >= 0 && visor_msg < (int)mensajes.size() && mensajes[visor_msg].media) menu_contextual(visor_msg);
+        return;
+    }
     if (x < ancho_lista || visor || modal_reenvio) return;
     // Sobre el campo de texto: cortar/copiar/pegar.
     if (y >= g.alto - alto_pie && !chat_actual.empty() && grab == Grab::Nada) {
@@ -716,6 +721,7 @@ void App::abrir_visor(int i) {
     const Mensaje& m = mensajes[i];
     if (!m.media) return;
     visor = true;
+    visor_msg = i;
     visor_zoom = 1.0f;
     visor_px = visor_py = 0;
     visor_arrastrando = false;
