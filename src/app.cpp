@@ -1680,6 +1680,7 @@ void App::dibujar() {
     dibujar_lista();
     dibujar_conversacion();
     dibujar_cabecera();
+    dibujar_aviso_estado();
     dibujar_barra_llamada();
     dibujar_pie();
     dibujar_progreso_carga();
@@ -1760,7 +1761,6 @@ void App::dibujar_lista() {
     // El engranaje de settings, arriba a la derecha de la lista.
     g.renglon(L"⚙", W - 42, 16, 22, Color(TXT_DIM()));
     g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE712", W - 74, 21, 16, Color(TXT_DIM()));
-    if (!aviso_estado.empty()) g.renglon(aviso_estado, 90, 22, 12, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, W - 170);
     if (tab_estados) {
         dibujar_lista_estados(top);
         return;
@@ -2203,6 +2203,32 @@ void App::abrir_contacto(int i) {
         chats.insert(chats.begin(), nuevo);
     }
     abrir_chat(c.jid);
+}
+
+// La pastilla con el aviso (errores, "Sending...", server caido), centrada
+// arriba de la conversacion; lo pasajero se apaga solo.
+void App::dibujar_aviso_estado() {
+    if (aviso_estado.empty()) {
+        aviso_mostrado.clear();
+        return;
+    }
+    if (aviso_estado != aviso_mostrado) {
+        aviso_mostrado = aviso_estado;
+        aviso_desde = ahora;
+        SetTimer(hwnd, 4, 6500, nullptr);
+    }
+    bool permanente = aviso_estado.rfind(L"Server not connected", 0) == 0 || aviso_estado.rfind(L"core\\", 0) == 0;
+    if (!permanente && ahora - aviso_desde > 6000) {
+        aviso_estado.clear();
+        aviso_mostrado.clear();
+        return;
+    }
+    float x = x_conv(), W = w_conv();
+    float tw = std::min(g.medir(aviso_estado, 13), W - 80), pw = tw + 32, ph = 32;
+    float px = x + (W - pw) / 2, py = (chat_actual.empty() || tab_estados ? 12.0f : CABECERA_H + 12.0f);
+    g.rect_redondo(px, py, pw, ph, 16, Color(BG_PANEL()));
+    g.borde_redondo(px, py, pw, ph, 16, Color(BORDE()), 1.0f);
+    g.renglon(aviso_estado, px + 16, py + 8, 13, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, tw);
 }
 
 void App::dibujar_pantalla_vacia() {

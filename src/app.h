@@ -256,6 +256,11 @@ struct App {
     long long seq_eventos = 0;
     bool conectado = false;
     std::wstring aviso_estado;
+    // El aviso se muestra en una pastilla arriba de la conversacion y los
+    // pasajeros ("Sending...", errores) se van solos a los 6 s.
+    std::wstring aviso_mostrado;
+    unsigned long long aviso_desde = 0;
+    void dibujar_aviso_estado();
 
     // Vista
     float ancho_lista = 340.0f;

@@ -156,8 +156,29 @@ var errVencido = errors.New("media no longer available on WhatsApp")
 func bajar(id int64, pedirAlTelefono bool) (string, error) {
 	bajandoMu.Lock()
 	if bajando[id] {
+		// Ya lo esta bajando otro (el que lo pidio al llegar, tipicamente):
+		// se espera a que termine y se devuelve lo que quedo, en vez de
+		// fallar. Un archivo grande puede tardar minutos.
 		bajandoMu.Unlock()
-		return "", errors.New("ya se esta bajando")
+		for i := 0; i < 3000; i++ {
+			time.Sleep(200 * time.Millisecond)
+			bajandoMu.Lock()
+			sigue := bajando[id]
+			bajandoMu.Unlock()
+			if !sigue {
+				var ruta string
+				var estado int
+				db.QueryRow("SELECT ruta, estado FROM media WHERE id = ?", id).Scan(&ruta, &estado)
+				if estado == 1 && ruta != "" {
+					return ruta, nil
+				}
+				if estado == 2 {
+					return "", errVencido
+				}
+				return "", errors.New("download failed")
+			}
+		}
+		return "", errors.New("still downloading")
 	}
 	bajando[id] = true
 	bajandoMu.Unlock()
