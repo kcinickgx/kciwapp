@@ -819,6 +819,12 @@ void App::cerrar_visor() {
 // Clicks dentro del visor: controles del video, o cerrar.
 bool App::click_visor(float x, float y) {
     if (!visor) return false;
+    // La cruz de arriba a la derecha gana siempre, aunque la foto (con zoom o
+    // paneada) quede debajo.
+    if (x > g.ancho - 50 && y < 50) {
+        cerrar_visor();
+        return true;
+    }
     if (visor_video) {
         float vx, vy, vw, vh;
         rect_video(*this, vx, vy, vw, vh);
