@@ -379,7 +379,7 @@ std::string mensaje_a_json(const Mensaje& m) {
 // cita_remitente,cita_texto,editado,borrado,reenviado,estado,media_json.
 const char* COLUMNAS_MENSAJE =
     "chat,id,remitente,propio,ts,tipo,texto,cita_id,cita_remitente,cita_texto,editado,borrado,reenviado,estado,"
-    "media_json,reacciones_json,botones_json";
+    "media_json,reacciones_json,botones_json,traduccion";
 
 Mensaje fila_a_mensaje(Stmt& st) {
     Mensaje m;
@@ -414,6 +414,7 @@ Mensaje fila_a_mensaje(Stmt& st) {
         m.botones = Botones::de_json(Json::parsear(bj));
         m.botones_json = bj;
     }
+    m.traduccion = ancho(st.col_texto(17));
     return m;
 }
 
@@ -508,6 +509,7 @@ bool abrir(const std::wstring& ruta) {
     // Columna agregada despues: si ya existe, el ALTER falla y no pasa nada.
     ejecutar("ALTER TABLE mensajes ADD COLUMN reacciones_json TEXT;");
     ejecutar("ALTER TABLE mensajes ADD COLUMN botones_json TEXT;");
+    ejecutar("ALTER TABLE mensajes ADD COLUMN traduccion TEXT;");
     return true;
 }
 
@@ -618,7 +620,7 @@ void guardar_mensajes(const std::vector<Mensaje>& mensajes) {
         Stmt st(
             "INSERT OR REPLACE INTO "
             "mensajes(chat,id,remitente,propio,ts,tipo,texto,texto_plano,cita_id,cita_remitente,cita_texto,"
-            "editado,borrado,reenviado,estado,media_json,reacciones_json,botones_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);");
+            "editado,borrado,reenviado,estado,media_json,reacciones_json,botones_json,traduccion) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);");
         if (st.ok) {
             for (const Mensaje& m : mensajes) {
                 std::string texto_utf8 = angosto(m.texto);
@@ -640,6 +642,7 @@ void guardar_mensajes(const std::vector<Mensaje>& mensajes) {
                 st.bind_texto(16, m.media ? media_a_json(*m.media) : std::string());
                 st.bind_texto(17, reacciones_a_json(m));
                 st.bind_texto(18, m.botones_json);
+                st.bind_texto(19, angosto(m.traduccion));
                 st.correr();
                 p_reset(st.st);
             }
@@ -803,6 +806,17 @@ std::string valor(const std::string& clave) {
     st.bind_texto(1, clave);
     if (st.fila()) return st.col_texto(0);
     return std::string();
+}
+
+void guardar_traduccion(const std::string& chat, const std::string& id, const std::string& traduccion) {
+    std::lock_guard<std::mutex> l(g_mu);
+    if (!g_db) return;
+    Stmt st("UPDATE mensajes SET traduccion=? WHERE chat=? AND id=?;");
+    if (!st.ok) return;
+    st.bind_texto(1, traduccion);
+    st.bind_texto(2, chat);
+    st.bind_texto(3, id);
+    st.correr();
 }
 
 void guardar_valor(const std::string& clave, const std::string& valor) {

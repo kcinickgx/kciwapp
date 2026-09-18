@@ -77,6 +77,8 @@ struct Mensaje {
     std::optional<Media> media;
     std::vector<Reaccion> reacciones;
     std::shared_ptr<Botones> botones;  // si es interactivo
+    std::wstring traduccion;           // hecha con el traductor local (cache); "" si no
+    bool traduccion_oculta = false;
     std::string botones_json;          // tal cual vino, para la cache
 
     static Mensaje de_json(const Json& j);
@@ -162,6 +164,8 @@ struct VistaMensaje {
     bool liviana = false;
     int album_cols = 0;     // columnas de la grilla (cabeza de album)
     float botones_y = 0;    // filas de boton (interactivos), relativo a la burbuja
+    ComPtr<IDWriteTextLayout> trad;  // la traduccion, debajo del texto
+    float trad_y = 0, trad_h = 0;
     int botones_n = 0;
     // Contacto compartido (vCard): nombre, telefono y jid de WhatsApp si lo trae.
     struct TarjetaContacto {
@@ -394,6 +398,13 @@ struct App {
     void rearmar_si_liviana(size_t i);
     // Transcripcion de notas de voz con whisper.cpp (portable\whisper\), a pedido.
     std::set<std::string> transcribiendo;  // ids en curso
+    // Traduccion local (traducir.cpp): llama.cpp en translate\.
+    std::set<std::string> traduciendo;
+    bool traductor_disponible() const;
+    void traducir(int i);
+    void alternar_traduccion(int i);
+    void rearmar_mensaje(int i);
+    static void cerrar_traductor();
     bool whisper_disponible() const;
     void transcribir(int i);
     // Cuenta nueva (primera vez o desde el menu): pantalla de configuracion (config_ui.cpp).

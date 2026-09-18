@@ -51,6 +51,7 @@ Paso g_paso = ELEGIR;
 std::wstring g_carpeta;
 bool g_acceso_escritorio = true;
 bool g_whisper = true;  // la transcripcion de notas de voz (whisper\, 2,7 GB)
+bool g_traductor = true;  // la traduccion de mensajes (translate\, 3,1 GB)
 std::atomic<bool> g_cancelar{false};
 // Progreso (lo escribe el hilo, lo lee la ventana; con el mutex simple de abajo).
 CRITICAL_SECTION g_cs;
@@ -244,8 +245,9 @@ void fallar(const std::wstring& e) {
 }
 
 bool es_whisper(const std::wstring& ruta) { return ruta.rfind(L"whisper\\", 0) == 0; }
+bool es_traductor(const std::wstring& ruta) { return ruta.rfind(L"translate\\", 0) == 0; }
 
-void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper) {
+void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper, bool traductor) {
     std::string manifiesto;
     if (!bajar_https(URL_MANIFIESTO, [&](const char* d, DWORD n) {
             manifiesto.append(d, n);
@@ -259,12 +261,12 @@ void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper) {
         fallar(L"Bad manifest from the server");
         return;
     }
-    if (!whisper) {
-        // Sin transcripcion: la carpeta whisper\ no se baja (el cliente
-        // tampoco la pide despues al actualizar, si no existe).
+    if (!whisper || !traductor) {
+        // Sin transcripcion / traduccion: esas carpetas no se bajan (el
+        // cliente tampoco las pide despues al actualizar, si no existen).
         std::vector<Archivo> sin;
         for (auto& a : lista)
-            if (!es_whisper(a.ruta)) sin.push_back(a);
+            if (!(!whisper && es_whisper(a.ruta)) && !(!traductor && es_traductor(a.ruta))) sin.push_back(a);
         lista = sin;
     }
     long long total = 0;
@@ -342,9 +344,9 @@ void hilo_bajada(std::wstring carpeta, bool escritorio, bool whisper) {
 // ---- la ventana --------------------------------------------------------------
 
 // Geometria (en px logicos, se escala al dibujar).
-const int ANCHO = 560, ALTO = 380, MARGEN = 32;
+const int ANCHO = 560, ALTO = 410, MARGEN = 32;
 struct Geo {
-    RECT campo, examinar, casilla, casilla2, boton, boton2, barra;
+    RECT campo, examinar, casilla, casilla2, casilla3, boton, boton2, barra;
 };
 
 Geo geo() {
@@ -354,6 +356,7 @@ Geo geo() {
     q.examinar = {x + w - E(96), E(140), x + w, E(140 + 36)};
     q.casilla = {x, E(196), x + E(20), E(216)};
     q.casilla2 = {x, E(228), x + E(20), E(248)};
+    q.casilla3 = {x, E(258), x + E(20), E(278)};
     q.boton = {x + w - E(140), E(ALTO - MARGEN - 40), x + w, E(ALTO - MARGEN)};
     q.boton2 = {x + w - E(140) - E(12) - E(120), E(ALTO - MARGEN - 40), x + w - E(140) - E(12), E(ALTO - MARGEN)};
     q.barra = {x, E(200), x + w, E(210)};
@@ -417,7 +420,13 @@ void dibujar(HDC dc, const RECT& area) {
     Geo q = geo();
     int x = E(MARGEN);
     texto(dc, L"Install kciwapp", x, E(40), 26, TXT, FW_LIGHT);
-    texto(dc, g_whisper ? L"Everything downloads from GitHub and Hugging Face (about 3 GB)." : L"Everything downloads from GitHub (about 400 MB).", x, E(84), 12, DIM);
+    {
+        int mb = 400 + (g_whisper ? 2700 : 0) + (g_traductor ? 3100 : 0);
+        wchar_t t[160];
+        if (mb >= 1000) swprintf(t, 160, L"Everything downloads from GitHub%s (about %.1f GB).", (g_whisper || g_traductor) ? L" and Hugging Face" : L"", mb / 1000.0);
+        else swprintf(t, 160, L"Everything downloads from GitHub (about %d MB).", mb);
+        texto(dc, t, x, E(84), 12, DIM);
+    }
 
     EnterCriticalSection(&g_cs);
     std::wstring actual = g_actual, error = g_error;
@@ -453,6 +462,7 @@ void dibujar(HDC dc, const RECT& area) {
         };
         casilla(q.casilla, g_acceso_escritorio, L"Desktop shortcut", nullptr);
         casilla(q.casilla2, g_whisper, L"Voice note transcription", L"whisper, 2.7 GB, needs an NVIDIA GPU");
+        casilla(q.casilla3, g_traductor, L"Message translation", L"llama.cpp + Qwen 3B, 3.1 GB, needs an NVIDIA GPU");
         boton(dc, q.boton, L"Install", true);
     } else if (g_paso == BAJANDO) {
         texto(dc, actual.empty() ? L"Getting the file list..." : actual, x, E(150), 13, DIM, FW_NORMAL, E(ANCHO - 2 * MARGEN));
@@ -484,7 +494,8 @@ bool clickeable(int x, int y) {
     Geo q = geo();
     if (g_paso == ELEGIR) return dentro(q.campo, x, y) || dentro(q.examinar, x, y) || dentro(q.boton, x, y) ||
                               (y >= q.casilla.top && y < q.casilla.bottom && x >= q.casilla.left && x < q.casilla.left + E(150)) ||
-                              (y >= q.casilla2.top && y < q.casilla2.bottom && x >= q.casilla2.left && x < q.casilla2.left + E(200));
+                              (y >= q.casilla2.top && y < q.casilla2.bottom && x >= q.casilla2.left && x < q.casilla2.left + E(200)) ||
+                              (y >= q.casilla3.top && y < q.casilla3.bottom && x >= q.casilla3.left && x < q.casilla3.left + E(200));
     if (g_paso == BAJANDO) return dentro(q.boton, x, y);
     return dentro(q.boton, x, y) || dentro(q.boton2, x, y);
 }
@@ -523,7 +534,7 @@ void empezar() {
     g_total = g_bajado = 0;
     g_hechos = g_cuantos = 0;
     LeaveCriticalSection(&g_cs);
-    std::thread(hilo_bajada, g_carpeta, g_acceso_escritorio, g_whisper).detach();
+    std::thread(hilo_bajada, g_carpeta, g_acceso_escritorio, g_whisper, g_traductor).detach();
     InvalidateRect(g_hwnd, nullptr, FALSE);
 }
 
@@ -533,6 +544,7 @@ void click(int x, int y) {
         if (dentro(q.campo, x, y) || dentro(q.examinar, x, y)) elegir_carpeta();
         else if (y >= q.casilla.top && y < q.casilla.bottom && x >= q.casilla.left && x < q.casilla.left + E(150)) g_acceso_escritorio = !g_acceso_escritorio;
         else if (y >= q.casilla2.top && y < q.casilla2.bottom && x >= q.casilla2.left && x < q.casilla2.left + E(200)) g_whisper = !g_whisper;
+        else if (y >= q.casilla3.top && y < q.casilla3.bottom && x >= q.casilla3.left && x < q.casilla3.left + E(200)) g_traductor = !g_traductor;
         else if (dentro(q.boton, x, y)) empezar();
     } else if (g_paso == BAJANDO) {
         if (dentro(q.boton, x, y)) {

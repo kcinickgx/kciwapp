@@ -52,13 +52,26 @@ void configurar(const std::wstring& host, int puerto, const std::string& token) 
 
 bool configurado() { return !g_host.empty() && !g_token.empty(); }
 
+static Respuesta pedir_en(const std::wstring& host, int puerto, const std::string& token, const wchar_t* metodo,
+                          const std::wstring& ruta, const std::string& cuerpo, const wchar_t* tipo, int espera_ms);
+
 Respuesta pedir(const wchar_t* metodo, const std::wstring& ruta, const std::string& cuerpo, const wchar_t* tipo,
                 int espera_ms) {
+    return pedir_en(g_host, g_puerto, g_token, metodo, ruta, cuerpo, tipo, espera_ms);
+}
+
+Respuesta pedir_a(const std::wstring& host, int puerto, const wchar_t* metodo, const std::wstring& ruta,
+                  const std::string& cuerpo, const wchar_t* tipo, int espera_ms) {
+    return pedir_en(host, puerto, "", metodo, ruta, cuerpo, tipo, espera_ms);
+}
+
+static Respuesta pedir_en(const std::wstring& host, int puerto, const std::string& token, const wchar_t* metodo,
+                          const std::wstring& ruta, const std::string& cuerpo, const wchar_t* tipo, int espera_ms) {
     Respuesta r;
     HINTERNET s = sesion();
     if (!s) return r;
     WinHttpSetTimeouts(s, 5000, 5000, espera_ms, espera_ms);
-    HINTERNET con = WinHttpConnect(s, g_host.c_str(), (INTERNET_PORT)g_puerto, 0);
+    HINTERNET con = WinHttpConnect(s, host.c_str(), (INTERNET_PORT)puerto, 0);
     if (!con) {
         registrar("http: sin conexion (winhttp " + std::to_string(GetLastError()) + ")");
         return r;
@@ -66,9 +79,9 @@ Respuesta pedir(const wchar_t* metodo, const std::wstring& ruta, const std::stri
     HINTERNET req = WinHttpOpenRequest(con, metodo, ruta.c_str(), nullptr, WINHTTP_NO_REFERER,
                                        WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
     if (req) {
-        std::wstring cabeceras = L"X-Token: " + ancho(g_token) + L"\r\n";
+        std::wstring cabeceras = token.empty() ? L"" : L"X-Token: " + ancho(token) + L"\r\n";
         if (!cuerpo.empty()) cabeceras += std::wstring(L"Content-Type: ") + tipo + L"\r\n";
-        BOOL ok = WinHttpSendRequest(req, cabeceras.c_str(), (DWORD)-1, (LPVOID)cuerpo.data(), (DWORD)cuerpo.size(),
+        BOOL ok = WinHttpSendRequest(req, cabeceras.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : cabeceras.c_str(), cabeceras.empty() ? 0 : (DWORD)-1, (LPVOID)cuerpo.data(), (DWORD)cuerpo.size(),
                                      (DWORD)cuerpo.size(), 0) &&
                   WinHttpReceiveResponse(req, nullptr);
         if (!ok) registrar("http: fallo " + angosto(ruta).substr(0, 120) + " (winhttp " + std::to_string(GetLastError()) + ")");

@@ -23,6 +23,9 @@ bool configurado();
 
 Respuesta pedir(const wchar_t* metodo, const std::wstring& ruta, const std::string& cuerpo = "",
                 const wchar_t* tipo = L"application/json", int espera_ms = 30000);
+// Lo mismo contra otro host:puerto (sin token): el traductor local.
+Respuesta pedir_a(const std::wstring& host, int puerto, const wchar_t* metodo, const std::wstring& ruta,
+                  const std::string& cuerpo, const wchar_t* tipo, int espera_ms);
 Respuesta obtener(const std::wstring& ruta, int espera_ms = 30000);
 Respuesta mandar_json(const std::wstring& ruta, const std::string& json);
 // Multipart con un archivo, para /enviar.

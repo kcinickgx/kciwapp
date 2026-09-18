@@ -16,7 +16,7 @@ namespace {
 
 
 enum IdMenu {
-    M_RESPONDER = 1, M_COPIAR, M_REENVIAR, M_EDITAR, M_BORRAR, M_ABRIR, M_GUARDAR, M_MOSTRAR, M_COPIAR_MEDIA,
+    M_RESPONDER = 1, M_COPIAR, M_REENVIAR, M_EDITAR, M_BORRAR, M_ABRIR, M_GUARDAR, M_MOSTRAR, M_COPIAR_MEDIA, M_TRADUCIR, M_TRADUCCION,
     M_REACCION = 100  // + indice
 };
 
@@ -227,6 +227,10 @@ void App::menu_contextual(int i) {
     else if (!m.texto.empty() || sel_msg == i) items.push_back({L"Copy", M_COPIAR, L"\uE8C8"});
     // A un estado no se le responde ni se lo edita.
     if (!es_estado()) items.push_back({L"Reply", M_RESPONDER, L"\uE97A"});
+    if (!m.borrado && (!m.texto.empty() || !m.texto_oculto.empty()) && traductor_disponible()) {
+        if (m.traduccion.empty()) items.push_back({L"Translate", M_TRADUCIR, L"\uE8C1"});
+        else items.push_back({m.traduccion_oculta ? L"Show translation" : L"Hide translation", M_TRADUCCION, L"\uE8C1"});
+    }
     if (!m.borrado) items.push_back({L"Forward", M_REENVIAR, L"\uE72A"});
     if (m.propio && !m.borrado && !m.media && !m.texto.empty() && !es_estado()) items.push_back({L"Edit", M_EDITAR, L"\uE70F"});
     if (m.media && !m.borrado) {
@@ -256,6 +260,8 @@ void App::menu_contextual(int i) {
                 break;
             }
             case M_COPIAR_MEDIA: copiar_media(i); break;
+            case M_TRADUCIR: traducir(i); break;
+            case M_TRADUCCION: alternar_traduccion(i); break;
             case M_GUARDAR: guardar_como(i); break;
             case M_MOSTRAR: {
                 std::wstring ruta = bajar_media(mensajes[i]);

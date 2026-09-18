@@ -14,6 +14,7 @@
 #include <functional>
 #include <vector>
 
+#include "app.h"
 #include "gfx.h"
 #include "grabador.h"
 #include "webwa.h"
@@ -630,6 +631,28 @@ float seccion_chat(Gfx& g, float x, float y, float ancho_contenido) {
     return y + 22;
 }
 
+// A que idioma traduce el menu "Translate" (modelo local en translate\).
+float seccion_traduccion(Gfx& g, float x, float y, float ancho_contenido) {
+    y = titulo_seccion(g, x, y, L"TRANSLATION");
+    y += 6;
+    static const wchar_t* IDIOMAS[] = {L"English", L"Spanish", L"Portuguese", L"Italian", L"French", L"German",
+                                       L"Russian", L"Chinese", L"Japanese", L"Korean", L"Arabic", L"Hebrew", L"Turkish", L"Polish", L"Dutch"};
+    std::vector<std::pair<std::wstring, int>> ops;
+    int actual = 0;
+    for (int i = 0; i < (int)(sizeof IDIOMAS / sizeof *IDIOMAS); i++) {
+        ops.push_back({IDIOMAS[i], i});
+        if (ajustes::actual().idioma_traduccion == IDIOMAS[i]) actual = i;
+    }
+    fila_desplegable(g, x, y, ancho_contenido, L"Translate to", 110, ops, actual,
+                     [](int v) { ajustes::cambiar([v](Ajustes& a) { a.idioma_traduccion = IDIOMAS[v]; }); });
+    y += FILA;
+    bool hay = GetFileAttributesW((carpeta_exe() + L"\\translate\\llama-server.exe").c_str()) != INVALID_FILE_ATTRIBUTES;
+    g.renglon(hay ? L"Local model (llama.cpp + Qwen2.5-3B in translate\\). Right-click a message \u2192 Translate."
+                  : L"Not installed: re-run the setup and tick Translation (translate\\, 3.1 GB, NVIDIA GPU).",
+              x, y + 4, 12, Color(TXT_DIM()), DWRITE_FONT_WEIGHT_NORMAL, ancho_contenido);
+    return y + 22;
+}
+
 float seccion_notificaciones(Gfx& g, float x, float y, float ancho_contenido) {
     y = titulo_seccion(g, x, y, L"NOTIFICATIONS");
     y += 6;
@@ -849,6 +872,7 @@ void dibujar_todo() {
     y = seccion_fondo(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_letras(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_chat(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
+    y = seccion_traduccion(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_notificaciones(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_llamadas(g_gfx, x, y, ancho_contenido) + ESPACIO_SECCION;
     y = seccion_audio(g_gfx, x, y, ancho_contenido) + PADDING;

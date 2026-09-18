@@ -52,6 +52,8 @@ std::vector<Mensaje> buscar_en(const std::string& chat, const std::wstring& text
 // Valores sueltos (cursor de eventos, etc.).
 std::string valor(const std::string& clave);
 void guardar_valor(const std::string& clave, const std::string& valor);
+// La traduccion de un mensaje (hecha en el cliente), para no pedirla dos veces.
+void guardar_traduccion(const std::string& chat, const std::string& id, const std::string& traduccion);
 
 // Que adjuntos ya estan bajados a disco.
 std::wstring ruta_media(long long media_id);  // vacio si no esta anotada

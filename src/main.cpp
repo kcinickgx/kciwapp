@@ -127,7 +127,13 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             if (app) {
                 float e = escala(h);
                 app->raton_mueve(GET_X_LPARAM(lp) / e, GET_Y_LPARAM(lp) / e);
+                // Para enterarnos cuando el mouse sale de la ventana (hover).
+                TRACKMOUSEEVENT tme{sizeof tme, TME_LEAVE, h, 0};
+                TrackMouseEvent(&tme);
             }
+            return 0;
+        case WM_MOUSELEAVE:
+            if (app) app->raton_mueve(-1, -1);
             return 0;
         case WM_LBUTTONDOWN:
             if (app) {
@@ -434,5 +440,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     aviso::parar();
     cache::cerrar();
     core::cerrar();
+    App::cerrar_traductor();
     return 0;
 }

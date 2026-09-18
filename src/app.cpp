@@ -1503,6 +1503,19 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
     } else {
         ancho_contenido = std::max(ancho_contenido, hora_w + 8);
     }
+    // La traduccion: en cursiva y atenuada, separada por una linea.
+    if (!m.traduccion.empty() && !m.traduccion_oculta && !m.borrado) {
+        v.trad = g.texto(m.traduccion, letra_chat - 0.5f, interior, DWRITE_FONT_WEIGHT_NORMAL);
+        if (v.trad) {
+            v.trad->SetFontStyle(DWRITE_FONT_STYLE_ITALIC, {0, (UINT32)m.traduccion.size()});
+            DWRITE_TEXT_METRICS tm;
+            v.trad->GetMetrics(&tm);
+            v.trad_y = y + 8;
+            v.trad_h = tm.height;
+            ancho_contenido = std::max(ancho_contenido, tm.widthIncludingTrailingWhitespace);
+            y += 8 + v.trad_h + 2;
+        }
+    }
     // Botones de un bot: debajo de todo, de borde a borde.
     v.botones_n = 0;
     if (m.botones && !m.borrado && m.botones->filas() > 0) {
@@ -2541,6 +2554,10 @@ void App::dibujar_mensaje(size_t i, float y) {
             }
         }
         g.dibujar_texto(v.texto.Get(), tx, ty, Color(m.borrado ? TXT_DIM() : TXT()));
+    }
+    if (v.trad) {
+        g.linea(bx + PAD_X, by + v.trad_y - 4, bx + v.bw - PAD_X, by + v.trad_y - 4, Color(BORDE()));
+        g.dibujar_texto(v.trad.Get(), bx + PAD_X, by + v.trad_y, Color(TXT_DIM()));
     }
     // Hora y tildes
     float hx = bx + v.hora_x, hy = by + v.hora_y;

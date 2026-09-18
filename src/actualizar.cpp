@@ -233,8 +233,10 @@ void verificar(const std::wstring& carpeta_exe, std::function<void()> al_termina
             }
             // Sin carpeta whisper\ (se instalo sin transcripcion): esos no cuentan.
             bool sin_whisper = GetFileAttributesW((carpeta_exe + L"\\whisper").c_str()) == INVALID_FILE_ATTRIBUTES;
+            bool sin_traductor = GetFileAttributesW((carpeta_exe + L"\\translate").c_str()) == INVALID_FILE_ATTRIBUTES;
             for (const Archivo& a : lista) {
                 if (sin_whisper && a.ruta.rfind(L"whisper\\", 0) == 0) continue;
+                if (sin_traductor && a.ruta.rfind(L"translate\\", 0) == 0) continue;
                 bool existe = GetFileAttributesW((carpeta_exe + L"\\" + a.ruta).c_str()) != INVALID_FILE_ATTRIBUTES;
                 if (!existe) pendientes.push_back(a);
                 else if (hay_local && local[a.ruta] != a.md5) pendientes.push_back(a);

@@ -40,7 +40,8 @@ EXCLUIR_DIR = {'datos', 'server'}
 FUENTES = {'kciwapp2.exe': os.path.join(RAIZ, 'build', 'kciwapp2.exe'),
            'core/kciwapp-core.exe': os.path.join(RAIZ, 'build', 'core', 'kciwapp-core.exe')}
 # Archivos que se bajan de otro lado (no se suben al release).
-EXTERNOS = {'whisper/ggml-large-v3-turbo.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin'}
+EXTERNOS = {'whisper/ggml-large-v3-turbo.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin',
+            'translate/qwen2.5-3b-instruct-q4_k_m.gguf': 'https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf'}
 # Assets del release que no son del manifiesto pero van igual.
 EXTRAS = [(INSTALADOR, os.path.join(RAIZ, 'build', INSTALADOR)),
           ('INSTALL.md', os.path.join(RAIZ, 'docs', 'INSTALL.md')),
