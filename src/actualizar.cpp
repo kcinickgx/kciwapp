@@ -237,9 +237,14 @@ void verificar(const std::wstring& carpeta_exe, std::function<void()> al_termina
             for (const Archivo& a : lista) {
                 if (sin_whisper && a.ruta.rfind(L"whisper\\", 0) == 0) continue;
                 if (sin_traductor && a.ruta.rfind(L"translate\\", 0) == 0) continue;
-                bool existe = GetFileAttributesW((carpeta_exe + L"\\" + a.ruta).c_str()) != INVALID_FILE_ATTRIBUTES;
+                std::wstring ruta = carpeta_exe + L"\\" + a.ruta;
+                bool existe = GetFileAttributesW(ruta.c_str()) != INVALID_FILE_ATTRIBUTES;
                 if (!existe) pendientes.push_back(a);
-                else if (hay_local && local[a.ruta] != a.md5) pendientes.push_back(a);
+                else if (hay_local && !local.count(a.ruta)) {
+                    // Esta en disco pero no en el manifiesto local (se copio a
+                    // mano, o es una carpeta nueva): vale si el md5 coincide.
+                    if (md5_de(ruta) != a.md5) pendientes.push_back(a);
+                } else if (hay_local && local[a.ruta] != a.md5) pendientes.push_back(a);
             }
             {
                 std::lock_guard<std::mutex> l(g_mu);
