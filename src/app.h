@@ -418,6 +418,10 @@ struct App {
     unsigned long long estado_desde = 0;
     bool estado_pausado = false;
     std::set<std::string> estados_vistos;
+    // Ids de estados ajenos de las ultimas 24 h que no se vieron (para el
+    // punto verde sin tener el chat de estados abierto).
+    std::set<std::string> estados_sin_ver;
+    void cargar_estados_pendientes();
     struct GrupoEstado {
         std::string jid;
         std::vector<int> idx;  // indices en `mensajes`, del mas viejo al mas nuevo

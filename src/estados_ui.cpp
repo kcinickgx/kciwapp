@@ -18,6 +18,22 @@ constexpr long long UN_DIA = 24LL * 3600 * 1000;
 constexpr unsigned long long DURA_TEXTO = 5000, DURA_FOTO = 5000;
 }  // namespace
 
+// Al arrancar: lo visto (cache) y los estados ajenos de las ultimas 24 h que
+// faltan ver, para el punto verde de la tab.
+void App::cargar_estados_pendientes() {
+    std::string v = cache::valor("estados_vistos");
+    size_t a = 0;
+    while (a < v.size()) {
+        size_t b = v.find(',', a);
+        if (b == std::string::npos) b = v.size();
+        if (b > a) estados_vistos.insert(v.substr(a, b - a));
+        a = b + 1;
+    }
+    long long limite = ahora_ms() - UN_DIA;
+    for (const Mensaje& m : cache::leer_mensajes(STATUS, 0, 500))
+        if (!m.propio && !m.borrado && m.ts >= limite && !estados_vistos.count(m.id)) estados_sin_ver.insert(m.id);
+}
+
 bool App::respondiendo_estado() const { return tab_estados && !estado_de.empty() && estado_de != mi_jid; }
 
 // Entrar o salir de la tab. Al entrar se abre (escondido) el chat de estados
@@ -31,17 +47,6 @@ void App::abrir_tab_estados(bool si) {
         estado_de.clear();
         estado_idx = -1;
         abrir_chat(STATUS);
-        if (estados_vistos.empty()) {
-            // Lo visto se recuerda en la cache (ids separados por coma).
-            std::string v = cache::valor("estados_vistos");
-            size_t a = 0;
-            while (a < v.size()) {
-                size_t b = v.find(',', a);
-                if (b == std::string::npos) b = v.size();
-                if (b > a) estados_vistos.insert(v.substr(a, b - a));
-                a = b + 1;
-            }
-        }
     } else {
         tab_estados = false;
         estado_de.clear();
@@ -105,6 +110,10 @@ void App::armar_grupos_estado() {
         gr.ultimo_ts = std::max(gr.ultimo_ts, m.ts);
         if (!m.propio && !estados_vistos.count(m.id)) gr.sin_ver = true;
     }
+    estados_sin_ver.clear();
+    for (auto& gr : grupos_estado)
+        for (int i : gr.idx)
+            if (!mensajes[i].propio && !estados_vistos.count(mensajes[i].id)) estados_sin_ver.insert(mensajes[i].id);
     std::stable_sort(grupos_estado.begin(), grupos_estado.end(), [](const GrupoEstado& a, const GrupoEstado& b) {
         if (a.propio != b.propio) return a.propio;
         if (a.sin_ver != b.sin_ver) return a.sin_ver;
@@ -122,15 +131,8 @@ void App::armar_grupos_estado() {
 }
 
 bool App::hay_estados_nuevos() {
-    if (chat_actual != STATUS) {
-        // Sin el chat abierto: lo dice el contador de la lista.
-        const Chat* c = chat_de(STATUS);
-        return c && c->no_leidos > 0;
-    }
-    armar_grupos_estado();
-    for (auto& gr : grupos_estado)
-        if (gr.sin_ver) return true;
-    return false;
+    // Los de mas de un dia ya no cuentan (se limpian cuando la tab arma los grupos).
+    return !estados_sin_ver.empty();
 }
 
 // El anillo de estados alrededor del avatar: un segmento por estado.
@@ -307,6 +309,7 @@ void App::mostrar_estado(const std::string& jid, int k) {
     estado_idx = k;
     estado_desde = GetTickCount64();
     const Mensaje& m = mensajes[(*idx)[k]];
+    estados_sin_ver.erase(m.id);
     if (!m.propio && !estados_vistos.count(m.id)) {
         estados_vistos.insert(m.id);
         guardar_estados_vistos();

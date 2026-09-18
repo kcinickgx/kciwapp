@@ -305,6 +305,7 @@ ID2D1Bitmap1* Imagen::cuadro_actual(Gfx& g, unsigned long long ahora) {
 void App::iniciar(HWND h) {
     hwnd = h;
     g.iniciar(h);
+    cargar_estados_pendientes();
     campo.indicio = L"Type a message";
     campo.tamano = letra_chat + 0.5f;
     campo.al_enviar = [this] {
@@ -965,6 +966,7 @@ bool App::aplicar_evento(const Json& e) {
         cache::guardar_mensajes({m});
         bool hay = chat_de(m.chat) != nullptr;
         // Aviso en la bandeja si no estoy mirando ese chat.
+        if (!m.propio && m.chat == "status@broadcast" && !m.borrado) estados_sin_ver.insert(m.id);
         if (!m.propio && !aviso::esta_al_frente(hwnd) && m.chat != "status@broadcast") {
             const Chat* c = chat_de(m.chat);
             std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
