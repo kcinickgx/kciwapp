@@ -444,6 +444,10 @@ struct App {
     Reproductor reproductor;
     bool reproductor_ok = false;
     std::string reproduciendo_id;   // mensaje que suena (vacio si ninguno)
+    // Al terminar un audio sigue solo con el siguiente si es otro audio y ya
+    // estaba (un texto en el medio o un audio que llega despues cortan la cadena).
+    bool cadena_audio_vista = false;
+    void encadenar_audio();
     bool bajando_audio = false;
     double velocidad_audio = 1.0;   // 1x / 1.5x / 2x, global
     int seek_msg = -1;              // arrastrando la onda de este mensaje

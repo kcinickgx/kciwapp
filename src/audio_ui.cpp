@@ -31,6 +31,7 @@ std::wstring mm_ss(double s) {
 // la baja (si hace falta) y la toca.
 void App::reproducir_audio(int i) {
     const Mensaje& m = mensajes[i];
+    cadena_audio_vista = false;
     if (reproduciendo_id == m.id) {
         if (reproductor.terminado()) {
             reproductor.ir_a(0);
@@ -222,6 +223,20 @@ const float AUDIO_ONDA_X = 52.0f;   // donde arranca la onda
 const float AUDIO_ONDA_DER = 14.0f; // margen derecho
 const float AUDIO_VEL_W = 40.0f;    // el boton 1x/1.5x/2x
 }  // namespace
+
+// Termino el que sonaba: si el mensaje que sigue en el chat es otro audio,
+// arranca solo. Se decide una sola vez por audio, en el momento en que
+// termina: lo que llegue despues ya no cuenta.
+void App::encadenar_audio() {
+    if (reproduciendo_id.empty() || cadena_audio_vista || !reproductor.terminado()) return;
+    cadena_audio_vista = true;
+    for (size_t i = 0; i + 1 < mensajes.size(); i++) {
+        if (mensajes[i].id != reproduciendo_id) continue;
+        const Mensaje& n = mensajes[i + 1];
+        if ((n.tipo == "audio" || n.tipo == "nota") && n.media && !n.borrado) reproducir_audio((int)i + 1);
+        return;
+    }
+}
 
 void App::dibujar_audio(int i, float cx, float cy, float w, float h) {
     const Mensaje& m = mensajes[i];

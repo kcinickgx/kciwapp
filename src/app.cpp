@@ -1639,6 +1639,7 @@ void App::dibujar() {
     lista.animar(dt);
     conv.animar(dt);
     scroll_res_chat.animar(dt);
+    encadenar_audio();
     necesita_dibujar = false;
 
     g.empezar_frame();
