@@ -851,6 +851,7 @@ bool App::click_visor(float x, float y) {
         // Velocidad.
         if (x > vx + vw - 180 && x < vx + vw - 132 && y > by - 14 && y < by + 14) {
             velocidad_audio = velocidad_audio == 1.0 ? 1.5 : (velocidad_audio == 1.5 ? 2.0 : 1.0);
+            ajustes::cambiar([v = velocidad_audio](Ajustes& a) { a.velocidad = v; });
             reproductor.velocidad(velocidad_audio);
             return true;
         }

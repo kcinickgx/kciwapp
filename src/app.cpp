@@ -315,6 +315,8 @@ void App::iniciar(HWND h) {
         teclear_presencia();
     };
     campo.al_escapar = [this] { escapar(); };
+    velocidad_audio = ajustes::actual().velocidad;
+    if (velocidad_audio != 1.5 && velocidad_audio != 2.0) velocidad_audio = 1.0;
     campo.foco = true;
     buscador.indicio = L"Search or start new chat";
     buscador.tamano = 14.0f;

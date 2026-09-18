@@ -318,6 +318,7 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
         }
         if (rx >= vx && ry >= 8 && ry <= 40) {
             velocidad_audio = velocidad_audio == 1.0 ? 1.5 : (velocidad_audio == 1.5 ? 2.0 : 1.0);
+            ajustes::cambiar([v = velocidad_audio](Ajustes& a) { a.velocidad = v; });
             reproductor.velocidad(velocidad_audio);
             pedir_dibujo();
             return;
