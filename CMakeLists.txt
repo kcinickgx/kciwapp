@@ -26,6 +26,7 @@ add_executable(kciwapp2 WIN32
     src/menu_ui.cpp
     src/buscar_chat.cpp
     src/botones_ui.cpp
+    src/estados_ui.cpp
     src/webwa.cpp
     src/llamadas_ui.cpp
     src/ventana_llamada.cpp

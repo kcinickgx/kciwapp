@@ -12,6 +12,7 @@
 // --demo: capturas con datos inventados (sin sesion de WhatsApp, mutex aparte).
 extern bool modo_demo;
 extern std::string chat_inicial;  // --chat JID: se abre al cargar la lista
+inline const wchar_t* LETRA_ESTADO[] = {L"Sans", L"Serif", L"Norican", L"Bryndan", L"Bebas", L"Oswald"};
 #include <vector>
 
 #include "campo.h"
@@ -404,8 +405,44 @@ struct App {
     // Cierra y vuelve a abrir el cliente con otra cuenta.
     void cambiar_cuenta(int i);
     void menu_cuentas(float x, float y);
-    // El chat de estados (status@broadcast): lo que se manda ahi es un estado.
-    bool es_estado() const { return chat_actual == "status@broadcast"; }
+    // El chat de estados (status@broadcast): lo que se manda ahi es un estado
+    // (salvo que el visor este respondiendo a un estado ajeno).
+    bool es_estado() const { return chat_actual == "status@broadcast" && !respondiendo_estado(); }
+    bool respondiendo_estado() const;
+    // ---- tab Status (estados_ui.cpp) ----
+    bool tab_estados = false;
+    float tab_status_x0 = 0, tab_status_x1 = 0;  // donde quedo dibujada la tab Status
+    std::string chat_antes_estados;   // el chat que estaba al pasar a la tab
+    std::string estado_de;            // remitente en el visor ("" = ninguno; mi_jid = My status)
+    int estado_idx = -1;              // cual de sus estados
+    unsigned long long estado_desde = 0;
+    bool estado_pausado = false;
+    std::set<std::string> estados_vistos;
+    struct GrupoEstado {
+        std::string jid;
+        std::vector<int> idx;  // indices en `mensajes`, del mas viejo al mas nuevo
+        long long ultimo_ts = 0;
+        bool sin_ver = false, propio = false;
+    };
+    std::vector<GrupoEstado> grupos_estado;
+    struct { float x = 0, y = 0, w = 0, h = 0; } estado_media_rect;
+    void abrir_tab_estados(bool si);
+    void cerrar_chat();
+    void guardar_estados_vistos();
+    void armar_grupos_estado();
+    bool hay_estados_nuevos();
+    void dibujar_anillo_estado(float cx, float cy, float r, int segmentos, int vistos, bool propio);
+    void dibujar_lista_estados(float top);
+    std::string fila_estado_en(float y);
+    bool click_lista_estados(float x, float y);
+    const std::vector<int>* estados_de(const std::string& jid);
+    void mostrar_estado(const std::string& jid, int k);
+    void avanzar_estado(int dir);
+    unsigned long long duracion_estado(const Mensaje& m) const;
+    void tic_estados();
+    void dibujar_visor_estado();
+    bool click_visor_estado(float x, float y);
+    bool clickeable_visor_estado(float x, float y) const;
     int estado_color = 0;  // indice en la paleta de fondos
     int estado_letra = 0;  // 0..5, los tipos de letra de WhatsApp
     unsigned estado_fondo_argb() const;
@@ -622,7 +659,7 @@ struct App {
     static constexpr float CABECERA_H = 60.0f;
     // La cabecera mas la barra de llamada en curso (si hay).
     float alto_cabecera() const { return CABECERA_H + alto_barra_llamada(); }
-    float top_lista() const { return 104.0f; }
+    float top_lista() const { return tab_estados ? 60.0f : 104.0f; }
     // Alto de una fila de la lista: acompana al tamano de letra.
     float fila_h() const { return std::round(letra_lista * 3.2f + 20.0f); }
     float alto_pie = 0;
@@ -669,6 +706,8 @@ std::wstring formatear_telefono(const std::string& jid);
 std::wstring nombre_tipo(const std::string& tipo);
 // Un solo renglon (saltos -> espacios), para vistas previas.
 std::wstring una_linea(std::wstring s);
+int dia_de(long long ts);   // AAAAMMDD local
+long long ahora_ms();
 std::wstring plano(const std::wstring& s);
 std::wstring carpeta_exe();
 // Foto, video, gif o sticker: lo que se muestra como imagen.

@@ -958,6 +958,10 @@ void App::dibujar_visor() {
 void App::escapar() {
     if (menu_abierto) {
         cerrar_menu();
+    } else if (tab_estados && !visor && !estado_de.empty() && !emojis_abierto && !modal_reenvio) {
+        estado_de.clear();
+        estado_idx = -1;
+        if (!reproduciendo_id.empty()) reproductor.parar(), reproduciendo_id.clear();
     } else if (visor) {
         cerrar_visor();
     } else if (emojis_abierto) {

@@ -41,19 +41,6 @@ SYSTEMTIME local_de(long long ts) {
     return loc;
 }
 
-int dia_de(long long ts) {
-    SYSTEMTIME s = local_de(ts);
-    return s.wYear * 10000 + s.wMonth * 100 + s.wDay;
-}
-
-long long ahora_ms() {
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    ULARGE_INTEGER u;
-    u.LowPart = ft.dwLowDateTime;
-    u.HighPart = ft.dwHighDateTime;
-    return (long long)((u.QuadPart - 116444736000000000ULL) / 10000ULL);
-}
 
 // Encuentra URLs (http://, https://, www.) en un texto.
 std::vector<VistaMensaje::Enlace> buscar_enlaces(const std::wstring& t) {
@@ -105,6 +92,20 @@ int solo_emojis(const std::wstring& t) {
 }
 
 }  // namespace
+
+int dia_de(long long ts) {
+    SYSTEMTIME s = local_de(ts);
+    return s.wYear * 10000 + s.wMonth * 100 + s.wDay;
+}
+
+long long ahora_ms() {
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    ULARGE_INTEGER u;
+    u.LowPart = ft.dwLowDateTime;
+    u.HighPart = ft.dwHighDateTime;
+    return (long long)((u.QuadPart - 116444736000000000ULL) / 10000ULL);
+}
 
 bool modo_demo = false;
 std::string chat_inicial;
@@ -377,7 +378,7 @@ void App::redimensionado() {
 bool App::animando() {
     return !lista.quieto() || !conv.quieto() ||
            (!resaltado_id.empty() && ahora - resaltado_desde < 2000) ||
-           alguien_escribe(chat_actual) ||
+           alguien_escribe(chat_actual) || (tab_estados && !estado_de.empty() && estado_idx >= 0) ||
            grab == Grab::Grabando ||
            ((!reproduciendo_id.empty() || grab_escuchando) && !reproductor.pausado() && !reproductor.terminado());
 }
@@ -861,7 +862,6 @@ static const unsigned PALETA_ESTADO[] = {0xFF37474F, 0xFF1565C0, 0xFF2E7D32, 0xF
                                         0xFF00838F, 0xFFC62828, 0xFF283593, 0xFF00695C, 0xFF9E9D24, 0xFF4E342E};
 static const wchar_t* NOMBRE_COLOR_ESTADO[] = {L"Slate", L"Blue", L"Green", L"Purple", L"Pink", L"Orange",
                                                L"Teal", L"Red", L"Indigo", L"Dark teal", L"Olive", L"Brown"};
-static const wchar_t* LETRA_ESTADO[] = {L"Sans", L"Serif", L"Norican", L"Bryndan", L"Bebas", L"Oswald"};
 
 unsigned App::estado_fondo_argb() const { return PALETA_ESTADO[estado_color % 12]; }
 
@@ -881,6 +881,11 @@ void App::enviar_texto() {
     }
     std::string cita = respondiendo ? respondiendo->id : "";
     respondiendo.reset();
+    if (respondiendo_estado()) {
+        chat = estado_de;
+        const std::vector<int>* idx = estados_de(estado_de);
+        if (idx && estado_idx >= 0 && estado_idx < (int)idx->size()) cita = mensajes[(*idx)[estado_idx]].id;
+    }
     std::string cuerpo = "{\"chat\":" + json_texto(chat) + ",\"texto\":" + json_texto(angosto(t)) +
                          (cita.empty() ? "" : ",\"cita_id\":" + json_texto(cita)) +
                          (es_estado() ? ",\"fondo\":" + std::to_string(estado_fondo_argb()) + ",\"letra\":" + std::to_string(estado_letra) : "") + "}";
@@ -960,7 +965,7 @@ bool App::aplicar_evento(const Json& e) {
         cache::guardar_mensajes({m});
         bool hay = chat_de(m.chat) != nullptr;
         // Aviso en la bandeja si no estoy mirando ese chat.
-        if (!m.propio && !aviso::esta_al_frente(hwnd)) {
+        if (!m.propio && !aviso::esta_al_frente(hwnd) && m.chat != "status@broadcast") {
             const Chat* c = chat_de(m.chat);
             std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
             std::wstring texto = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
@@ -1667,6 +1672,8 @@ void App::dibujar() {
     alto_pie = campo.alto(g) + 16;
     if (respondiendo || editando) alto_pie += BARRA_H;
     if (adjunto) alto_pie += ADJUNTO_H;
+    if (tab_estados && estado_de.empty()) alto_pie = 0;
+    tic_estados();
     dibujar_lista();
     dibujar_conversacion();
     dibujar_cabecera();
@@ -1690,12 +1697,13 @@ void App::armar_items() {
     std::wstring q = plano(buscador.texto);
     while (!q.empty() && q.back() == L' ') q.pop_back();
     if (q.empty()) {
-        for (size_t i = 0; i < chats.size(); i++) items.push_back({ItemLista::ChatItem, (int)i, L""});
+        for (size_t i = 0; i < chats.size(); i++)
+            if (chats[i].jid != "status@broadcast") items.push_back({ItemLista::ChatItem, (int)i, L""});
         return;
     }
     items.push_back({ItemLista::Titulo, 0, L"Contacts"});
     for (size_t i = 0; i < chats.size(); i++)
-        if (plano(chats[i].nombre).find(q) != std::wstring::npos) items.push_back({ItemLista::ChatItem, (int)i, L""});
+        if (chats[i].jid != "status@broadcast" && plano(chats[i].nombre).find(q) != std::wstring::npos) items.push_back({ItemLista::ChatItem, (int)i, L""});
     items.push_back({ItemLista::Titulo, 0, buscando ? L"Messages (searching...)" : L"Messages (" + std::to_wstring(resultados.size()) + L")"});
     for (size_t i = 0; i < resultados.size(); i++) items.push_back({ItemLista::Resultado, (int)i, L""});
 }
@@ -1715,11 +1723,45 @@ void App::dibujar_lista() {
     g.rect(0, 0, W, g.alto, Color(BG_APP()));
     // Cabecera de la lista: titulo, aviso y buscador.
     g.rect(0, 0, W, top, Color(BG_PANEL()));
-    g.renglon(reenviando ? L"Forward to..." : L"Chats", 16, 17, 20, Color(reenviando ? ACCENT() : TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    if (reenviando) g.renglon(L"Forward to...", 16, 17, 20, Color(ACCENT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    else {
+        // Dos tabs con iconos, como WhatsApp: el globo de chats y el anillo de
+        // estados; la activa sobre una pastilla, punto verde si hay estados sin ver.
+        const float P = 40;  // la pastilla
+        float cx0 = 14, sx0 = cx0 + P + 8, py = 10;
+        if (!tab_estados) g.rect_redondo(cx0, py, P, P, 12, Color(BG_SEL()));
+        else g.rect_redondo(sx0, py, P, P, 12, Color(BG_SEL()));
+        // Globo de chat (relleno con dos renglones).
+        Color cc = Color(tab_estados ? TXT_DIM() : TXT());
+        float gx = cx0 + 9, gy = py + 10;
+        g.rect_redondo(gx, gy, 22, 16, 5, cc);
+        g.triangulo(gx + 4, gy + 15, gx + 11, gy + 15, gx + 4, gy + 21, cc);
+        Color hueco = Color(tab_estados ? BG_PANEL() : BG_SEL());
+        g.rect_redondo(gx + 5, gy + 4.5f, 12, 2, 1, hueco);
+        g.rect_redondo(gx + 5, gy + 9.5f, 8, 2, 1, hueco);
+        // Anillo de estados: dos arcos.
+        bool nuevos = hay_estados_nuevos();
+        Color sc = Color(tab_estados ? TXT() : TXT_DIM());
+        float acx = sx0 + P / 2, acy = py + P / 2, ar = 10;
+        g.circulo(acx, acy, 4.5f, sc);
+        for (int k = 0; k < 40; k++) {
+            float frac = k / 40.0f;
+            if ((frac > 0.42f && frac < 0.5f) || frac > 0.92f) continue;
+            float a = -1.5707963f + frac * 6.2831853f;
+            g.circulo(acx + ar * std::cos(a), acy + ar * std::sin(a), 1.3f, sc);
+        }
+        if (nuevos) g.circulo(sx0 + P - 6, py + 6, 4.5f, Color(ACCENT()));
+        tab_status_x0 = sx0;
+        tab_status_x1 = sx0 + P;
+    }
     // El engranaje de settings, arriba a la derecha de la lista.
     g.renglon(L"⚙", W - 42, 16, 22, Color(TXT_DIM()));
     g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE712", W - 74, 21, 16, Color(TXT_DIM()));
     if (!aviso_estado.empty()) g.renglon(aviso_estado, 90, 22, 12, Color(0xf15c6d), DWRITE_FONT_WEIGHT_NORMAL, W - 170);
+    if (tab_estados) {
+        dibujar_lista_estados(top);
+        return;
+    }
     g.rect_redondo(12, 60, W - 24, 34, 8, Color(BG_CAMPO()));
     g.lupa(29, 76, 6, Color(TXT_DIM()));
     buscador.dibujar(g, 40, 61, W - 54, 32, ahora);
@@ -1865,7 +1907,7 @@ void App::tildes(float x, float y, bool doble, Color c) {
 
 void App::dibujar_cabecera() {
     float x = x_conv(), W = w_conv(), H = CABECERA_H;
-    if (chat_actual.empty()) return;
+    if (chat_actual.empty() || tab_estados) return;
     g.rect(x, 0, W, H, Color(BG_PANEL()));
     const Chat* c = chat_de(chat_actual);
     if (!c) return;
@@ -1896,7 +1938,7 @@ void App::dibujar_cabecera() {
 
 void App::dibujar_pie() {
     float x = x_conv(), W = w_conv(), H = alto_pie, y = g.alto - H;
-    if (chat_actual.empty()) return;
+    if (chat_actual.empty() || (tab_estados && estado_de.empty())) return;
     g.rect(x, y, W, H, Color(BG_PANEL()));
     float yy = y + 8;
     // Barra de respuesta / edicion.
@@ -2199,6 +2241,10 @@ void App::dibujar_conversacion() {
     dibujar_fondo_chat(x, top, W, H);
     if (sin_sesion) {
         dibujar_vinculacion();
+        return;
+    }
+    if (tab_estados) {
+        dibujar_visor_estado();
         return;
     }
     if (chat_actual.empty()) {
@@ -2637,9 +2683,23 @@ void App::raton_abajo(float x, float y, bool shift) {
         pedir_dibujo();
         return;
     }
+    if (click_visor_estado(x, y)) {
+        pedir_dibujo();
+        return;
+    }
     if (x < ancho_lista) {
         if (y < 60 && x > ancho_lista - 56) {
             ventana_ajustes::abrir(hwnd);
+            return;
+        }
+        if (y < 60 && !reenviando && x < ancho_lista - 86) {
+            // Las tabs.
+            if (x >= tab_status_x0 && x < tab_status_x1) abrir_tab_estados(true);
+            else if (x >= 14 && x < tab_status_x0 - 8) abrir_tab_estados(false);
+            return;
+        }
+        if (click_lista_estados(x, y)) {
+            pedir_dibujo();
             return;
         }
         if (y < 60 && x > ancho_lista - 86) {
@@ -2846,6 +2906,7 @@ void App::rueda(float x, float y, float delta) {
     float px = -delta / 120.0f * lineas * 40.0f;
     if (rueda_modal_reenvio(x, y, delta) || rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
     if (x < ancho_lista) lista.rodar(px);
+    else if (tab_estados) return;
     else if (cargando_todo) return;
     else if (panel_resultados_chat() && y > alto_cabecera() && y < g.alto - alto_pie) scroll_res_chat.rodar(px);
     else if (y > alto_cabecera() && y < g.alto - alto_pie) conv.rodar(px);
@@ -2898,6 +2959,10 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
     }
     if (vk == VK_ESCAPE) {
         escapar();
+        return;
+    }
+    if (tab_estados && !estado_de.empty() && (vk == VK_LEFT || vk == VK_RIGHT) && campo.texto.empty()) {
+        avanzar_estado(vk == VK_RIGHT ? +1 : -1);
         return;
     }
     if (ctrl && vk == 'F') {
@@ -3103,7 +3168,8 @@ bool App::sobre_clickeable(float x, float y) {
                (x > g.ancho - 50 && y < 50);
     }
     if (x < ancho_lista) {
-        if (y < 60) return x > ancho_lista - 86;              // menu de cuentas y engranaje
+        if (y < 60) return x > ancho_lista - 86 || (!reenviando && x >= 14 && x < tab_status_x1);  // tabs, menu, engranaje
+        if (tab_estados) return !fila_estado_en(y).empty();
         if (y < top_lista()) return false;                     // buscador
         int k = item_en(y);
         return k >= 0 && k < (int)items.size() && items[k].tipo != ItemLista::Titulo;
@@ -3114,6 +3180,7 @@ bool App::sobre_clickeable(float x, float y) {
     if (clickeable_llamada(x, y)) return true;
     if (llamada_activa && y >= CABECERA_H && y < top) return false;  // la barra de la llamada
     if (clickeable_busqueda_chat(x, y)) return true;
+    if (tab_estados) return clickeable_visor_estado(x, y);
     if (panel_resultados_chat() && y >= top && y < bottom) return false;
     if (y < top) return !chat_actual.empty() && !busca_chat_abierta;  // cabecera -> info
     if (y >= bottom) {

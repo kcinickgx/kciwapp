@@ -8,6 +8,12 @@ build date and commit show in ⋯ → About.
 
 First public release.
 
+- Status tab: the status chat leaves the chat list; a second tab (WhatsApp-style
+  icons) lists My status, Recent and Viewed per contact with segmented rings, and
+  a viewer on the right with progress bar, auto-advance, reply field and delete
+  for your own. Read receipts are sent only for the status being viewed.
+- About dialog (version, build date, commit, links) and a version number;
+  playback speed (1x/1.5x/2x) is remembered.
 - Business bot messages: buttons, lists, templates, native-flow buttons,
   product and order cards. They render inside the bubble and can be answered
   from the client (quick reply, list row, open link, copy phone/code).
