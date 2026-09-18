@@ -195,7 +195,7 @@ bool App::panel_resultados_chat() const { return busca_chat_abierta && elegido_c
 
 // Clicks de la cabecera (lupa/cruz/campo/flechas) y del panel de resultados.
 bool App::click_busqueda_chat(float x, float y, bool shift) {
-    if (chat_actual.empty() || x < ancho_lista || info_abierto) return false;
+    if (chat_actual.empty() || x < ancho_lista || info_abierto || tab_estados) return false;
     float xc = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie;
     if (y < top) {
         // "Cargar todo" (a la derecha de la lupa) y la lupa (o la cruz cuando esta abierta).
@@ -240,7 +240,7 @@ bool App::click_busqueda_chat(float x, float y, bool shift) {
 }
 
 bool App::clickeable_busqueda_chat(float x, float y) const {
-    if (chat_actual.empty() || x < ancho_lista || info_abierto) return false;
+    if (chat_actual.empty() || x < ancho_lista || info_abierto || tab_estados) return false;
     float xc = x_conv(), W = w_conv(), top = alto_cabecera(), bottom = g.alto - alto_pie;
     if (y < top) {
         if (busca_chat_abierta) {

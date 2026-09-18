@@ -2970,7 +2970,7 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
     }
     if (ctrl && vk == 'F') {
         // Con un chat abierto se busca ahi; sin chat, en la lista.
-        if (!chat_actual.empty() && !info_abierto) abrir_busqueda_chat();
+        if (!chat_actual.empty() && !info_abierto && !tab_estados) abrir_busqueda_chat();
         else {
             buscador.foco = true;
             campo.foco = false;

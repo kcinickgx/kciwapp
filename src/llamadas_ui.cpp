@@ -114,7 +114,7 @@ bool App::click_llamada(float x, float y) {
     float xc = x_conv(), W = w_conv(), top = alto_cabecera();
     // Botones de la cabecera.
     const Chat* c = chat_de(chat_actual);
-    if (y < top && c && !c->es_grupo && !es_estado() && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa) {
+    if (y < top && c && !c->es_grupo && !es_estado() && !tab_estados && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa) {
         if (x >= xc + W - 144 && x < xc + W - 108) {
             iniciar_llamada(true);
             return true;
@@ -131,7 +131,7 @@ bool App::clickeable_llamada(float x, float y) const {
     if (x < ancho_lista || info_abierto || visor) return false;
     float xc = x_conv(), W = w_conv(), top = alto_cabecera();
     const Chat* c = chat_de(chat_actual);
-    if (y < top && c && !c->es_grupo && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa)
+    if (y < top && c && !c->es_grupo && !tab_estados && llamadas_disponibles() && !busca_chat_abierta && !seleccionando && !llamada_activa)
         return x >= xc + W - 184 && x < xc + W - 108;
     return false;
 }
