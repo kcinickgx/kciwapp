@@ -78,7 +78,10 @@ struct Mensaje {
     std::vector<Reaccion> reacciones;
     std::shared_ptr<Botones> botones;  // si es interactivo
     std::wstring traduccion;           // hecha con el traductor local (cache); "" si no
+    std::wstring traduccion_idioma;    // a que idioma; si no es el de settings, es como si no existiera
     bool traduccion_oculta = false;
+    // La traduccion vale solo si es al idioma elegido ahora.
+    bool tiene_traduccion(const std::wstring& idioma) const { return !traduccion.empty() && traduccion_idioma == idioma; }
     std::string botones_json;          // tal cual vino, para la cache
 
     static Mensaje de_json(const Json& j);
@@ -403,6 +406,9 @@ struct App {
     bool traductor_disponible() const;
     void traducir(int i);
     void alternar_traduccion(int i);
+    // El iconito de traducir arriba a la derecha de la burbuja (un click).
+    bool boton_traducir_en(int i, float ym, float x, float y) const;
+    void click_traducir(int i);
     void rearmar_mensaje(int i);
     static void cerrar_traductor();
     bool whisper_disponible() const;

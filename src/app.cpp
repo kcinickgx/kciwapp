@@ -1504,7 +1504,7 @@ void App::armar_vista_core(const Mensaje& m, const Mensaje* anterior, bool es_gr
         ancho_contenido = std::max(ancho_contenido, hora_w + 8);
     }
     // La traduccion: en cursiva y atenuada, separada por una linea.
-    if (!m.traduccion.empty() && !m.traduccion_oculta && !m.borrado) {
+    if (m.tiene_traduccion(ajustes::actual().idioma_traduccion) && !m.traduccion_oculta && !m.borrado) {
         v.trad = g.texto(m.traduccion, letra_chat - 0.5f, interior, DWRITE_FONT_WEIGHT_NORMAL);
         if (v.trad) {
             v.trad->SetFontStyle(DWRITE_FONT_STYLE_ITALIC, {0, (UINT32)m.traduccion.size()});
@@ -2559,6 +2559,14 @@ void App::dibujar_mensaje(size_t i, float y) {
         g.linea(bx + PAD_X, by + v.trad_y - 4, bx + v.bw - PAD_X, by + v.trad_y - 4, Color(BORDE()));
         g.dibujar_texto(v.trad.Get(), bx + PAD_X, by + v.trad_y, Color(TXT_DIM()));
     }
+    if (msg_bajo_mouse == (int)i && !seleccionando && !m.borrado && traductor_disponible() && (!m.texto.empty() || !m.texto_oculto.empty())) {
+        // Un click traduce (o muestra/esconde la traduccion que ya esta).
+        bool hecha = m.tiene_traduccion(ajustes::actual().idioma_traduccion);
+        float cx = m.propio ? bx - 22 - 34 : bx + v.bw + 22 + 34, cy = by + v.bh / 2;
+        g.circulo(cx, cy, 14, Color(BG_PANEL()));
+        g.borde_redondo(cx - 14, cy - 14, 28, 28, 14, Color(BORDE()), 1.0f);
+        g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE8C1", cx - 7, cy - 7, 14, Color(hecha && !m.traduccion_oculta ? ACCENT() : TXT_DIM()));
+    }
     // Hora y tildes
     float hx = bx + v.hora_x, hy = by + v.hora_y;
     bool sobre_media = !v.texto && v.mw > 0 && con_imagen(m.tipo);
@@ -2877,6 +2885,11 @@ void App::raton_abajo(float x, float y, bool shift) {
     sel_msg = -1;
     float ym = 0;
     int i = mensaje_en(y, &ym);
+    if (i >= 0 && boton_traducir_en(i, ym, x, y)) {
+        click_traducir(i);
+        pedir_dibujo();
+        return;
+    }
     if (i >= 0 && boton_en(i, ym, x, y) >= 0) {
         click_boton(i, boton_en(i, ym, x, y));
         pedir_dibujo();
@@ -3247,6 +3260,7 @@ bool App::sobre_clickeable(float x, float y) {
     if (i < 0) return false;
     if (!enlace_en(i, ym, x, y).empty()) return true;
     if (boton_en(i, ym, x, y) >= 0) return true;
+    if (boton_traducir_en(i, ym, x, y)) return true;
     const VistaMensaje& v = vistas[i];
     float mx = x_conv() + v.bx + v.mx, my = ym + v.by + v.my;
     float qx = x_conv() + v.bx + PAD_X, qy = ym + v.by + v.cita_y;

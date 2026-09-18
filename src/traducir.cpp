@@ -131,6 +131,7 @@ void App::traducir(int i) {
     aviso_estado = g_estado == 2 ? L"Translating..." : L"Loading the translation model...";
     pedir_dibujo();
     std::string chat = m.chat, id = m.id, original = angosto(texto), idioma = idioma_destino();
+    m.traduccion.clear();  // si habia una a otro idioma, se reemplaza
     red::en_fondo([this, chat, id, original, idioma] {
         std::wstring error;
         std::string traduccion;
@@ -151,8 +152,8 @@ void App::traducir(int i) {
                 if (traduccion.empty()) error = L"Empty translation";
             }
         }
-        if (error.empty()) cache::guardar_traduccion(chat, id, traduccion);
-        red::en_ui([this, chat, id, traduccion, error] {
+        if (error.empty()) cache::guardar_traduccion(chat, id, traduccion, idioma);
+        red::en_ui([this, chat, id, traduccion, error, idioma] {
             traduciendo.erase(id);
             aviso_estado = error;
             for (size_t k = 0; k < mensajes.size(); k++) {
@@ -160,6 +161,7 @@ void App::traducir(int i) {
                 if (x.chat != chat || x.id != id) continue;
                 if (error.empty()) {
                     x.traduccion = ancho(traduccion);
+                    x.traduccion_idioma = ancho(idioma);
                     x.traduccion_oculta = false;
                     rearmar_mensaje((int)k);
                 }
@@ -170,9 +172,25 @@ void App::traducir(int i) {
     });
 }
 
+bool App::boton_traducir_en(int i, float ym, float x, float y) const {
+    if (i < 0 || i >= (int)vistas.size() || i >= (int)mensajes.size() || msg_bajo_mouse != i || seleccionando) return false;
+    const Mensaje& m = mensajes[i];
+    if (m.borrado || (m.texto.empty() && m.texto_oculto.empty()) || !traductor_disponible()) return false;
+    const VistaMensaje& v = vistas[i];
+    float cx = m.propio ? x_conv() + v.bx - 22 - 34 : x_conv() + v.bx + v.bw + 22 + 34, cy = ym + v.by + v.bh / 2;
+    return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= 15 * 15;
+}
+
+// El iconito: traduce si no esta, si no muestra/esconde.
+void App::click_traducir(int i) {
+    if (i < 0 || i >= (int)mensajes.size()) return;
+    if (mensajes[i].tiene_traduccion(ajustes::actual().idioma_traduccion)) alternar_traduccion(i);
+    else traducir(i);
+}
+
 // Muestra/esconde la traduccion ya hecha.
 void App::alternar_traduccion(int i) {
-    if (i < 0 || i >= (int)mensajes.size() || mensajes[i].traduccion.empty()) return;
+    if (i < 0 || i >= (int)mensajes.size() || !mensajes[i].tiene_traduccion(ajustes::actual().idioma_traduccion)) return;
     mensajes[i].traduccion_oculta = !mensajes[i].traduccion_oculta;
     rearmar_mensaje(i);
     pedir_dibujo();
