@@ -34,6 +34,26 @@ void App::cargar_estados_pendientes() {
         if (!m.propio && !m.borrado && m.ts >= limite && !estados_vistos.count(m.id)) estados_sin_ver.insert(m.id);
 }
 
+// La cache solo tiene lo que se abrio alguna vez: el dia de hoy se pide
+// tambien al server (y queda en la cache). Se llama cuando el server ya
+// respondio la lista de chats.
+void App::pedir_estados_pendientes() {
+    long long limite = ahora_ms() - UN_DIA;
+    red::en_fondo([this, limite] {
+        Respuesta r = red::obtener(L"/mensajes?chat=status@broadcast&limite=500&desde=" + std::to_wstring(limite), 30000);
+        if (!r.ok()) return;
+        Json j = Json::parsear(r.cuerpo);
+        std::vector<Mensaje> lista;
+        for (size_t i = 0; i < j.largo(); i++) lista.push_back(Mensaje::de_json(j[i]));
+        cache::guardar_mensajes(lista);
+        red::en_ui([this, lista] {
+            for (const Mensaje& m : lista)
+                if (!m.propio && !m.borrado && !estados_vistos.count(m.id)) estados_sin_ver.insert(m.id);
+            pedir_dibujo();
+        });
+    });
+}
+
 bool App::respondiendo_estado() const { return tab_estados && !estado_de.empty() && estado_de != mi_jid; }
 
 // Entrar o salir de la tab. Al entrar se abre (escondido) el chat de estados

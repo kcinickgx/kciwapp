@@ -443,6 +443,7 @@ void App::cargar_chats() {
                 seq_eventos = guardado.empty() ? je["seq"].entero() : atoll(guardado.c_str());
                 escuchando = true;
                 escuchar_eventos();
+                pedir_estados_pendientes();
             }
             aviso_estado = (conectado || modo_demo) ? L"" : L"Server not connected to WhatsApp";
             bool logueado = modo_demo || je["logueado"].bul(true);
