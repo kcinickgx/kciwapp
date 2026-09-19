@@ -104,6 +104,14 @@ var esquemaSQLite = []string{
 		ts        INTEGER NOT NULL,
 		PRIMARY KEY (chat, mensaje, remitente)
 	)`,
+	`CREATE TABLE IF NOT EXISTS acuses (
+		chat         TEXT NOT NULL,
+		mensaje      TEXT NOT NULL,
+		participante TEXT NOT NULL,
+		estado       INTEGER NOT NULL,
+		ts           INTEGER NOT NULL,
+		PRIMARY KEY (chat, mensaje, participante)
+	)`,
 	`CREATE TABLE IF NOT EXISTS media (
 		id        INTEGER PRIMARY KEY AUTOINCREMENT,
 		chat      TEXT NOT NULL,

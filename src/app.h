@@ -428,6 +428,26 @@ struct App {
     // Cierra y vuelve a abrir el cliente con otra cuenta.
     void cambiar_cuenta(int i);
     void menu_cuentas(float x, float y);
+    // "Message info" (info_msg_ui.cpp): quien leyo/recibio un mensaje mio.
+    struct Acuse {
+        std::string quien;
+        int estado = 0;
+        long long ts = 0;
+    };
+    bool info_msg_abierto = false, info_msg_cargando = false;
+    std::string info_msg_chat, info_msg_id;
+    long long info_msg_ts = 0;
+    std::vector<Acuse> info_msg_acuses;
+    std::vector<std::string> info_msg_miembros;
+    Desplazable info_msg_scroll;
+    void abrir_info_mensaje(int i);
+    void cerrar_info_mensaje();
+    void acuse_para_info(const std::string& chat, const std::string& id, const std::string& quien, int estado, long long ts);
+    void armar_secciones_info(std::vector<std::pair<std::wstring, std::vector<std::pair<std::wstring, std::wstring>>>>& secciones);
+    void dibujar_info_mensaje();
+    bool click_info_mensaje(float x, float y);
+    bool sobre_info_mensaje(float x, float y) const;
+    bool rueda_info_mensaje(float x, float y, float delta);
     // El chat de estados (status@broadcast): lo que se manda ahi es un estado
     // (salvo que el visor este respondiendo a un estado ajeno).
     bool es_estado() const { return chat_actual == "status@broadcast" && !respondiendo_estado(); }

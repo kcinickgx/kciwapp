@@ -498,14 +498,19 @@ func acuse(r *events.Receipt) {
 	default:
 		return
 	}
+	// Quien: en un grupo/estado el participante; en un chat comun, el otro.
+	quien := normalizar(r.Sender)
+	if r.Chat.Server != types.GroupServer && r.Chat.Server != types.BroadcastServer {
+		quien = chat
+	}
+	ts := r.Timestamp.UnixMilli()
 	for _, id := range r.MessageIDs {
-		res, err := db.Exec("UPDATE mensajes SET estado = ? WHERE chat = ? AND id_wa = ? AND propio = 1 AND estado < ?", estado, chat, id, estado)
-		if err != nil {
-			continue
-		}
-		if n, _ := res.RowsAffected(); n > 0 {
-			evento("acuse", chat, map[string]any{"id": id, "estado": estado})
-		}
+		// El detalle: sube (entregado -> leido -> escuchado), nunca baja.
+		db.Exec(`INSERT INTO acuses (chat, mensaje, participante, estado, ts) VALUES (?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE estado = GREATEST(estado, VALUES(estado)), ts = IF(VALUES(estado) > estado, VALUES(ts), ts)`,
+			chat, id, quien, estado, ts)
+		evento("acuse", chat, map[string]any{"id": id, "estado": estado, "quien": quien, "ts": ts})
+		db.Exec("UPDATE mensajes SET estado = ? WHERE chat = ? AND id_wa = ? AND propio = 1 AND estado < ?", estado, chat, id, estado)
 	}
 }
 

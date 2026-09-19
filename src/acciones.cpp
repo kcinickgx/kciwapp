@@ -16,7 +16,7 @@ namespace {
 
 
 enum IdMenu {
-    M_RESPONDER = 1, M_COPIAR, M_REENVIAR, M_EDITAR, M_BORRAR, M_ABRIR, M_GUARDAR, M_MOSTRAR, M_COPIAR_MEDIA, M_TRADUCIR, M_TRADUCCION,
+    M_RESPONDER = 1, M_COPIAR, M_REENVIAR, M_EDITAR, M_BORRAR, M_ABRIR, M_GUARDAR, M_MOSTRAR, M_COPIAR_MEDIA, M_TRADUCIR, M_TRADUCCION, M_INFO,
     M_REACCION = 100  // + indice
 };
 
@@ -232,6 +232,7 @@ void App::menu_contextual(int i) {
         else items.push_back({m.traduccion_oculta ? L"Show translation" : L"Hide translation", M_TRADUCCION, L"\uE8C1"});
     }
     if (!m.borrado) items.push_back({L"Forward", M_REENVIAR, L"\uE72A"});
+    if (m.propio && !m.borrado) items.push_back({L"Message info", M_INFO, L"\uE946"});
     if (m.propio && !m.borrado && !m.media && !m.texto.empty() && !es_estado()) items.push_back({L"Edit", M_EDITAR, L"\uE70F"});
     if (m.media && !m.borrado) {
         items.push_back({L"", 0, nullptr, true});
@@ -249,6 +250,7 @@ void App::menu_contextual(int i) {
         campo.foco = true;
         switch (id) {
             case M_RESPONDER: responder(i); break;
+            case M_INFO: abrir_info_mensaje(i); break;
             case M_COPIAR: copiar_mensaje(i); break;
             case M_REENVIAR: reenviar(i); break;
             case M_EDITAR: editar(i); break;

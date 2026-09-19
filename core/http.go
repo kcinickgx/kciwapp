@@ -31,6 +31,7 @@ func servirHTTP() {
 	mux.HandleFunc("GET /chats", conToken(hChats))
 	mux.HandleFunc("GET /contactos", conToken(hContactos))
 	mux.HandleFunc("GET /miembros", conToken(hMiembros))
+	mux.HandleFunc("GET /acuses", conToken(hAcuses))
 	mux.HandleFunc("GET /mensajes", conToken(hMensajes))
 	mux.HandleFunc("GET /buscar", conToken(hBuscar))
 	mux.HandleFunc("GET /cantidad", conToken(hCantidad))
@@ -214,6 +215,31 @@ func hMiembros(w http.ResponseWriter, r *http.Request) {
 		var m miembro
 		if filas.Scan(&m.JID, &m.Admin) == nil {
 			lista = append(lista, m)
+		}
+	}
+	responder(w, lista)
+}
+
+// GET /acuses?chat=&id=: quien recibio/leyo ese mensaje mio, con hora
+// (estado 2 entregado, 3 leido/reproducido).
+func hAcuses(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filas, err := db.Query("SELECT participante, estado, ts FROM acuses WHERE chat = ? AND mensaje = ? ORDER BY ts", q.Get("chat"), q.Get("id"))
+	if err != nil {
+		fallar(w, 500, err)
+		return
+	}
+	defer filas.Close()
+	type acuse struct {
+		Quien  string `json:"quien"`
+		Estado int    `json:"estado"`
+		TS     int64  `json:"ts"`
+	}
+	lista := []acuse{}
+	for filas.Next() {
+		var a acuse
+		if filas.Scan(&a.Quien, &a.Estado, &a.TS) == nil {
+			lista = append(lista, a)
 		}
 	}
 	responder(w, lista)

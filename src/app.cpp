@@ -987,6 +987,7 @@ bool App::aplicar_evento(const Json& e) {
     } else if (tipo == "acuse") {
         std::string id = d["id"].str();
         int estado = (int)d["estado"].entero();
+        acuse_para_info(chat, id, d["quien"].str(), estado, d["ts"].entero());
         cache::poner_estado(chat, id, estado);
         for (auto& c : chats)
             if (c.jid == chat && c.ultimo && c.ultimo->id == id) c.ultimo->estado = std::max(c.ultimo->estado, estado);
@@ -1702,6 +1703,7 @@ void App::dibujar() {
     dibujar_emojis();
     dibujar_visor();
     dibujar_modal_reenvio();
+    dibujar_info_mensaje();
     dibujar_menu();
     dibujar_modal_actualizacion();
     g.terminar_frame();
@@ -2701,6 +2703,8 @@ void App::raton_abajo(float x, float y, bool shift) {
     if (cargando_todo && x >= ancho_lista) return;
     if (actualizando) return;
     if (click_modal_actualizacion(x, y)) return;
+    if (click_menu(x, y)) return;
+    if (click_info_mensaje(x, y)) return;
     if (click_configuracion(x, y, shift)) return;
     if (click_selector(x, y)) return;
     if (click_menu(x, y)) return;
@@ -2963,7 +2967,7 @@ void App::rueda(float x, float y, float delta) {
     UINT lineas = 3;
     SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lineas, 0);
     float px = -delta / 120.0f * lineas * 40.0f;
-    if (rueda_modal_reenvio(x, y, delta) || rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
+    if (rueda_info_mensaje(x, y, delta) || rueda_modal_reenvio(x, y, delta) || rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
     if (x < ancho_lista) lista.rodar(px);
     else if (tab_estados) return;
     else if (cargando_todo) return;
@@ -2975,6 +2979,10 @@ void App::rueda(float x, float y, float delta) {
 void App::tecla(WPARAM vk, bool shift, bool ctrl) {
     if (actualizando) return;
     if (tecla_modal_actualizacion(vk)) return;
+    if (info_msg_abierto) {
+        if (vk == VK_ESCAPE) cerrar_info_mensaje();
+        return;
+    }
     if (tecla_configuracion(vk, shift, ctrl)) return;
     if (selector_pendiente) return;
     if (vk == VK_F9) {
@@ -3107,7 +3115,7 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
 }
 
 void App::caracter(wchar_t c) {
-    if (actualizando || modal_actualizacion) return;
+    if (actualizando || modal_actualizacion || info_msg_abierto) return;
     if (caracter_configuracion(c)) return;
     if (selector_pendiente) return;
     if (buscador_chat.foco) {
@@ -3228,6 +3236,7 @@ bool App::sobre_campo(float x, float y) const {
 bool App::sobre_clickeable(float x, float y) {
     if (actualizando) return false;
     if (modal_actualizacion) return sobre_modal_actualizacion(x, y);
+    if (info_msg_abierto && !menu_abierto) return sobre_info_mensaje(x, y);
     if (sin_sesion && !menu_abierto) return y < 50 && x > g.ancho - 56;
     if (config_pendiente) return clickeable_configuracion(x, y);
     if (selector_pendiente) return clickeable_selector(x, y);

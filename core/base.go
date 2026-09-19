@@ -64,6 +64,16 @@ var esquema = []string{
 		ts        BIGINT NOT NULL,
 		PRIMARY KEY (chat, mensaje, remitente)
 	)`,
+	// Quien recibio/leyo/escucho cada mensaje mio (el "Message info" del
+	// telefono): en grupos y estados llega uno por participante.
+	`CREATE TABLE IF NOT EXISTS acuses (
+		chat         VARCHAR(64) NOT NULL,
+		mensaje      VARCHAR(64) NOT NULL,
+		participante VARCHAR(64) NOT NULL,
+		estado       TINYINT NOT NULL,
+		ts           BIGINT NOT NULL,
+		PRIMARY KEY (chat, mensaje, participante)
+	)`,
 	`CREATE TABLE IF NOT EXISTS media (
 		id        BIGINT AUTO_INCREMENT PRIMARY KEY,
 		chat      VARCHAR(64) NOT NULL,
