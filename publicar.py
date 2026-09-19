@@ -118,15 +118,18 @@ def main():
             return 1
     r = gh('release', 'view', TAG, '-R', REPO, '--json', 'assets')
     assets = {a['name'] for a in json.loads(r.stdout)['assets']} if r.returncode == 0 else set()
+    # Lo ya publicado, segun los dos manifiestos (sin el de translate se
+    # volvian a subir los 27 archivos de llama.cpp en cada corrida).
     publicado = {}
-    try:
-        with urllib.request.urlopen(BASE + MANIFIESTO) as r:
-            for linea in r.read().decode('utf-8').splitlines():
-                partes = linea.split(' ', 3)
-                if len(partes) == 4:
-                    publicado[partes[3]] = partes[0]
-    except Exception:
-        pass
+    for manifiesto in (MANIFIESTO, MANIFIESTO_TRADUCTOR):
+        try:
+            with urllib.request.urlopen(BASE + manifiesto) as r:
+                for linea in r.read().decode('utf-8').splitlines():
+                    partes = linea.split(' ', 3)
+                    if len(partes) == 4:
+                        publicado[partes[3]] = partes[0]
+        except Exception:
+            pass
     # Subir lo que cambio, con el nombre plano.
     tmp = tempfile.mkdtemp(prefix='kciwapp-pub-')
     subidos = 0
