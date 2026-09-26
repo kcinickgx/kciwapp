@@ -328,7 +328,7 @@ void App::iniciar(HWND h) {
         // La busqueda en el server espera a que dejes de escribir.
         SetTimer(hwnd, 3, 250, nullptr);
     };
-    buscador.al_enviar = [this] { buscar_ahora(); };
+    buscador.al_enviar = [this] { enter_buscador(); };
     buscador.al_escapar = [this] { escapar(); };
     reproductor_ok = reproductor.iniciar(carpeta_exe());
     reproductor.al_cambiar = [this] { red::en_ui([this] { pedir_dibujo(); }); };

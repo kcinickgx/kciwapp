@@ -638,6 +638,9 @@ struct App {
     int salto_intentos = 0;
     void intentar_salto();
     void buscar_ahora();
+    // Enter en el buscador de la lista: abre el primero y cierra el buscador.
+    void enter_buscador();
+    void cerrar_buscador();
     void buscar_mas();
     void abrir_busqueda_chat();
     void cerrar_busqueda_chat();

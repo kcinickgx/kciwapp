@@ -451,6 +451,43 @@ void App::intentar_salto() {
 
 // ---- busqueda -------------------------------------------------------------
 
+// Enter en el buscador de la lista: al primer contacto que coincide (o, si
+// no hay ninguno, al primer mensaje encontrado), con el buscador cerrado y
+// el cursor listo en el campo de escribir.
+void App::enter_buscador() {
+    std::wstring q = buscador.texto;
+    while (!q.empty() && q.back() == L' ') q.pop_back();
+    if (q.empty()) return;  // vacio: Enter no abre el primer chat de la lista
+    armar_items();
+    for (const ItemLista& it : items) {
+        if (it.tipo == ItemLista::ChatItem) {
+            std::string jid = chats[it.idx].jid;
+            cerrar_buscador();
+            abrir_chat(jid);
+            pedir_dibujo();
+            return;
+        }
+        if (it.tipo == ItemLista::Resultado) {
+            Mensaje m = resultados[it.idx];
+            cerrar_buscador();
+            ir_a_mensaje(m.chat, m.id, m.ts);
+            pedir_dibujo();
+            return;
+        }
+    }
+    // Todavia no hay nada: que al menos empiece a buscar en los mensajes.
+    buscar_ahora();
+}
+
+void App::cerrar_buscador() {
+    buscador.poner(L"");
+    ultima_busqueda.clear();
+    resultados.clear();
+    items.clear();
+    buscador.foco = false;
+    campo.foco = true;
+}
+
 void App::buscar_ahora() {
     std::wstring q = buscador.texto;
     while (!q.empty() && q.back() == L' ') q.pop_back();
@@ -1006,11 +1043,7 @@ void App::escapar() {
     } else if (adjunto) {
         adjunto.reset();
     } else if (buscador.foco) {
-        buscador.poner(L"");
-        ultima_busqueda.clear();
-        resultados.clear();
-        buscador.foco = false;
-        campo.foco = true;
+        cerrar_buscador();
     } else if (sel_msg >= 0) {
         sel_msg = -1;
     }
