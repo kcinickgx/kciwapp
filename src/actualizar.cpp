@@ -295,8 +295,10 @@ void bajar(const std::wstring& carpeta_exe, std::function<void()> progreso, std:
         for (const Archivo& a : lista) {
             std::wstring destino = carpeta_exe + L"\\" + a.ruta + L".nuevo";
             size_t corte = destino.find_last_of(L'\\');
-            // Las carpetas intermedias (una nueva en el paquete).
-            for (size_t i = carpeta_exe.size() + 1; i < corte; i++)
+            // Las carpetas intermedias, incluida la ultima (una carpeta
+            // nueva en el paquete): el separador de antes del nombre tambien
+            // cuenta, si no la carpeta no se crea y el archivo falla.
+            for (size_t i = carpeta_exe.size() + 1; i <= corte && corte != std::wstring::npos; i++)
                 if (destino[i] == L'\\') CreateDirectoryW(destino.substr(0, i).c_str(), nullptr);
             con_estado([&](Estado& e) { e.actual = a.ruta; });
             ULONGLONG ultimo_aviso = 0;
@@ -313,6 +315,7 @@ void bajar(const std::wstring& carpeta_exe, std::function<void()> progreso, std:
                 bien = false;
             }
             if (!bien) {
+                red::registrar("actualizar: fallo " + angosto(a.ruta) + " (error " + std::to_string(GetLastError()) + ")");
                 DeleteFileW(destino.c_str());
                 ok = false;
                 con_estado([&](Estado& e) { e.error = L"Download failed: " + a.ruta; });

@@ -14,7 +14,7 @@ import urllib.request
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, 'portable', 'emoji.txt')
 FUENTES_TTF = [r'C:\Windows\Fonts\seguiemj.ttf',
-               os.path.join(RAIZ, 'portable', 'fuentes', 'TwemojiMozilla.ttf')]  # las banderas
+               os.path.join(RAIZ, 'portable', 'TwemojiMozilla.ttf')]  # las banderas
 VERSION = sys.argv[1] if len(sys.argv) > 1 else 'latest'
 URL = f'https://unicode.org/Public/emoji/{VERSION}/emoji-test.txt'
 

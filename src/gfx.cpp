@@ -118,7 +118,7 @@ IDWriteFontFallback* Gfx::fallback() {
     GetModuleFileNameW(nullptr, exe, MAX_PATH);
     std::wstring ttf = exe;
     size_t corte = ttf.find_last_of(L'\\');
-    ttf = (corte == std::wstring::npos ? L"." : ttf.substr(0, corte)) + L"\\fuentes\\TwemojiMozilla.ttf";
+    ttf = (corte == std::wstring::npos ? L"." : ttf.substr(0, corte)) + L"\\TwemojiMozilla.ttf";
     if (GetFileAttributesW(ttf.c_str()) != INVALID_FILE_ATTRIBUTES) {
         // IDWriteFontSetBuilder1 (dwrite_3) es el que toma un archivo entero.
         ComPtr<IDWriteFontSetBuilder> juego;

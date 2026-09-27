@@ -15,7 +15,7 @@ compiled into the Go core/server.
 | Whisper large-v3-turbo model (`whisper\ggml-large-v3-turbo.bin`) | downloaded from the official Hugging Face repo, not redistributed here | MIT (OpenAI Whisper weights, converted by ggerganov) | https://huggingface.co/ggerganov/whisper.cpp |
 | NVIDIA CUDA runtime (`whisper\cublas64_12.dll`, `cublasLt64_12.dll`, `nvrtc*.dll`) | needed by whisper.cpp on NVIDIA GPUs | NVIDIA CUDA Toolkit EULA (redistributable runtime libraries) | https://docs.nvidia.com/cuda/eula/ |
 | WebView2Loader.dll | loads the Edge WebView2 runtime for calls | Microsoft Edge WebView2 license (redistributable) | https://developer.microsoft.com/microsoft-edge/webview2/ |
-| Twemoji Mozilla (`fuentes\TwemojiMozilla.ttf`) | COLR font shipped with the client, used only for country flags (no Windows font draws them) | Font build MIT (Mozilla `twemoji-colr`), artwork CC-BY 4.0 (Twemoji) | https://github.com/mozilla/twemoji-colr |
+| Twemoji Mozilla (`TwemojiMozilla.ttf`) | COLR font shipped with the client, used only for country flags (no Windows font draws them) | Font build MIT (Mozilla `twemoji-colr`), artwork CC-BY 4.0 (Twemoji) | https://github.com/mozilla/twemoji-colr |
 | Segoe UI / Segoe MDL2 Assets / Segoe UI Emoji | system fonts, not shipped | Windows | — |
 
 WhatsApp is a trademark of Meta Platforms, Inc. kciwapp is an independent,
