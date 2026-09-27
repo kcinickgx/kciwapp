@@ -7,6 +7,7 @@
 #include "cuentas.h"
 #include "red.h"
 #include "tema.h"
+#include "ventana_ajustes.h"
 
 namespace {
 
@@ -421,12 +422,15 @@ void App::menu_cuentas(float x, float y) {
     if (!items.empty()) items.push_back({L"", 0, nullptr, true});
     items.push_back({L"Add account", 1000, L""});
     items.push_back({L"", 0, nullptr, true});
+    items.push_back({L"Settings", 1004, L""});
+    items.push_back({L"", 0, nullptr, true});
     items.push_back({L"Check for updates", 1001, L""});
     items.push_back({L"About kciwapp", 1002, L""});
     abrir_menu(std::move(items), x, y, [this](int id) {
         if (id == 1000) empezar_configuracion();
         else if (id == 1001) verificar_actualizacion(true);
         else if (id == 1002) abrir_about();
+        else if (id == 1004) ventana_ajustes::abrir(hwnd);
         else if (id >= 1 && id - 1 != cuentas::activa()) cambiar_cuenta(id - 1);
         pedir_dibujo();
     });
