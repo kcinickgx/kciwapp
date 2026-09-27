@@ -1670,6 +1670,9 @@ void App::dibujar() {
     lista.animar(dt);
     conv.animar(dt);
     scroll_res_chat.animar(dt);
+    // Los paneles (emojis, reenviar, info del contacto, info del mensaje).
+    bool moviendo = emoji_scroll.animar(dt) | scroll_reenvio.animar(dt) | info_scroll.animar(dt) | info_msg_scroll.animar(dt);
+    if (moviendo) pedir_dibujo();
     encadenar_audio();
     necesita_dibujar = false;
 
