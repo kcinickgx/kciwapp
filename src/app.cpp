@@ -72,13 +72,19 @@ std::vector<VistaMensaje::Enlace> buscar_enlaces(const std::wstring& t) {
 // Los modificadores (tono de piel, VS16, ZWJ, keycaps) no cuentan.
 int solo_emojis(const std::wstring& t) {
     int n = 0;
+    bool regional = false;  // la mitad de una bandera (van de a dos)
+    bool tras_zwj = false;  // lo que sigue a un ZWJ es parte del mismo emoji
     for (size_t i = 0; i < t.size(); i++) {
         unsigned cp = t[i];
         if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < t.size()) {
             cp = 0x10000 + ((cp - 0xD800) << 10) + (t[i + 1] - 0xDC00);
             i++;
         }
-        if (cp == 0xFE0F || cp == 0x200D || cp == 0x20E3 || (cp >= 0x1F3FB && cp <= 0x1F3FF) || (cp >= 0xE0020 && cp <= 0xE007F)) continue;
+        if (cp == 0x200D) {
+            tras_zwj = true;
+            continue;
+        }
+        if (cp == 0xFE0F || cp == 0x20E3 || (cp >= 0x1F3FB && cp <= 0x1F3FF) || (cp >= 0xE0020 && cp <= 0xE007F)) continue;
         if (cp == ' ') continue;
         bool emoji = (cp >= 0x1F000 && cp <= 0x1FAFF) || (cp >= 0x2600 && cp <= 0x27BF) || (cp >= 0x2B00 && cp <= 0x2BFF) ||
                      cp == 0x2122 || cp == 0x2139 || (cp >= 0x2194 && cp <= 0x21AA) || cp == 0x231A || cp == 0x231B ||
@@ -86,6 +92,16 @@ int solo_emojis(const std::wstring& t) {
                      cp == 0x25AB || cp == 0x25B6 || cp == 0x25C0 || (cp >= 0x25FB && cp <= 0x25FE) || cp == 0x3030 ||
                      cp == 0x303D || cp == 0x3297 || cp == 0x3299 || cp == 0xA9 || cp == 0xAE;
         if (!emoji) return 0;
+        bool ri = cp >= 0x1F1E6 && cp <= 0x1F1FF;
+        // Una bandera son dos letras, y lo pegado con ZWJ (familias, etc.)
+        // es un solo emoji: si no, nunca se agrandaban.
+        if ((ri && regional) || tras_zwj) {
+            regional = ri && !regional;
+            tras_zwj = false;
+            continue;
+        }
+        regional = ri;
+        tras_zwj = false;
         n++;
     }
     return n;
