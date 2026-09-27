@@ -603,7 +603,7 @@ struct App {
     bool menu_abierto = false;
     std::vector<ItemMenu> menu_items;
     std::function<void(int)> menu_accion;
-    float menu_x = 0, menu_y = 0;
+    float menu_x = 0, menu_y = 0, menu_w = 220;  // el ancho lo manda el item mas largo
     void abrir_menu(std::vector<ItemMenu> items, float x, float y, std::function<void(int)> accion);
     void cerrar_menu();
     void dibujar_menu();
