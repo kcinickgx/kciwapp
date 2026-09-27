@@ -107,6 +107,27 @@ ID2D1SolidColorBrush* Gfx::pincel(Color c) {
     return p.Get();
 }
 
+// La tabla de reemplazo de fuentes: primero la nuestra (los bloques de
+// emoji van a Segoe UI Emoji), despues la del sistema para todo lo demas.
+IDWriteFontFallback* Gfx::fallback() {
+    if (fallback_emoji) return fallback_emoji.Get();
+    ComPtr<IDWriteFontFallbackBuilder> armador;
+    if (FAILED(dwrite->CreateFontFallbackBuilder(&armador))) return nullptr;
+    DWRITE_UNICODE_RANGE rangos[] = {
+        {0x1F000, 0x1FAFF},  // pictogramas, caritas, simbolos extendidos A y B
+        {0x1FC00, 0x1FFFF},  // lo que venga despues
+        // Los simbolos viejos (2600-27BF) no se tocan: ya andan, y ahi
+        // viven tildes y flechas que la interfaz dibuja como texto.
+        {0x1F1E6, 0x1F1FF},  // banderas
+    };
+    const wchar_t* familias[] = {L"Segoe UI Emoji"};
+    armador->AddMapping(rangos, ARRAYSIZE(rangos), familias, 1, nullptr, nullptr, nullptr, 1.0f);
+    ComPtr<IDWriteFontFallback> sistema;
+    if (SUCCEEDED(dwrite->GetSystemFontFallback(&sistema))) armador->AddMappings(sistema.Get());
+    armador->CreateFontFallback(&fallback_emoji);
+    return fallback_emoji.Get();
+}
+
 IDWriteTextFormat* Gfx::formato(float tamano, DWRITE_FONT_WEIGHT peso, const wchar_t* fuente) {
     std::wstring clave = fuente + std::to_wstring((int)(tamano * 10)) + L"/" + std::to_wstring((int)peso);
     std::lock_guard<std::mutex> candado(formatos_mu);
@@ -114,7 +135,11 @@ IDWriteTextFormat* Gfx::formato(float tamano, DWRITE_FONT_WEIGHT peso, const wch
     if (!f) {
         dwrite->CreateTextFormat(fuente, nullptr, peso, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, tamano,
                                  L"es-AR", &f);
-        if (f) f->SetWordWrapping(DWRITE_WORD_WRAPPING_EMERGENCY_BREAK);
+        if (f) {
+            f->SetWordWrapping(DWRITE_WORD_WRAPPING_EMERGENCY_BREAK);
+            ComPtr<IDWriteTextFormat1> f1;
+            if (SUCCEEDED(f.As(&f1)) && fallback()) f1->SetFontFallback(fallback());
+        }
     }
     return f.Get();
 }

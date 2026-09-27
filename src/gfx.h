@@ -105,6 +105,11 @@ struct Gfx {
 
    private:
     std::map<unsigned, ComPtr<ID2D1SolidColorBrush>> pinceles;
+    // Los emojis nuevos (Unicode 15/16) estan en Segoe UI Emoji pero la
+    // tabla de reemplazo del sistema no siempre los manda ahi y salen como
+    // cuadraditos: se arma una propia que mapea los bloques de emoji.
+    ComPtr<IDWriteFontFallback> fallback_emoji;
+    IDWriteFontFallback* fallback();
     std::map<std::wstring, ComPtr<IDWriteTextFormat>> formatos;
     std::mutex formatos_mu;
     std::vector<ComPtr<ID2D1Layer>> capas;
