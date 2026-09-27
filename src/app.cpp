@@ -1776,6 +1776,8 @@ void App::dibujar_lista() {
     // El engranaje de settings, arriba a la derecha de la lista.
     g.renglon(L"⚙", W - 42, 16, 22, Color(TXT_DIM()));
     g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE712", W - 74, 21, 16, Color(TXT_DIM()));
+    // A que parlante sale el audio (el mismo ajuste que Settings > Speakers).
+    g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE767", W - 106, 21, 16, Color(TXT_DIM()));
     if (tab_estados) {
         dibujar_lista_estados(top);
         return;
@@ -2750,7 +2752,11 @@ void App::raton_abajo(float x, float y, bool shift) {
             ventana_ajustes::abrir(hwnd);
             return;
         }
-        if (y < 60 && !reenviando && x < ancho_lista - 86) {
+        if (y < 60 && x > ancho_lista - 116 && x <= ancho_lista - 86) {
+            menu_salida_audio(ancho_lista - 116, 52);
+            return;
+        }
+        if (y < 60 && !reenviando && x < ancho_lista - 116) {
             // Las tabs.
             if (x >= tab_status_x0 && x < tab_status_x1) abrir_tab_estados(true);
             else if (x >= 14 && x < tab_status_x0 - 8) abrir_tab_estados(false);
@@ -3247,7 +3253,7 @@ bool App::sobre_clickeable(float x, float y) {
                (x > g.ancho - 50 && y < 50);
     }
     if (x < ancho_lista) {
-        if (y < 60) return x > ancho_lista - 86 || (!reenviando && x >= 14 && x < tab_status_x1);  // tabs, menu, engranaje
+        if (y < 60) return x > ancho_lista - 116 || (!reenviando && x >= 14 && x < tab_status_x1);  // tabs, parlante, menu, engranaje
         if (tab_estados) return !fila_estado_en(y).empty();
         if (y < top_lista()) return false;                     // buscador
         int k = item_en(y);
