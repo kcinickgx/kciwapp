@@ -13,7 +13,8 @@ import urllib.request
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, 'portable', 'emoji.txt')
-FUENTE = r'C:\Windows\Fonts\seguiemj.ttf'
+FUENTES_TTF = [r'C:\Windows\Fonts\seguiemj.ttf',
+               os.path.join(RAIZ, 'portable', 'fuentes', 'TwemojiMozilla.ttf')]  # las banderas
 VERSION = sys.argv[1] if len(sys.argv) > 1 else 'latest'
 URL = f'https://unicode.org/Public/emoji/{VERSION}/emoji-test.txt'
 
@@ -26,10 +27,8 @@ CATEGORIAS = {
     'Travel & Places': 4,
     'Objects': 5,
     'Symbols': 6,
-    'Flags': 6,  # quedan 8 (las de pais no se dibujan): van con los simbolos
+    'Flags': 7,
 }
-# Las banderas de pais (pares de indicadores regionales) no van: Segoe UI
-# Emoji no las dibuja, muestra las dos letras. Las otras banderas si.
 # Modificadores de tono de piel: el selector muestra el emoji base.
 TONOS = {0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF}
 
@@ -69,8 +68,11 @@ def main():
     print(f'bajando {URL}')
     with urllib.request.urlopen(URL) as r:
         texto = r.read().decode('utf-8')
-    hay = puntos_del_font(FUENTE)
-    print(f'{len(hay)} codepoints en Segoe UI Emoji')
+    hay = set()
+    for f in FUENTES_TTF:
+        if os.path.exists(f):
+            hay |= puntos_del_font(f)
+    print(f'{len(hay)} codepoints entre Segoe UI Emoji y Twemoji')
     grupo = ''
     salida, vistos, sin_font = [], set(), []
     for linea in texto.splitlines():
@@ -86,8 +88,6 @@ def main():
         puntos = [int(x, 16) for x in campos[0].split()]
         if TONOS & set(puntos):
             continue  # los tonos de piel no van en la grilla
-        if puntos and all(0x1F1E6 <= p <= 0x1F1FF for p in puntos):
-            continue  # banderas de pais: Windows las dibuja como 'AR', 'BR'...
         cat = CATEGORIAS.get(grupo)
         if cat is None:
             continue
@@ -98,7 +98,7 @@ def main():
         partes = comentario.strip().split(' ', 2)
         nombre = partes[2] if len(partes) > 2 else ''
         # Todos los codepoints (menos VS16 y ZWJ) tienen que estar en el font.
-        falta = [p for p in puntos if p not in hay and p not in (0xFE0F, 0x200D)]
+        falta = [p for p in puntos if p not in hay and p not in (0xFE0F, 0x200D) and not (0xE0020 <= p <= 0xE007F)]
         if falta:
             sin_font.append((emoji, nombre))
             continue

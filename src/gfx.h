@@ -109,6 +109,9 @@ struct Gfx {
     // tabla de reemplazo del sistema no siempre los manda ahi y salen como
     // cuadraditos: se arma una propia que mapea los bloques de emoji.
     ComPtr<IDWriteFontFallback> fallback_emoji;
+    // Las banderas de pais no estan en ninguna fuente de Windows: van con
+    // Twemoji Mozilla (COLR), que viaja con el programa en fuentes\.
+    ComPtr<IDWriteFontCollection1> coleccion_banderas;
     IDWriteFontFallback* fallback();
     std::map<std::wstring, ComPtr<IDWriteTextFormat>> formatos;
     std::mutex formatos_mu;

@@ -44,7 +44,8 @@ FUENTES = {'kciwapp2.exe': os.path.join(RAIZ, 'build', 'kciwapp2.exe'),
            'core/kciwapp-core.exe': os.path.join(RAIZ, 'build', 'core', 'kciwapp-core.exe'),
            # Los datos que versiona el repo (la tabla de emojis se genera con
            # docs/emoji-tabla.py), no la copia de la instalacion.
-           'emoji.txt': os.path.join(RAIZ, 'portable', 'emoji.txt')}
+           'emoji.txt': os.path.join(RAIZ, 'portable', 'emoji.txt'),
+           'fuentes/TwemojiMozilla.ttf': os.path.join(RAIZ, 'portable', 'fuentes', 'TwemojiMozilla.ttf')}
 # Archivos que se bajan de otro lado (no se suben al release).
 EXTERNOS = {'whisper/ggml-large-v3-turbo.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin',
             'translate/Qwen2.5-7B-Instruct-Q4_K_M.gguf': 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf'}

@@ -113,12 +113,36 @@ IDWriteFontFallback* Gfx::fallback() {
     if (fallback_emoji) return fallback_emoji.Get();
     ComPtr<IDWriteFontFallbackBuilder> armador;
     if (FAILED(dwrite->CreateFontFallbackBuilder(&armador))) return nullptr;
+    // Twemoji Mozilla, al lado del exe: solo para las banderas.
+    wchar_t exe[MAX_PATH];
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring ttf = exe;
+    size_t corte = ttf.find_last_of(L'\\');
+    ttf = (corte == std::wstring::npos ? L"." : ttf.substr(0, corte)) + L"\\fuentes\\TwemojiMozilla.ttf";
+    if (GetFileAttributesW(ttf.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        // IDWriteFontSetBuilder1 (dwrite_3) es el que toma un archivo entero.
+        ComPtr<IDWriteFontSetBuilder> juego;
+        ComPtr<IDWriteFontSetBuilder1> juego1;
+        ComPtr<IDWriteFontFile> archivo;
+        if (SUCCEEDED(dwrite->CreateFontSetBuilder(&juego)) && SUCCEEDED(juego.As(&juego1)) &&
+            SUCCEEDED(dwrite->CreateFontFileReference(ttf.c_str(), nullptr, &archivo)) && SUCCEEDED(juego1->AddFontFile(archivo.Get()))) {
+            ComPtr<IDWriteFontSet> listo;
+            if (SUCCEEDED(juego1->CreateFontSet(&listo))) dwrite->CreateFontCollectionFromFontSet(listo.Get(), &coleccion_banderas);
+        }
+    }
+    if (coleccion_banderas) {
+        DWRITE_UNICODE_RANGE banderas[] = {
+            {0x1F1E6, 0x1F1FF},  // los pares de letras que forman cada bandera
+            {0xE0020, 0xE007F},  // las etiquetas de las banderas de region
+        };
+        const wchar_t* twemoji[] = {L"Twemoji Mozilla"};
+        armador->AddMapping(banderas, ARRAYSIZE(banderas), twemoji, 1, coleccion_banderas.Get(), nullptr, nullptr, 1.0f);
+    }
     DWRITE_UNICODE_RANGE rangos[] = {
         {0x1F000, 0x1FAFF},  // pictogramas, caritas, simbolos extendidos A y B
         {0x1FC00, 0x1FFFF},  // lo que venga despues
         // Los simbolos viejos (2600-27BF) no se tocan: ya andan, y ahi
         // viven tildes y flechas que la interfaz dibuja como texto.
-        {0x1F1E6, 0x1F1FF},  // banderas
     };
     const wchar_t* familias[] = {L"Segoe UI Emoji"};
     armador->AddMapping(rangos, ARRAYSIZE(rangos), familias, 1, nullptr, nullptr, nullptr, 1.0f);

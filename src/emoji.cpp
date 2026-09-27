@@ -14,9 +14,7 @@ namespace {
 
 std::vector<Emoji> g_emojis;
 std::vector<std::wstring> g_categorias = {
-    // Sin "Flags": Windows no dibuja las banderas de pais (muestra las dos
-    // letras), asi que las pocas que quedan van con los simbolos.
-    L"Smileys", L"Animals", L"Food", L"Activities", L"Travel", L"Objects", L"Symbols",
+    L"Smileys", L"Animals", L"Food", L"Activities", L"Travel", L"Objects", L"Symbols", L"Flags",
 };
 std::vector<std::wstring> g_recientes;
 std::wstring g_ruta_recientes;
