@@ -636,6 +636,20 @@ func enviarArchivo(w http.ResponseWriter, r *http.Request) {
 		}
 		nombre = "nota.ogg"
 	}
+	// Un video que no sea H.264/AAC 1280 o menos no se ve en el celular ni
+	// en WhatsApp Web: se reencodea como lo manda el telefono (tarda, pero
+	// recien aca, cuando ya se apreto enviar).
+	var vid videoListo
+	if tipo == "video" || tipo == "gif" {
+		vid = normalizarVideo(datos, mimeT)
+		datos, mimeT = vid.datos, vid.mime
+		if vid.segundos > 0 {
+			segundos = vid.segundos
+		}
+		if vid.reencodeado {
+			nombre = strings.TrimSuffix(nombre, filepath.Ext(nombre)) + ".mp4"
+		}
+	}
 	ctxInfo := contextoCita(chat, r.FormValue("cita_id"))
 
 	var claseSubida whatsmeow.MediaType
@@ -689,6 +703,13 @@ func enviarArchivo(w http.ResponseWriter, r *http.Request) {
 		}
 		if segundos > 0 {
 			vm.Seconds = proto.Uint32(uint32(segundos))
+		}
+		if vid.ancho > 0 && vid.alto > 0 {
+			vm.Width, vm.Height = proto.Uint32(uint32(vid.ancho)), proto.Uint32(uint32(vid.alto))
+			c.media.Ancho, c.media.Alto = vid.ancho, vid.alto
+		}
+		if len(vid.miniatura) > 0 {
+			vm.JPEGThumbnail = vid.miniatura
 		}
 		c.proto = vm
 		msg = &waE2E.Message{VideoMessage: vm}
