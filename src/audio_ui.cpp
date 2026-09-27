@@ -342,6 +342,25 @@ void App::click_audio(int i, float rx, float ry, float w, float h) {
     reproducir_audio(i);
 }
 
+// El desplegable de salida de audio del menu ⋯: los parlantes activos, con
+// tilde en el que se esta usando. Cambia ajustes.salida (lo mismo que la
+// fila Speakers de Settings) y el reproductor lo toma al instante.
+void App::menu_salida_audio(float x, float y) {
+    std::vector<ItemMenu> items;
+    std::wstring actual = ajustes::actual().salida;
+    items.push_back({L"System default", 1, actual.empty() ? L"\uE73E" : nullptr});
+    std::vector<grabador::Dispositivo> lista = grabador::dispositivos(false);
+    for (size_t i = 0; i < lista.size(); i++)
+        items.push_back({lista[i].nombre, (int)i + 2, lista[i].id == actual ? L"\uE73E" : nullptr});
+    abrir_menu(std::move(items), x, y, [this, lista](int id) {
+        if (id <= 0) return;
+        std::wstring nuevo = id == 1 ? std::wstring() : lista[id - 2].id;
+        ajustes::cambiar([nuevo](Ajustes& a) { a.salida = nuevo; });
+        if (reproductor_ok) reproductor.salida(nuevo);
+        pedir_dibujo();
+    });
+}
+
 // ---- transcripcion (whisper.cpp) --------------------------------------------
 
 bool App::whisper_disponible() const {

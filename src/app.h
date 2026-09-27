@@ -428,6 +428,8 @@ struct App {
     // Cierra y vuelve a abrir el cliente con otra cuenta.
     void cambiar_cuenta(int i);
     void menu_cuentas(float x, float y);
+    // Elegir a que parlante sale el audio, sin abrir Settings (audio_ui.cpp).
+    void menu_salida_audio(float x, float y);
     // "Message info" (info_msg_ui.cpp): quien leyo/recibio un mensaje mio.
     struct Acuse {
         std::string quien;
