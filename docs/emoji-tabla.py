@@ -26,8 +26,10 @@ CATEGORIAS = {
     'Travel & Places': 4,
     'Objects': 5,
     'Symbols': 6,
-    'Flags': 7,
+    'Flags': 6,  # quedan 8 (las de pais no se dibujan): van con los simbolos
 }
+# Las banderas de pais (pares de indicadores regionales) no van: Segoe UI
+# Emoji no las dibuja, muestra las dos letras. Las otras banderas si.
 # Modificadores de tono de piel: el selector muestra el emoji base.
 TONOS = {0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF}
 
@@ -84,6 +86,8 @@ def main():
         puntos = [int(x, 16) for x in campos[0].split()]
         if TONOS & set(puntos):
             continue  # los tonos de piel no van en la grilla
+        if puntos and all(0x1F1E6 <= p <= 0x1F1FF for p in puntos):
+            continue  # banderas de pais: Windows las dibuja como 'AR', 'BR'...
         cat = CATEGORIAS.get(grupo)
         if cat is None:
             continue
