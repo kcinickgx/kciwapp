@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go.mau.fi/whatsmeow"
 	"sync"
 	"sync/atomic"
 	"fmt"
@@ -171,6 +172,9 @@ func manejarEvento(e any) {
 		db.Exec("UPDATE mensajes SET borrado = 1 WHERE chat = ? AND id_wa = ?", chat, v.MessageID)
 		evento("borrado", chat, map[string]any{"id": v.MessageID})
 	case *events.AppStateSyncComplete:
+		if v.Recovery {
+			log.Printf("recuperacion de %s aplicada (v%d)", v.Name, v.Version)
+		}
 		if v.Name == appstate.WAPatchCriticalUnblockLow {
 			go refrescarContactos()
 		}
@@ -536,10 +540,27 @@ func sincronizarEstadoApp() {
 	for _, nombre := range appstate.AllPatchNames {
 		if err := cli.FetchAppState(ctx, nombre, true, false); err != nil {
 			log.Printf("estado de la app (%s): %v", nombre, err)
+			// "mismatching LTHash": el historial de ese patch quedo
+			// inconsistente y WhatsApp no lo va a poder mandar nunca mas.
+			// La salida es pedirle al telefono una copia entera (la misma
+			// recuperacion que hace WhatsApp Web); llega como mensaje y
+			// whatsmeow la aplica solo.
+			if strings.Contains(err.Error(), "LTHash") {
+				pedirRecuperacion(nombre)
+			}
 			continue
 		}
 		log.Printf("estado de la app sincronizado: %s", nombre)
 	}
+}
+
+// Le pide al telefono la copia completa de un patch roto.
+func pedirRecuperacion(nombre appstate.WAPatchName) {
+	if _, err := cli.SendPeerMessage(ctx, whatsmeow.BuildAppStateRecoveryRequest(nombre)); err != nil {
+		log.Printf("recuperacion de %s: no se pudo pedir: %v", nombre, err)
+		return
+	}
+	log.Printf("recuperacion de %s pedida al telefono (tiene que estar prendido)", nombre)
 }
 
 func siDesdeSync(b bool) string {

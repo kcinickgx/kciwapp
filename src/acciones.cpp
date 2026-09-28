@@ -639,6 +639,9 @@ void App::enviar_adjunto() {
         Respuesta r = red::mandar_archivo(L"/enviar", chat, a.nombre, a.mime, a.datos, texto, cita, a.tipo, 0);
         Json j = Json::parsear(r.cuerpo);
         bool ok = r.ok();
+        if (!ok)
+            red::registrar("enviar archivo " + a.nombre + " (" + a.tipo + ", " + std::to_string(a.datos.size()) + " bytes) -> " +
+                           std::to_string(r.estado) + " " + r.cuerpo.substr(0, 200));
         red::en_ui([this, j, ok] {
             aviso_estado.clear();
             if (!ok) aviso_estado = L"Could not send: " + ancho(j["error"].str("no response"));

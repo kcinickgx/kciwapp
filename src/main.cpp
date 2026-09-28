@@ -366,6 +366,29 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     g_ventana_lista = true;
     red::anotar_ventana(h);
     DragAcceptFiles(h, TRUE);
+    // Si el programa quedo corriendo como administrador (por ejemplo, abierto
+    // desde el instalador), Windows le bloquea los mensajes que le manda el
+    // Explorador, que corre sin permisos: sin esto no se pueden arrastrar ni
+    // pegar archivos. Con el filtro abierto anda igual.
+    {
+        HMODULE u = GetModuleHandleW(L"user32.dll");
+        using PFN = BOOL(WINAPI*)(HWND, UINT, DWORD, void*);
+        auto filtro = u ? (PFN)GetProcAddress(u, "ChangeWindowMessageFilterEx") : nullptr;
+        if (filtro) {
+            filtro(h, WM_DROPFILES, 1 /*MSGFLT_ALLOW*/, nullptr);
+            filtro(h, 0x0049 /*WM_COPYGLOBALDATA*/, 1, nullptr);
+            filtro(h, WM_COPYDATA, 1, nullptr);
+        }
+        // Y se deja anotado, que explica varios "no me anda nada de esto".
+        HANDLE testigo = nullptr;
+        if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &testigo)) {
+            TOKEN_ELEVATION e{};
+            DWORD largo = 0;
+            if (GetTokenInformation(testigo, TokenElevation, &e, sizeof e, &largo) && e.TokenIsElevated)
+                red::registrar("kciwapp corre como administrador (el Explorador no puede arrastrarle archivos)");
+            CloseHandle(testigo);
+        }
+    }
     emoji::cargar(carpeta_exe());
     app.iniciar(h);
     // Sin cuentas: la pantalla de configuracion. Una: directo. Varias: elegir.

@@ -913,8 +913,11 @@ void App::enviar_texto() {
         Respuesta r = red::mandar_json(L"/enviar", cuerpo);
         Json j = Json::parsear(r.cuerpo);
         bool ok = r.ok();
-        red::en_ui([this, chat, j, ok, t] {
+        int r_estado = r.estado;
+        std::string r_cuerpo = r.cuerpo;
+        red::en_ui([this, chat, j, ok, t, r_estado, r_cuerpo] {
             if (!ok) {
+                red::registrar("enviar texto -> " + std::to_string(r_estado) + " " + r_cuerpo.substr(0, 200));
                 aviso_estado = L"Could not send: " + ancho(j["error"].str("no response"));
                 if (chat == chat_actual && campo.texto.empty()) campo.poner(t);
                 pedir_dibujo();
