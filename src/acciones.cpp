@@ -394,7 +394,9 @@ void App::agregar_mensaje(const Mensaje& m) {
         if (k + 1 == n || mensajes[k].album != 0) armar_vista(k);
     recalcular_inicios();
     conv.max = std::max(0.0, alto_contenido() - (g.alto - alto_cabecera() - alto_pie));
-    if (abajo || m.propio) bajar_al_final(false);
+    // Lo que mando yo aparece de una (sin el deslizamiento); lo que llega
+    // de otro se acompana con el scroll suave.
+    if (abajo || m.propio) bajar_al_final(m.propio);
 }
 
 // ---- ir a un mensaje (desde la busqueda o una notificacion) ---------------
