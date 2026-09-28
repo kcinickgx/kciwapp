@@ -589,7 +589,13 @@ void App::buscar_mas() {
 
 void App::adjuntar_archivo(const std::wstring& ruta) {
     std::string datos = leer_archivo(ruta);
-    if (datos.empty()) return;
+    if (datos.empty()) {
+        red::registrar("adjuntar: no se pudo leer " + angosto(ruta) + " (error " + std::to_string(GetLastError()) + ")");
+        aviso_estado = L"Could not read the file";
+        pedir_dibujo();
+        return;
+    }
+    red::registrar("adjuntar " + angosto(ruta) + " (" + std::to_string(datos.size()) + " bytes)");
     size_t corte = ruta.find_last_of(L"\\/");
     std::wstring nombre = corte == std::wstring::npos ? ruta : ruta.substr(corte + 1);
     adjuntar_datos(std::move(datos), mime_por_extension(ruta), angosto(nombre));
