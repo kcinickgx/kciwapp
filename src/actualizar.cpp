@@ -355,7 +355,7 @@ bool aplicar(const std::wstring& carpeta_exe) {
             ok = false;
         }
     }
-    red::registrar(std::string("actualizar: aplicado ") + (ok ? "bien" : "con errores"));
+    red::registrar(std::string("actualizar: aplicado ") + (ok ? "bien" : "con errores") + " (" + std::to_string(lista.size()) + " archivos)");
     if (ok) {
         std::string m;
         {

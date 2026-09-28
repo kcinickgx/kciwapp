@@ -113,6 +113,9 @@ bool iniciar(const std::wstring& carpeta_exe, const std::wstring& carpeta_datos,
 void cerrar() {
     if (g_proceso) {
         TerminateProcess(g_proceso, 0);
+        // Hasta que no termine de verdad, su exe sigue tomado y el
+        // actualizador no puede reemplazarlo.
+        if (WaitForSingleObject(g_proceso, 5000) != WAIT_OBJECT_0) red::registrar("core: no termino a tiempo al cerrarlo");
         CloseHandle(g_proceso);
         g_proceso = nullptr;
     }
