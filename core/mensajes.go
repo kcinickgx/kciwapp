@@ -2,7 +2,6 @@ package main
 
 import (
 	"go.mau.fi/whatsmeow"
-	"sync"
 	"sync/atomic"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow/appstate"
+	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/proto/waHistorySync"
 	"go.mau.fi/whatsmeow/proto/waWeb"
@@ -137,23 +137,19 @@ func manejarEvento(e any) {
 			go refrescarGrupo(v.JID)
 		}
 	case *events.Mute:
-		// Silenciaron (o le sacaron el silencio) desde el telefono. Al
-		// sincronizar llega el historial entero de cambios: vale el ultimo.
+		// Silenciaron (o le sacaron el silencio) desde el telefono. No miramos
+		// este evento suelto (al sincronizar llega el historial entero y puede
+		// venir desordenado): preguntamos el estado YA consolidado que whatsmeow
+		// dejo en su store, que es el que vale.
 		chat := normalizar(v.JID)
-		ts := v.Timestamp.UnixMilli()
-		if previo, hay := muteTS.Load(chat); hay && previo.(int64) > ts {
-			return
-		}
-		muteTS.Store(chat, ts)
-		var hasta int64
-		if v.Action.GetMuted() {
-			hasta = v.Action.GetMuteEndTimestamp()
-			if hasta == 0 {
-				hasta = -1
+		hasta := int64(0)
+		if cli.Store.ChatSettings != nil {
+			if st, err := cli.Store.ChatSettings.GetChatSettings(ctx, v.JID); err == nil {
+				hasta = silencioDe(st.MutedUntil)
 			}
 		}
 		db.Exec("UPDATE chats SET silenciado = ? WHERE jid = ?", hasta, chat)
-		log.Printf("silenciado desde el telefono: %s hasta %d%s", chat, hasta, siDesdeSync(v.FromFullSync))
+		log.Printf("silencio desde el telefono: %s hasta %d%s", chat, hasta, siDesdeSync(v.FromFullSync))
 		evento("chat", chat, chatDe(chat))
 	case *events.DeleteChat:
 		// Borraron el chat desde el telefono: aca tambien.
@@ -530,7 +526,18 @@ func actualizarContacto(jid, columna, valor string) {
 // archivado en regular_low, y los chats borrados en regular. Asi lo que se
 // hizo en el telefono con el server apagado tambien se aplica aca.
 var sincronizado atomic.Bool
-var muteTS sync.Map // chat -> ts del ultimo cambio de silencio aplicado
+
+// Traduce el "silenciado hasta" del store de whatsmeow a lo que guardamos en
+// la columna: 0 = no silenciado, -1 = para siempre, o el vencimiento en ms.
+func silencioDe(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	if t.Equal(store.MutedForever) || t.After(time.Now().AddDate(50, 0, 0)) {
+		return -1
+	}
+	return t.UnixMilli()
+}
 
 func sincronizarEstadoApp() {
 	if !sincronizado.CompareAndSwap(false, true) {
@@ -538,7 +545,13 @@ func sincronizarEstadoApp() {
 	}
 	time.Sleep(5 * time.Second) // primero que termine de arrancar
 	for _, nombre := range appstate.AllPatchNames {
-		if err := cli.FetchAppState(ctx, nombre, true, false); err != nil {
+		// fullSync=false: baja SOLO los cambios nuevos, sin borrar lo que ya
+		// hay. Con true, whatsmeow tira el estado guardado y re-baja toda la
+		// cadena de patches desde el server; si esa cadena esta rota (LTHash),
+		// vuelve a fallar en cada arranque y ademas PISA la recuperacion que
+		// nos mando el telefono. Asi la recuperacion queda y no se repite el
+		// circulo (romper -> recuperar -> reiniciar -> romper).
+		if err := cli.FetchAppState(ctx, nombre, false, false); err != nil {
 			log.Printf("estado de la app (%s): %v", nombre, err)
 			// "mismatching LTHash": el historial de ese patch quedo
 			// inconsistente y WhatsApp no lo va a poder mandar nunca mas.
@@ -733,8 +746,30 @@ func refrescarGrupos() {
 		log.Printf("grupos: %v", err)
 		return
 	}
+	vivos := map[string]bool{}
 	for _, g := range grupos {
 		guardarGrupo(g)
+		vivos[normalizar(g.JID)] = true
+	}
+	// Los grupos de los que me sali (quiza desde el telefono con el core
+	// apagado, asi que nunca llego el events.GroupInfo/Leave) ya no vienen en
+	// la lista: los saco. El guard len(grupos)>0 evita borrar todo si la
+	// consulta fallo raro y volvio vacia.
+	if len(grupos) > 0 {
+		if filas, err := db.Query("SELECT jid FROM chats WHERE es_grupo = 1"); err == nil {
+			var fuera []string
+			for filas.Next() {
+				var j string
+				if filas.Scan(&j) == nil && !vivos[j] {
+					fuera = append(fuera, j)
+				}
+			}
+			filas.Close()
+			for _, j := range fuera {
+				log.Printf("grupo en el que ya no estoy, lo saco: %s", j)
+				borrarChat(j)
+			}
+		}
 	}
 	log.Printf("grupos: %d", len(grupos))
 	evento("chats", "", map[string]any{})
