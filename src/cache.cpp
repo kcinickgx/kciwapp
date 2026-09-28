@@ -693,6 +693,24 @@ std::optional<Mensaje> mensaje_por_id(const std::string& chat, const std::string
     return fila_a_mensaje(st);
 }
 
+void borrar_chat(const std::string& chat, bool solo_mensajes) {
+    std::lock_guard<std::mutex> l(g_mu);
+    if (!g_db) return;
+    {
+        Stmt st("DELETE FROM mensajes WHERE chat=?;");
+        if (st.ok) {
+            st.bind_texto(1, chat);
+            st.correr();
+        }
+    }
+    if (solo_mensajes) return;
+    Stmt st("DELETE FROM chats WHERE jid=?;");
+    if (st.ok) {
+        st.bind_texto(1, chat);
+        st.correr();
+    }
+}
+
 void borrar_mensajes() {
     std::lock_guard<std::mutex> l(g_mu);
     if (!g_db) return;

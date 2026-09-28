@@ -35,6 +35,8 @@ bool hay_mensaje(const std::string& chat, const std::string& id);
 std::optional<Mensaje> mensaje_por_id(const std::string& chat, const std::string& id);
 // Tira todos los mensajes guardados (tras una importacion masiva en el server).
 void borrar_mensajes();
+// Un chat entero (sus mensajes y su fila en chats); con solo_mensajes, el chat queda.
+void borrar_chat(const std::string& chat, bool solo_mensajes = false);
 void marcar_borrado(const std::string& chat, const std::string& id);
 // El server cambio el tipo del mensaje (video "foto con musica" -> imagen).
 void cambiar_tipo(const std::string& chat, const std::string& id, const std::string& tipo, const std::string& mime);

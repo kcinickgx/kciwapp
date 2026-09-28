@@ -121,9 +121,28 @@ func manejarEvento(e any) {
 			db.Exec("UPDATE chats SET nombre = ? WHERE jid = ?", v.Name.Name, chat)
 			evento("chat", chat, chatDe(chat))
 		}
+		yo := cli.Store.ID.ToNonAD()
+		for _, q := range v.Leave {
+			// Me sacaron del grupo (o me fui desde el telefono): fuera de la lista.
+			if q.ToNonAD() == yo || normalizar(q) == normalizar(yo) {
+				borrarChat(chat)
+				return
+			}
+		}
 		if len(v.Join) > 0 || len(v.Leave) > 0 || len(v.Promote) > 0 || len(v.Demote) > 0 {
 			go refrescarGrupo(v.JID)
 		}
+	case *events.DeleteChat:
+		// Borraron el chat desde el telefono: aca tambien.
+		borrarChat(normalizar(v.JID))
+	case *events.ClearChat:
+		// Vaciaron el chat (queda en la lista, sin mensajes).
+		chat := normalizar(v.JID)
+		db.Exec("DELETE FROM mensajes WHERE chat = ?", chat)
+		db.Exec("DELETE FROM acuses WHERE chat = ?", chat)
+		db.Exec("UPDATE chats SET ultimo_ts = 0, no_leidos = 0 WHERE jid = ?", chat)
+		log.Printf("chat vaciado desde el telefono: %s", chat)
+		evento("chat_vaciado", chat, map[string]any{})
 	case *events.DeleteForMe:
 		chat := normalizar(v.ChatJID)
 		db.Exec("UPDATE mensajes SET borrado = 1 WHERE chat = ? AND id_wa = ?", chat, v.MessageID)
@@ -478,6 +497,17 @@ func actualizarContacto(jid, columna, valor string) {
 }
 
 // ---- acuses ---------------------------------------------------------------
+
+// Saca un chat de la base entera (mensajes, acuses, miembros) y avisa.
+func borrarChat(chat string) {
+	db.Exec("DELETE FROM mensajes WHERE chat = ?", chat)
+	db.Exec("DELETE FROM acuses WHERE chat = ?", chat)
+	db.Exec("DELETE FROM miembros WHERE chat = ?", chat)
+	db.Exec("DELETE FROM media WHERE chat = ?", chat)
+	db.Exec("DELETE FROM chats WHERE jid = ?", chat)
+	log.Printf("chat borrado desde el telefono: %s", chat)
+	evento("chat_borrado", chat, map[string]any{})
+}
 
 func acuse(r *events.Receipt) {
 	chat := normalizar(r.Chat)

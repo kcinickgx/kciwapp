@@ -1087,6 +1087,31 @@ bool App::aplicar_evento(const Json& e) {
             } else chats_para_refrescar.insert(chat);
         }
         return true;
+    } else if (tipo == "chat_borrado" || tipo == "chat_vaciado") {
+        // Borraron (o vaciaron) el chat desde el telefono.
+        bool entero = tipo == "chat_borrado";
+        cache::borrar_chat(chat, !entero);
+        en_memoria.erase(chat);
+        en_memoria_orden.erase(std::remove(en_memoria_orden.begin(), en_memoria_orden.end(), chat), en_memoria_orden.end());
+        if (entero) {
+            chats.erase(std::remove_if(chats.begin(), chats.end(), [&](const Chat& c) { return c.jid == chat; }), chats.end());
+            if (chat == chat_actual) cerrar_chat();
+        } else {
+            for (auto& c : chats)
+                if (c.jid == chat) {
+                    c.ultimo.reset();
+                    c.no_leidos = 0;
+                }
+            if (chat == chat_actual) {
+                mensajes.clear();
+                vistas.clear();
+                inicio.clear();
+                hay_mas_viejos = false;
+                recalcular_inicios();
+            }
+        }
+        pedir_dibujo();
+        return true;
     } else if (tipo == "chat" || tipo == "chats" || tipo == "contactos" || tipo == "contacto") {
         return true;
     } else if (tipo == "leido") {
