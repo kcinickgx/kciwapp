@@ -19,6 +19,7 @@ var esquema = []string{
 		ultimo_ts  BIGINT NOT NULL DEFAULT 0,
 		no_leidos  INT NOT NULL DEFAULT 0,
 		archivado  TINYINT NOT NULL DEFAULT 0,
+		silenciado BIGINT NOT NULL DEFAULT 0,
 		INDEX (ultimo_ts)
 	)`,
 	`CREATE TABLE IF NOT EXISTS contactos (
@@ -114,11 +115,21 @@ var esquema = []string{
 	)`,
 }
 
+// Columnas agregadas despues: si ya estan, el ALTER falla y no importa.
+var migraciones = []string{
+	`ALTER TABLE chats ADD COLUMN silenciado BIGINT NOT NULL DEFAULT 0`,
+}
+
 func crearTablas() {
 	lista := esquema
 	if db.sqlite {
 		lista = esquemaSQLite
 	}
+	defer func() {
+		for _, m := range migraciones {
+			db.Exec(m)
+		}
+	}()
 	for _, s := range lista {
 		if _, err := db.Exec(s); err != nil {
 			log.Fatalf("esquema: %v\n%s", err, s)
@@ -136,6 +147,8 @@ type Chat struct {
 	UltimoTS  int64    `json:"ultimo_ts"`
 	NoLeidos  int      `json:"no_leidos"`
 	Archivado bool     `json:"archivado"`
+	// 0 = suena; -1 = silenciado para siempre; si no, hasta ese ts (ms).
+	Silenciado int64 `json:"silenciado,omitempty"`
 	Ultimo    *Mensaje `json:"ultimo,omitempty"`
 }
 

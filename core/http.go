@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
+	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
@@ -47,6 +48,7 @@ func servirHTTP() {
 	mux.HandleFunc("POST /editar", conToken(hEditar))
 	mux.HandleFunc("POST /borrar", conToken(hBorrar))
 	mux.HandleFunc("POST /leido", conToken(hLeido))
+	mux.HandleFunc("POST /silenciar", conToken(hSilenciar))
 	mux.HandleFunc("POST /escribiendo", conToken(hEscribiendo))
 	mux.HandleFunc("POST /presencia", conToken(hPresencia))
 	mux.HandleFunc("POST /boton", conToken(hBoton))
@@ -150,7 +152,7 @@ func hCantidad(w http.ResponseWriter, r *http.Request) {
 // ---- lecturas -------------------------------------------------------------
 
 func hChats(w http.ResponseWriter, r *http.Request) {
-	filas, err := db.Query(`SELECT c.jid, c.es_grupo, c.foto, c.ultimo_ts, c.no_leidos, c.archivado,
+	filas, err := db.Query(`SELECT c.jid, c.es_grupo, c.foto, c.ultimo_ts, c.no_leidos, c.archivado, c.silenciado,
 		IF(c.es_grupo, c.nombre, COALESCE(NULLIF(k.nombre_agenda, ''), NULLIF(k.nombre_push, ''), c.nombre, '')), COALESCE(k.foto, '')
 		FROM chats c LEFT JOIN contactos k ON k.jid = c.jid ORDER BY c.ultimo_ts DESC`)
 	if err != nil {
@@ -162,7 +164,7 @@ func hChats(w http.ResponseWriter, r *http.Request) {
 	for filas.Next() {
 		var c Chat
 		var fotoContacto string
-		if err := filas.Scan(&c.JID, &c.EsGrupo, &c.Foto, &c.UltimoTS, &c.NoLeidos, &c.Archivado, &c.Nombre, &fotoContacto); err != nil {
+		if err := filas.Scan(&c.JID, &c.EsGrupo, &c.Foto, &c.UltimoTS, &c.NoLeidos, &c.Archivado, &c.Silenciado, &c.Nombre, &fotoContacto); err != nil {
 			continue
 		}
 		if c.Foto == "" {
@@ -859,6 +861,37 @@ func hBorrar(w http.ResponseWriter, r *http.Request) {
 
 // POST /leido {chat, ids?}: marca leido en WhatsApp (tildes azules para el
 // otro) y deja el chat sin no-leidos. Sin ids, marca los ajenos recientes.
+// POST /silenciar {chat, hasta}: hasta = 0 le saca el silencio, -1 lo
+// silencia para siempre, y cualquier otro numero es el ts (ms) hasta cuando.
+// Se manda al telefono como app state, asi queda igual en todos lados.
+func hSilenciar(w http.ResponseWriter, r *http.Request) {
+	var p struct {
+		Chat  string `json:"chat"`
+		Hasta int64  `json:"hasta"`
+	}
+	if err := leerJSON(r, &p); err != nil {
+		fallar(w, 400, err)
+		return
+	}
+	j, ok := jidDe(p.Chat)
+	if !ok {
+		fallar(w, 400, errors.New("chat required"))
+		return
+	}
+	hasta := p.Hasta
+	var fin *int64
+	if hasta > 0 {
+		fin = &hasta
+	}
+	if err := cli.SendAppState(ctx, appstate.BuildMuteAbs(j, hasta != 0, fin)); err != nil {
+		fallar(w, http.StatusBadGateway, err)
+		return
+	}
+	db.Exec("UPDATE chats SET silenciado = ? WHERE jid = ?", hasta, p.Chat)
+	evento("chat", p.Chat, chatDe(p.Chat))
+	responder(w, map[string]any{"ok": true})
+}
+
 func hLeido(w http.ResponseWriter, r *http.Request) {
 	var p struct {
 		Chat string   `json:"chat"`

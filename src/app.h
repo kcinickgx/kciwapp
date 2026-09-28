@@ -87,6 +87,8 @@ struct Mensaje {
     static Mensaje de_json(const Json& j);
 };
 
+long long ahora_ms();
+
 struct Chat {
     std::string jid;
     std::wstring nombre;
@@ -94,6 +96,9 @@ struct Chat {
     bool tiene_foto = false;
     long long ultimo_ts = 0;
     int no_leidos = 0;
+    // 0 = suena; -1 = silenciado siempre; si no, hasta ese ts (ms).
+    long long silenciado = 0;
+    bool esta_silenciado() const { return silenciado < 0 || (silenciado > 0 && silenciado > ahora_ms()); }
     bool archivado = false;
     std::optional<Mensaje> ultimo;
 
@@ -609,6 +614,9 @@ struct App {
     void dibujar_menu();
     bool click_menu(float x, float y);
     void menu_campo(float x, float y);
+    // Menu del boton derecho sobre un chat de la lista (silenciar, etc.).
+    void menu_chat(const std::string& jid, float x, float y);
+    void silenciar_chat(const std::string& jid, long long hasta);
     // Acciones (acciones.cpp)
     void menu_contextual(int i);
     void responder(int i);

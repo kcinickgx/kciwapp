@@ -281,6 +281,7 @@ Chat Chat::de_json(const Json& j) {
     c.ultimo_ts = j["ultimo_ts"].entero();
     c.no_leidos = (int)j["no_leidos"].entero();
     c.archivado = j["archivado"].bul();
+    c.silenciado = j["silenciado"].entero();
     if (j.esta("ultimo")) c.ultimo = Mensaje::de_json(j["ultimo"]);
     return c;
 }
@@ -984,7 +985,9 @@ bool App::aplicar_evento(const Json& e) {
         bool hay = chat_de(m.chat) != nullptr;
         // Aviso en la bandeja si no estoy mirando ese chat.
         if (!m.propio && m.chat == "status@broadcast" && !m.borrado) estados_sin_ver.insert(m.id);
-        if (!m.propio && !aviso::esta_al_frente(hwnd) && m.chat != "status@broadcast") {
+        const Chat* silen = chat_de(m.chat);
+        bool callado = silen && silen->esta_silenciado();
+        if (!m.propio && !callado && !aviso::esta_al_frente(hwnd) && m.chat != "status@broadcast") {
             const Chat* c = chat_de(m.chat);
             std::wstring titulo = c ? c->nombre : nombre_de(m.chat);
             std::wstring texto = m.texto.empty() ? nombre_tipo(m.tipo) : una_linea(m.texto);
@@ -994,7 +997,7 @@ bool App::aplicar_evento(const Json& e) {
                 toast::mostrar(titulo, texto, m.chat, m.id, con_foto ? L"/foto/" + ancho(m.chat) : L"");
             }
         }
-        if (hay && !m.propio && m.chat != chat_actual)
+        if (hay && !m.propio && !callado && m.chat != chat_actual)
             for (auto& c : chats)
                 if (c.jid == m.chat) c.no_leidos++;
         agregar_mensaje(m);
@@ -1888,7 +1891,8 @@ void App::dibujar_lista() {
         std::wstring hora = c.ultimo_ts ? formatear_hora(c.ultimo_ts) : L"";
         if (c.ultimo_ts && dia_de(c.ultimo_ts) != dia_de(ahora_ms())) hora = formatear_dia(c.ultimo_ts);
         float hw = g.medir(hora, 12);
-        g.renglon(hora, W - 16 - hw, y + FILA_H * 0.2f, 12, Color(c.no_leidos ? ACCENT() : TXT_DIM()));
+        bool callado = c.esta_silenciado();
+        g.renglon(hora, W - 16 - hw, y + FILA_H * 0.2f, 12, Color(c.no_leidos && !callado ? ACCENT() : TXT_DIM()));
         float tx = 16 + 2 * r + 14;
         g.renglon(c.nombre, tx, y + FILA_H * 0.17f, letra_lista, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - tx - 24 - hw);
         // Ultimo mensaje (o el borrador, si hay)
@@ -1908,7 +1912,8 @@ void App::dibujar_lista() {
             else if (c.varios_remitentes()) prev = nombre_de(u.remitente) + L": " + prev;
         }
         float ancho_prev = W - tx - 16;
-        if (c.no_leidos) ancho_prev -= 34;
+        if (c.no_leidos && !callado) ancho_prev -= 34;
+        if (callado) ancho_prev -= 22;
         float py = y + FILA_H * 0.53f;
         std::wstring escribe = texto_escribiendo(c.jid);
         if (!escribe.empty()) {
@@ -1921,7 +1926,10 @@ void App::dibujar_lista() {
             int estado = c.jid == mi_jid ? std::max(c.ultimo->estado, 2) : c.ultimo->estado;
             tildes(tx, py + 3, estado >= 2, Color(estado >= 3 ? TICK_AZUL() : TXT_DIM()));
         }
-        if (c.no_leidos) {
+        if (callado) {
+            // La campanita tachada, como en el telefono.
+            g.renglon_fuente(L"Segoe MDL2 Assets", L"\uE7ED", W - 34, py + 2, 14, Color(TXT_DIM()));
+        } else if (c.no_leidos) {
             std::wstring n = std::to_wstring(c.no_leidos);
             float nw = g.medir(n, 11, DWRITE_FONT_WEIGHT_SEMI_BOLD);
             float pw = std::max(20.0f, nw + 12);

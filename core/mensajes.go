@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"fmt"
 	"log"
 	"strings"
@@ -96,6 +97,7 @@ func manejarEvento(e any) {
 		}
 		go refrescarGrupos()
 		go refrescarContactos()
+		go sincronizarEstadoApp()
 	case *events.PairSuccess:
 		log.Printf("vinculado como %s (%s)", v.ID, v.BusinessName)
 	case *events.Disconnected:
@@ -132,6 +134,18 @@ func manejarEvento(e any) {
 		if len(v.Join) > 0 || len(v.Leave) > 0 || len(v.Promote) > 0 || len(v.Demote) > 0 {
 			go refrescarGrupo(v.JID)
 		}
+	case *events.Mute:
+		// Silenciaron (o le sacaron el silencio) desde el telefono.
+		chat := normalizar(v.JID)
+		var hasta int64
+		if v.Action.GetMuted() {
+			hasta = v.Action.GetMuteEndTimestamp()
+			if hasta == 0 {
+				hasta = -1
+			}
+		}
+		db.Exec("UPDATE chats SET silenciado = ? WHERE jid = ?", hasta, chat)
+		evento("chat", chat, chatDe(chat))
 	case *events.DeleteChat:
 		// Borraron el chat desde el telefono: aca tambien.
 		borrarChat(normalizar(v.JID))
@@ -498,6 +512,24 @@ func actualizarContacto(jid, columna, valor string) {
 
 // ---- acuses ---------------------------------------------------------------
 
+// Una vez por arranque, ya conectado: se pide el estado de la app entero
+// (silenciados, archivados, chats borrados). Asi lo que se hizo en el
+// telefono con el server apagado tambien se aplica aca.
+var sincronizado atomic.Bool
+
+func sincronizarEstadoApp() {
+    if !sincronizado.CompareAndSwap(false, true) {
+        return
+    }
+    time.Sleep(5 * time.Second)  // primero que termine de arrancar
+    if err := cli.FetchAppState(ctx, appstate.WAPatchRegular, true, false); err != nil {
+        log.Printf("estado de la app: %v", err)
+        sincronizado.Store(false)
+        return
+    }
+    log.Printf("estado de la app sincronizado con el telefono")
+}
+
 // Saca un chat de la base entera (mensajes, acuses, miembros) y avisa.
 func borrarChat(chat string) {
 	db.Exec("DELETE FROM mensajes WHERE chat = ?", chat)
@@ -707,12 +739,12 @@ func asegurarChatContacto(jid string) {
 // ---- lecturas para la API -------------------------------------------------
 
 func chatDe(jid string) *Chat {
-	f := db.QueryRow(`SELECT c.jid, c.es_grupo, c.foto, c.ultimo_ts, c.no_leidos, c.archivado,
+	f := db.QueryRow(`SELECT c.jid, c.es_grupo, c.foto, c.ultimo_ts, c.no_leidos, c.archivado, c.silenciado,
 		IF(c.es_grupo, c.nombre, COALESCE(NULLIF(k.nombre_agenda, ''), NULLIF(k.nombre_push, ''), c.nombre, '')), COALESCE(k.foto, '')
 		FROM chats c LEFT JOIN contactos k ON k.jid = c.jid WHERE c.jid = ?`, jid)
 	var c Chat
 	var fotoContacto string
-	if err := f.Scan(&c.JID, &c.EsGrupo, &c.Foto, &c.UltimoTS, &c.NoLeidos, &c.Archivado, &c.Nombre, &fotoContacto); err != nil {
+	if err := f.Scan(&c.JID, &c.EsGrupo, &c.Foto, &c.UltimoTS, &c.NoLeidos, &c.Archivado, &c.Silenciado, &c.Nombre, &fotoContacto); err != nil {
 		return nil
 	}
 	if c.Foto == "" {

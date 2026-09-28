@@ -58,7 +58,8 @@ var esquemaSQLite = []string{
 		foto       TEXT NOT NULL DEFAULT '',
 		ultimo_ts  INTEGER NOT NULL DEFAULT 0,
 		no_leidos  INTEGER NOT NULL DEFAULT 0,
-		archivado  INTEGER NOT NULL DEFAULT 0
+		archivado  INTEGER NOT NULL DEFAULT 0,
+		silenciado INTEGER NOT NULL DEFAULT 0
 	)`,
 	`CREATE INDEX IF NOT EXISTS ix_chats_ultimo ON chats(ultimo_ts)`,
 	`CREATE TABLE IF NOT EXISTS contactos (

@@ -207,7 +207,14 @@ void App::raton_derecho(float x, float y) {
         if (visor_msg >= 0 && visor_msg < (int)mensajes.size() && mensajes[visor_msg].media) menu_contextual(visor_msg);
         return;
     }
-    if (x < ancho_lista || visor || modal_reenvio) return;
+    if (x < ancho_lista) {
+        // Sobre un chat de la lista: su menu.
+        if (visor || modal_reenvio || tab_estados || y <= top_lista()) return;
+        int k = item_en(y);
+        if (k >= 0 && k < (int)items.size() && items[k].tipo == ItemLista::ChatItem) menu_chat(chats[items[k].idx].jid, x, y);
+        return;
+    }
+    if (visor || modal_reenvio) return;
     // Sobre el campo de texto: cortar/copiar/pegar.
     if (y >= g.alto - alto_pie && !chat_actual.empty() && grab == Grab::Nada) {
         menu_campo(x, y);
@@ -273,6 +280,38 @@ void App::menu_contextual(int i) {
         }
         pedir_dibujo();
     });
+}
+
+// El menu de un chat de la lista. Por ahora, silenciar (como en el
+// telefono: 8 horas, una semana o siempre) y sacarle el silencio.
+void App::menu_chat(const std::string& jid, float x, float y) {
+    const Chat* c = chat_de(jid);
+    if (!c) return;
+    enum { M_8H = 1, M_SEMANA, M_SIEMPRE, M_SONAR };
+    std::vector<ItemMenu> items;
+    if (c->esta_silenciado()) {
+        items.push_back({L"Unmute notifications", M_SONAR, L"\uE767"});
+    } else {
+        items.push_back({L"Mute for 8 hours", M_8H, L"\uE7ED"});
+        items.push_back({L"Mute for a week", M_SEMANA, L"\uE7ED"});
+        items.push_back({L"Mute always", M_SIEMPRE, L"\uE7ED"});
+    }
+    abrir_menu(std::move(items), x, y, [this, jid](int id) {
+        switch (id) {
+            case M_8H: silenciar_chat(jid, ahora_ms() + 8LL * 3600 * 1000); break;
+            case M_SEMANA: silenciar_chat(jid, ahora_ms() + 7LL * 24 * 3600 * 1000); break;
+            case M_SIEMPRE: silenciar_chat(jid, -1); break;
+            case M_SONAR: silenciar_chat(jid, 0); break;
+        }
+    });
+}
+
+void App::silenciar_chat(const std::string& jid, long long hasta) {
+    for (auto& c : chats)
+        if (c.jid == jid) c.silenciado = hasta;
+    pedir_dibujo();
+    std::string cuerpo = "{\"chat\":" + json_texto(jid) + ",\"hasta\":" + std::to_string(hasta) + "}";
+    red::en_fondo([cuerpo] { red::mandar_json(L"/silenciar", cuerpo); });
 }
 
 // Menu del campo de texto: cortar, copiar, pegar, seleccionar todo.
