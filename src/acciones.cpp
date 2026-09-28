@@ -50,10 +50,16 @@ std::string mime_por_extension(const std::wstring& ruta) {
     return "application/octet-stream";
 }
 
-std::string leer_archivo(const std::wstring& ruta) {
+std::string leer_archivo(const std::wstring& ruta, DWORD* err = nullptr) {
     std::string s;
-    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (h == INVALID_HANDLE_VALUE) return s;
+    // Share permisivo: asi se puede leer un archivo que otro programa tiene
+    // abierto (un log activo, un Excel/Word abierto, una base de datos), como
+    // hace el WhatsApp oficial. El que manda es quien lo abrio primero: si ese
+    // no comparte, ni con esto se puede (da ERROR_SHARING_VIOLATION, 32).
+    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                           nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) { if (err) *err = GetLastError(); return s; }
     LARGE_INTEGER tam;
     GetFileSizeEx(h, &tam);
     s.resize((size_t)tam.QuadPart);
@@ -588,10 +594,16 @@ void App::buscar_mas() {
 // ---- adjuntos -------------------------------------------------------------
 
 void App::adjuntar_archivo(const std::wstring& ruta) {
-    std::string datos = leer_archivo(ruta);
+    DWORD err = 0;
+    std::string datos = leer_archivo(ruta, &err);
     if (datos.empty()) {
-        red::registrar("adjuntar: no se pudo leer " + angosto(ruta) + " (error " + std::to_string(GetLastError()) + ")");
-        aviso_estado = L"Could not read the file";
+        red::registrar("adjuntar: no se pudo leer " + angosto(ruta) + " (error " + std::to_string(err) + ")");
+        // 32 = ERROR_SHARING_VIOLATION: otro programa lo tiene abierto en
+        // exclusiva (por ejemplo el propio core.log). El resto: no existe,
+        // sin permiso, etc.
+        aviso_estado = (err == ERROR_SHARING_VIOLATION)
+                           ? L"The file is open in another program"
+                           : L"Could not read the file";
         pedir_dibujo();
         return;
     }
