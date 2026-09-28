@@ -145,9 +145,11 @@ func manejarEvento(e any) {
 			}
 		}
 		db.Exec("UPDATE chats SET silenciado = ? WHERE jid = ?", hasta, chat)
+		log.Printf("silenciado desde el telefono: %s hasta %d%s", chat, hasta, siDesdeSync(v.FromFullSync))
 		evento("chat", chat, chatDe(chat))
 	case *events.DeleteChat:
 		// Borraron el chat desde el telefono: aca tambien.
+		log.Printf("borrar chat %s%s", normalizar(v.JID), siDesdeSync(v.FromFullSync))
 		borrarChat(normalizar(v.JID))
 	case *events.ClearChat:
 		// Vaciaron el chat (queda en la lista, sin mensajes).
@@ -512,22 +514,31 @@ func actualizarContacto(jid, columna, valor string) {
 
 // ---- acuses ---------------------------------------------------------------
 
-// Una vez por arranque, ya conectado: se pide el estado de la app entero
-// (silenciados, archivados, chats borrados). Asi lo que se hizo en el
-// telefono con el server apagado tambien se aplica aca.
+// Una vez por arranque, ya conectado: se pide el estado de la app entero.
+// Son varios "patches": el silenciado vive en regular_high, lo fijado y
+// archivado en regular_low, y los chats borrados en regular. Asi lo que se
+// hizo en el telefono con el server apagado tambien se aplica aca.
 var sincronizado atomic.Bool
 
 func sincronizarEstadoApp() {
-    if !sincronizado.CompareAndSwap(false, true) {
-        return
-    }
-    time.Sleep(5 * time.Second)  // primero que termine de arrancar
-    if err := cli.FetchAppState(ctx, appstate.WAPatchRegular, true, false); err != nil {
-        log.Printf("estado de la app: %v", err)
-        sincronizado.Store(false)
-        return
-    }
-    log.Printf("estado de la app sincronizado con el telefono")
+	if !sincronizado.CompareAndSwap(false, true) {
+		return
+	}
+	time.Sleep(5 * time.Second) // primero que termine de arrancar
+	for _, nombre := range appstate.AllPatchNames {
+		if err := cli.FetchAppState(ctx, nombre, true, false); err != nil {
+			log.Printf("estado de la app (%s): %v", nombre, err)
+			continue
+		}
+		log.Printf("estado de la app sincronizado: %s", nombre)
+	}
+}
+
+func siDesdeSync(b bool) string {
+	if b {
+		return " (sincronizando)"
+	}
+	return ""
 }
 
 // Saca un chat de la base entera (mensajes, acuses, miembros) y avisa.

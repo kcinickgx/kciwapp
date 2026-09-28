@@ -140,6 +140,9 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 	cli = whatsmeow.NewClient(dispositivo, waLog.Stdout("WA", "INFO", true))
+	// Sin esto, al pedir el estado de la app entero (silenciados, chats
+	// borrados) whatsmeow lo guarda pero no avisa, y no nos enteramos.
+	cli.EmitAppStateEventsOnFullSync = true
 	// Modo importar: solo la base, sin conectarse a WhatsApp.
 	if len(os.Args) > 1 && os.Args[1] == "importar" {
 		importarCLI(os.Args[2:])
