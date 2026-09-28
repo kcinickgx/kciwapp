@@ -451,6 +451,7 @@ void App::cargar_chats() {
             cargando_chats = false;
             mi_jid = je["jid"].str();
             conectado = je["conectado"].bul();
+            version_core = ancho(je["version"].str());
             // El nombre de la cuenta en cuentas.json: el telefono.
             if (!mi_jid.empty()) cuentas::poner_nombre(cuentas::activa(), formatear_telefono(mi_jid));
             if (!escuchando) {

@@ -57,6 +57,10 @@ var (
 	conectado atomic.Bool
 )
 
+// La version del core: la pone el compilador (-ldflags -X main.VERSION=...)
+// y el cliente la muestra en About, para saber si quedo uno viejo.
+var VERSION = "dev"
+
 func main() {
 	log.SetFlags(log.Ltime)
 	// ffmpeg/ffprobe al lado del exe, si estan ahi.

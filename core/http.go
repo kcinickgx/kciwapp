@@ -108,6 +108,7 @@ func hEstado(w http.ResponseWriter, r *http.Request) {
 	est["seq"] = seq
 	// Cambia con cada importacion masiva: el cliente tira su cache y recarga.
 	est["importacion"] = valor("importacion")
+	est["version"] = VERSION
 	responder(w, est)
 }
 

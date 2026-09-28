@@ -226,6 +226,7 @@ struct App {
     std::vector<Chat> chats;
     std::map<std::string, Contacto> contactos;
     std::string mi_jid;
+    std::wstring version_core;  // la del server/core con el que hablamos (About)
     std::string chat_actual;
     std::vector<Mensaje> mensajes;
     std::vector<VistaMensaje> vistas;

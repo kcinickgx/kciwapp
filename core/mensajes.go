@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"sync/atomic"
 	"fmt"
 	"log"
@@ -135,8 +136,14 @@ func manejarEvento(e any) {
 			go refrescarGrupo(v.JID)
 		}
 	case *events.Mute:
-		// Silenciaron (o le sacaron el silencio) desde el telefono.
+		// Silenciaron (o le sacaron el silencio) desde el telefono. Al
+		// sincronizar llega el historial entero de cambios: vale el ultimo.
 		chat := normalizar(v.JID)
+		ts := v.Timestamp.UnixMilli()
+		if previo, hay := muteTS.Load(chat); hay && previo.(int64) > ts {
+			return
+		}
+		muteTS.Store(chat, ts)
 		var hasta int64
 		if v.Action.GetMuted() {
 			hasta = v.Action.GetMuteEndTimestamp()
@@ -519,6 +526,7 @@ func actualizarContacto(jid, columna, valor string) {
 // archivado en regular_low, y los chats borrados en regular. Asi lo que se
 // hizo en el telefono con el server apagado tambien se aplica aca.
 var sincronizado atomic.Bool
+var muteTS sync.Map // chat -> ts del ultimo cambio de silencio aplicado
 
 func sincronizarEstadoApp() {
 	if !sincronizado.CompareAndSwap(false, true) {

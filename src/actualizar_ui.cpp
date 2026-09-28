@@ -107,7 +107,8 @@ void App::dibujar_modal_actualizacion() {
     g.borde_redondo(q.x, q.y, q.w, q.h, 12, Color(BORDE(), 1.0f));
     if (about) {
         g.renglon(L"kciwapp", q.x + 20, q.y + 18, 22, Color(TXT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
-        g.renglon(std::wstring(L"Version ") + KCIWAPP_VERSION + L"  \u00b7  build " + KCIWAPP_FECHA + L" (" + KCIWAPP_COMMIT + L")",
+        g.renglon(std::wstring(L"Version ") + KCIWAPP_VERSION + L"  \u00b7  build " + KCIWAPP_FECHA + L" (" + KCIWAPP_COMMIT + L")" +
+                      (version_core.empty() ? L"" : L"  \u00b7  core " + version_core),
                   q.x + 20, q.y + 52, 13, Color(TXT_DIM()));
         g.renglon(L"A native WhatsApp client for Windows. Win32 + Direct2D, no frameworks;", q.x + 20, q.y + 80, 13, Color(TXT()));
         g.renglon(L"the WhatsApp side runs on whatsmeow. Unofficial, not affiliated with Meta.", q.x + 20, q.y + 100, 13, Color(TXT()));
