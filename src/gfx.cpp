@@ -15,6 +15,7 @@ bool Gfx::iniciar(HWND h) {
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, niveles, 4, D3D11_SDK_VERSION,
                                    &d3d, nullptr, &d3dctx);
     if (FAILED(hr)) {
+        acelerado = false;
         hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, niveles, 4, D3D11_SDK_VERSION, &d3d,
                                nullptr, &d3dctx);
         if (FAILED(hr)) return false;
@@ -25,6 +26,12 @@ bool Gfx::iniciar(HWND h) {
     dxgi->GetAdapter(&adaptador);
     ComPtr<IDXGIFactory2> fabrica_dxgi;
     adaptador->GetParent(IID_PPV_ARGS(&fabrica_dxgi));
+    DXGI_ADAPTER_DESC desc = {};
+    if (SUCCEEDED(adaptador->GetDesc(&desc))) {
+        placa = desc.Description;
+        // El "adaptador basico de Microsoft" tambien es software.
+        if (desc.VendorId == 0x1414) acelerado = false;
+    }
 
     DXGI_SWAP_CHAIN_DESC1 sd = {};
     sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -98,7 +105,7 @@ void Gfx::terminar_frame() {
         return;
     }
     DXGI_PRESENT_PARAMETERS pp = {};
-    swap->Present1(1, 0, &pp);
+    swap->Present1(vsync ? 1 : 0, 0, &pp);
 }
 
 ID2D1SolidColorBrush* Gfx::pincel(Color c) {

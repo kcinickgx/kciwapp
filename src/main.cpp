@@ -54,6 +54,7 @@ float escala(HWND h) { return GetDpiForWindow(h) / 96.0f; }
 // Posicion y tamano de la ventana en ajustes.json, para que vuelva a abrir
 // donde quedo (y maximizada si lo estaba).
 bool g_ventana_lista = false;  // hasta restaurar, los WM_SIZE de la creacion no cuentan
+bool g_redimensionando = false;  // el usuario esta arrastrando el borde
 bool g_era_max = false;
 
 void guardar_ventana(HWND h) {
@@ -100,8 +101,17 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == SIZE_MAXIMIZED || (wp == SIZE_RESTORED && g_era_max)) guardar_ventana(h);
             if (wp == SIZE_MAXIMIZED || wp == SIZE_RESTORED) g_era_max = wp == SIZE_MAXIMIZED;
             if (app && wp != SIZE_MINIMIZED) {
-                app->redimensionado();
-                app->dibujar();
+                // Arrastrando el borde llegan decenas de WM_SIZE por segundo y
+                // cada uno recrea el buffer de video y dibuja un cuadro: se
+                // hace como mucho uno cada 8 ms (el tamano final lo aplica
+                // EXITSIZEMOVE), si no en una maquina lenta va a los tirones.
+                static ULONGLONG ultimo = 0;
+                ULONGLONG t = GetTickCount64();
+                if (!g_redimensionando || t - ultimo >= 8) {
+                    ultimo = t;
+                    app->redimensionado();
+                    app->dibujar();
+                }
             }
             return 0;
         case WM_DPICHANGED: {
@@ -245,7 +255,17 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         case red::WM_TRABAJO:
             red::atender_trabajo(lp);
             return 0;
+        case WM_ENTERSIZEMOVE:
+            g_redimensionando = true;
+            if (app) app->g.esperar_monitor(false);
+            return 0;
         case WM_EXITSIZEMOVE:
+            g_redimensionando = false;
+            if (app) {
+                app->g.esperar_monitor(true);
+                app->redimensionado();  // el ultimo WM_SIZE pudo saltearse
+                app->dibujar();
+            }
             guardar_ventana(h);
             return 0;
         case WM_DESTROY:

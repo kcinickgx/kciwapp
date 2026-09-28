@@ -3037,6 +3037,7 @@ void App::tecla(WPARAM vk, bool shift, bool ctrl) {
                  mensajes.empty() ? 0LL : mensajes.back().ts,
                  mensajes.empty() ? "" : angosto(mensajes.back().texto.substr(0, 30)).c_str());
         red::registrar(buf);
+        red::registrar("F12 video: " + angosto(g.placa) + (g.acelerado ? " (acelerada)" : " (POR SOFTWARE: todo va a ir lento)"));
         for (size_t k = vistas.size() > 5 ? vistas.size() - 5 : 0; k < vistas.size(); k++) {
             snprintf(buf, sizeof buf, "  v[%zu] alto=%.0f by=%.0f bh=%.0f ancho_para=%.0f ts=%lld", k, vistas[k].alto, vistas[k].by,
                      vistas[k].bh, vistas[k].ancho_para, mensajes[k].ts);

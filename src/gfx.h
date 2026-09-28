@@ -60,6 +60,12 @@ struct Gfx {
 
     bool iniciar(HWND h);
     void redimensionar();
+    // Mientras se arrastra el borde no se espera al monitor: cada WM_SIZE
+    // dibuja, y con vsync cada uno costaba un cuadro entero.
+    void esperar_monitor(bool si) { vsync = si; }
+    // Que placa toco (o WARP = por software, todo va a andar lento).
+    std::wstring placa;
+    bool acelerado = true;
     void empezar_frame();
     void terminar_frame();
 
@@ -108,6 +114,7 @@ struct Gfx {
     // Los emojis nuevos (Unicode 15/16) estan en Segoe UI Emoji pero la
     // tabla de reemplazo del sistema no siempre los manda ahi y salen como
     // cuadraditos: se arma una propia que mapea los bloques de emoji.
+    bool vsync = true;
     ComPtr<IDWriteFontFallback> fallback_emoji;
     // Las banderas de pais no estan en ninguna fuente de Windows: van con
     // Twemoji Mozilla (COLR), que viaja con el programa en fuentes\.
