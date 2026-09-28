@@ -209,8 +209,12 @@ void App::raton_derecho(float x, float y) {
     }
     if (x < ancho_lista) {
         // Sobre un chat de la lista: su menu.
-        if (visor || modal_reenvio || tab_estados || y <= top_lista()) return;
+        if (visor || modal_reenvio || tab_estados || y <= top_lista()) {
+            red::registrar("menu chat: no va (visor/reenvio/estados/cabecera)");
+            return;
+        }
         int k = item_en(y);
+        red::registrar("menu chat: item " + std::to_string(k) + " de " + std::to_string(items.size()));
         if (k >= 0 && k < (int)items.size() && items[k].tipo == ItemLista::ChatItem) menu_chat(chats[items[k].idx].jid, x, y);
         return;
     }
@@ -311,7 +315,10 @@ void App::silenciar_chat(const std::string& jid, long long hasta) {
         if (c.jid == jid) c.silenciado = hasta;
     pedir_dibujo();
     std::string cuerpo = "{\"chat\":" + json_texto(jid) + ",\"hasta\":" + std::to_string(hasta) + "}";
-    red::en_fondo([cuerpo] { red::mandar_json(L"/silenciar", cuerpo); });
+    red::en_fondo([cuerpo] {
+        Respuesta r = red::mandar_json(L"/silenciar", cuerpo);
+        red::registrar("silenciar " + cuerpo + " -> " + std::to_string(r.estado) + " " + r.cuerpo.substr(0, 120));
+    });
 }
 
 // Menu del campo de texto: cortar, copiar, pegar, seleccionar todo.
