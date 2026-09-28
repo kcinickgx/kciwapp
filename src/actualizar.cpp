@@ -301,24 +301,40 @@ void bajar(const std::wstring& carpeta_exe, std::function<void()> progreso, std:
             for (size_t i = carpeta_exe.size() + 1; i <= corte && corte != std::wstring::npos; i++)
                 if (destino[i] == L'\\') CreateDirectoryW(destino.substr(0, i).c_str(), nullptr);
             con_estado([&](Estado& e) { e.actual = a.ruta; });
-            ULONGLONG ultimo_aviso = 0;
-            bool bien = bajar_https(a.url, nullptr, destino, [&](long long bytes) {
-                con_estado([&](Estado& e) { e.bajados = acumulado + bytes; });
-                ULONGLONG t = GetTickCount64();
-                if (t - ultimo_aviso > 100) {
-                    ultimo_aviso = t;
-                    red::en_ui(progreso);
+            // Hasta tres intentos: justo despues de publicar, el CDN puede
+            // dar todavia el archivo viejo y el md5 no coincide.
+            bool bien = false;
+            std::wstring porque;
+            for (int intento = 0; intento < 3 && !bien; intento++) {
+                if (intento > 0) Sleep(1500 * intento);
+                std::wstring url = a.url;
+                if (intento > 0) url += (url.find(L'?') == std::wstring::npos ? L"?r=" : L"&r=") + std::to_wstring(intento);
+                ULONGLONG ultimo_aviso = 0;
+                con_estado([&](Estado& e) { e.bajados = acumulado; });
+                bien = bajar_https(url, nullptr, destino, [&](long long bytes) {
+                    con_estado([&](Estado& e) { e.bajados = acumulado + bytes; });
+                    ULONGLONG t = GetTickCount64();
+                    if (t - ultimo_aviso > 100) {
+                        ultimo_aviso = t;
+                        red::en_ui(progreso);
+                    }
+                });
+                if (!bien) {
+                    porque = L" (network)";
+                    red::registrar("actualizar: no se pudo bajar " + angosto(a.ruta) + " (intento " + std::to_string(intento + 1) +
+                                   ", error " + std::to_string(GetLastError()) + ")");
+                    continue;
                 }
-            });
-            if (bien && md5_de(destino) != a.md5) {
-                red::registrar("actualizar: md5 distinto al bajar " + angosto(a.ruta));
-                bien = false;
+                if (md5_de(destino) != a.md5) {
+                    porque = L" (checksum)";
+                    red::registrar("actualizar: md5 distinto al bajar " + angosto(a.ruta) + " (intento " + std::to_string(intento + 1) + ")");
+                    bien = false;
+                }
             }
             if (!bien) {
-                red::registrar("actualizar: fallo " + angosto(a.ruta) + " (error " + std::to_string(GetLastError()) + ")");
                 DeleteFileW(destino.c_str());
                 ok = false;
-                con_estado([&](Estado& e) { e.error = L"Download failed: " + a.ruta; });
+                con_estado([&](Estado& e) { e.error = L"Download failed" + porque + L": " + a.ruta; });
                 break;
             }
             acumulado += a.tamano;
