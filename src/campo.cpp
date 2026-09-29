@@ -110,10 +110,14 @@ void Campo::dibujar(Gfx& g, float x, float y, float w, float h, unsigned long lo
     float cursor_rel = cy - (y + RELLENO_Y);
     if (m.height <= interior) desplazamiento = 0;
     else {
-        float abs_cursor = cursor_rel + desplazamiento;
-        if (abs_cursor + ch > desplazamiento + interior) desplazamiento = abs_cursor + ch - interior;
-        if (abs_cursor < desplazamiento) desplazamiento = abs_cursor;
+        // cursor_rel ya es la posicion del cursor dentro del texto (0 = la
+        // primera linea), sin el scroll. Si se fue abajo de lo visible, bajo
+        // el scroll; si se fue arriba, lo subo (esto ultimo faltaba: al ir con
+        // la flecha arriba el principio quedaba oculto y no se podia editar).
+        if (cursor_rel + ch > desplazamiento + interior) desplazamiento = cursor_rel + ch - interior;
+        if (cursor_rel < desplazamiento) desplazamiento = cursor_rel;
         desplazamiento = std::min(desplazamiento, m.height - interior);
+        desplazamiento = std::max(desplazamiento, 0.0f);
     }
     float tx = x + RELLENO_X, ty = y + RELLENO_Y - desplazamiento;
 
