@@ -31,7 +31,7 @@ Respuesta mandar_json(const std::wstring& ruta, const std::string& json);
 // Multipart con un archivo, para /enviar.
 Respuesta mandar_archivo(const std::wstring& ruta, const std::string& chat, const std::string& nombre,
                          const std::string& mime, const std::string& datos, const std::string& texto,
-                         const std::string& cita, const std::string& tipo, int segundos);
+                         const std::string& cita, const std::string& tipo, int segundos, bool lossless = false);
 
 // Trabajo en un hilo de fondo.
 void en_fondo(std::function<void()> f);

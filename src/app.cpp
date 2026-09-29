@@ -326,7 +326,7 @@ void App::iniciar(HWND h) {
     campo.indicio = L"Type a message";
     campo.tamano = letra_chat + 0.5f;
     campo.al_enviar = [this] {
-        if (adjunto) enviar_adjunto();
+        if (!adjuntos.empty()) enviar_adjuntos();
         else enviar_texto();
     };
     campo.al_cambiar = [this] {
@@ -554,7 +554,8 @@ void App::abrir_chat(const std::string& jid) {
     // El borrador del chat que se deja queda guardado.
     if (!chat_actual.empty()) {
         borradores[chat_actual] = campo.texto;
-        borradores_adjunto[chat_actual] = adjunto;
+        borradores_adjunto[chat_actual] = adjuntos;
+        borradores_lossless[chat_actual] = lossless;
         recordar_chat();
     }
     chat_actual = jid;
@@ -577,7 +578,8 @@ void App::abrir_chat(const std::string& jid) {
     info_pila.clear();
     emojis_abierto = false;
     campo.poner(borradores[jid]);
-    adjunto = borradores_adjunto[jid];
+    adjuntos = borradores_adjunto[jid];
+    lossless = borradores_lossless[jid];
     campo.foco = true;
     int cuantos = ajustes::actual().mensajes_por_chat;
     if (cuantos <= 0) cuantos = 1000000;
@@ -1739,7 +1741,7 @@ void App::dibujar() {
     }
     alto_pie = campo.alto(g) + 16;
     if (respondiendo || editando) alto_pie += BARRA_H;
-    if (adjunto) alto_pie += ADJUNTO_H;
+    if (!adjuntos.empty()) alto_pie += ADJUNTO_H;
     if (tab_estados && estado_de.empty()) alto_pie = 0;
     tic_estados();
     dibujar_lista();
@@ -2029,30 +2031,56 @@ void App::dibujar_pie() {
         g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM()));
         yy += BARRA_H;
     }
-    // Vista previa del adjunto.
-    if (adjunto) {
+    // Vista previa de los adjuntos (uno o varios): una fila de miniaturas.
+    if (!adjuntos.empty()) {
         g.rect_redondo(x + 16, yy, W - 32, ADJUNTO_H - 8, 6, Color(BG_CAMPO()));
-        if (adjunto->vista) {
-            float esc = std::min((ADJUNTO_H - 24) / adjunto->h, 200.0f / adjunto->w);
-            float w = adjunto->w * esc, h = adjunto->h * esc;
-            g.recortar_redondo(x + 24, yy + 8, w, h, 4);
-            g.bitmap(adjunto->vista.Get(), x + 24, yy + 8, w, h);
-            g.destapar_redondo();
-            g.renglon(ancho(adjunto->nombre), x + 24 + w + 14, yy + 12, 13, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - w - 120);
-        } else {
-            g.renglon(L"\U0001F4C4", x + 28, yy + 14, 28, Color(TXT_DIM()));
-            g.renglon(ancho(adjunto->nombre), x + 72, yy + 14, 14, Color(TXT()), DWRITE_FONT_WEIGHT_NORMAL, W - 160);
-            g.renglon(std::to_wstring(adjunto->datos.size() / 1024) + L" KB", x + 72, yy + 36, 12, Color(TXT_DIM()));
+        const float TH = 64, GAP = 8, MY = yy + 10;
+        float mx = x + 24, lim = x + W - 52;
+        bool hay_media = false;
+        for (const Adjunto& a : adjuntos)
+            if (a.tipo == "imagen" || a.tipo == "video" || a.tipo == "gif") hay_media = true;
+        for (size_t i = 0; i < adjuntos.size(); i++) {
+            const Adjunto& a = adjuntos[i];
+            if (mx + TH > lim) {  // no entran mas: cuantas quedan
+                g.renglon(L"+" + std::to_wstring(adjuntos.size() - i), mx + 2, MY + TH / 2 - 11, 16, Color(TXT()));
+                break;
+            }
+            g.rect_redondo(mx, MY, TH, TH, 4, Color(0x0b141a));
+            if (a.vista) {
+                float esc = std::min(TH / a.w, TH / a.h);
+                float w = a.w * esc, h = a.h * esc;
+                g.recortar_redondo(mx, MY, TH, TH, 4);
+                g.bitmap(a.vista.Get(), mx + (TH - w) / 2, MY + (TH - h) / 2, w, h);
+                g.destapar_redondo();
+                if (a.tipo == "video" || a.tipo == "gif")
+                    g.renglon(L"▶", mx + TH / 2 - 8, MY + TH / 2 - 12, 18, Color(0xffffff));
+            } else {
+                const wchar_t* ic = (a.tipo == "audio" || a.tipo == "nota") ? L"\U0001F3B5" : L"\U0001F4C4";
+                g.renglon(ic, mx + TH / 2 - 14, MY + TH / 2 - 16, 26, Color(TXT_DIM()));
+            }
+            // La ✕ para sacar solo esta.
+            g.circulo(mx + TH - 9, MY + 9, 8, Color(0x000000, 0.55f));
+            g.renglon(L"✕", mx + TH - 14, MY + 2, 11, Color(0xffffff));
+            mx += TH + GAP;
         }
-        if (adjunto->vista) {
-            // Mandar como sticker en vez de foto.
-            bool sticker = adjunto->tipo == "figurita";
-            float sx = x + W - 180, sy = yy + ADJUNTO_H - 32;
-            g.borde_redondo(sx, sy, 16, 16, 3, Color(sticker ? ACCENT() : TXT_DIM()), 1.5f);
-            if (sticker) g.rect_redondo(sx + 3, sy + 3, 10, 10, 2, Color(ACCENT()));
-            g.renglon(L"Send as sticker", sx + 24, sy - 1, 12.5f, Color(TXT()));
+        float cy = yy + ADJUNTO_H - 30;
+        // Tilde "Lossless": manda la media original sin que WhatsApp la achique.
+        if (hay_media) {
+            float lx = x + W - 150;
+            g.borde_redondo(lx, cy, 16, 16, 3, Color(lossless ? ACCENT() : TXT_DIM()), 1.5f);
+            if (lossless) g.rect_redondo(lx + 3, cy + 3, 10, 10, 2, Color(ACCENT()));
+            g.renglon(L"Lossless", lx + 24, cy - 1, 12.5f, Color(TXT()));
         }
-        g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM()));
+        // "Send as sticker": solo cuando hay una sola imagen.
+        if (adjuntos.size() == 1 && adjuntos[0].vista &&
+            (adjuntos[0].tipo == "imagen" || adjuntos[0].tipo == "figurita")) {
+            bool sticker = adjuntos[0].tipo == "figurita";
+            float sx = x + 24;
+            g.borde_redondo(sx, cy, 16, 16, 3, Color(sticker ? ACCENT() : TXT_DIM()), 1.5f);
+            if (sticker) g.rect_redondo(sx + 3, cy + 3, 10, 10, 2, Color(ACCENT()));
+            g.renglon(L"Send as sticker", sx + 24, cy - 1, 12.5f, Color(TXT()));
+        }
+        g.renglon(L"✕", x + W - 42, yy + 9, 16, Color(TXT_DIM()));  // limpiar todo
         yy += ADJUNTO_H;
     }
     float ch = campo.alto(g);
@@ -2078,7 +2106,7 @@ void App::dibujar_pie() {
         g.rect_redondo(cx, yy, W - 82 - 60, ch, 8, Color(BG_CAMPO()));
         campo.dibujar(g, cx, yy, W - 82 - 60, ch, ahora);
     }
-    bool hay_texto = !campo.texto.empty() || adjunto;
+    bool hay_texto = !campo.texto.empty() || !adjuntos.empty();
     g.renglon(hay_texto ? L"➤" : L"\U0001F3A4", x + W - 44, yy + ch / 2 - 12, 22, Color(hay_texto ? ACCENT() : TXT_DIM()));
 }
 
@@ -2871,14 +2899,46 @@ void App::raton_abajo(float x, float y, bool shift) {
             return;
         }
         if (respondiendo || editando) yy += BARRA_H;
-        if (adjunto && y < yy + ADJUNTO_H) {
-            if (x > x_conv() + W - 56 && y < yy + 40) adjunto.reset();
-            else if (adjunto->vista && x > x_conv() + W - 180 && y > yy + ADJUNTO_H - 40)
-                adjunto->tipo = adjunto->tipo == "figurita" ? "imagen" : "figurita";
+        if (!adjuntos.empty() && y < yy + ADJUNTO_H) {
+            float xc = x_conv();
+            // ✕ general (esquina): limpiar todo.
+            if (x > xc + W - 56 && y < yy + 40) {
+                adjuntos.clear();
+                lossless = false;
+                pedir_dibujo();
+                return;
+            }
+            const float TH = 64, GAP = 8, MY = yy + 10;
+            // ✕ de cada miniatura.
+            float mx = xc + 24, lim = xc + W - 52;
+            for (size_t i = 0; i < adjuntos.size() && mx + TH <= lim; i++) {
+                if (x >= mx + TH - 18 && x <= mx + TH && y >= MY && y <= MY + 18) {
+                    adjuntos.erase(adjuntos.begin() + i);
+                    pedir_dibujo();
+                    return;
+                }
+                mx += TH + GAP;
+            }
+            float cy = yy + ADJUNTO_H - 30;
+            bool hay_media = false;
+            for (const Adjunto& a : adjuntos)
+                if (a.tipo == "imagen" || a.tipo == "video" || a.tipo == "gif") hay_media = true;
+            // Tilde lossless.
+            if (hay_media && x >= xc + W - 150 && x <= xc + W - 60 && y >= cy - 3 && y <= cy + 19) {
+                lossless = !lossless;
+                pedir_dibujo();
+                return;
+            }
+            // Send as sticker (una sola imagen).
+            if (adjuntos.size() == 1 && adjuntos[0].vista &&
+                (adjuntos[0].tipo == "imagen" || adjuntos[0].tipo == "figurita") &&
+                x >= xc + 24 && x <= xc + 160 && y >= cy - 3 && y <= cy + 19) {
+                adjuntos[0].tipo = adjuntos[0].tipo == "figurita" ? "imagen" : "figurita";
+            }
             pedir_dibujo();
             return;
         }
-        if (adjunto) yy += ADJUNTO_H;
+        if (!adjuntos.empty()) yy += ADJUNTO_H;
         if (grab != Grab::Nada) {
             click_grabacion(x, y, yy, campo.alto(g));
             return;
@@ -2920,7 +2980,7 @@ void App::raton_abajo(float x, float y, bool shift) {
             return;
         }
         if (x > x_conv() + W - 60) {
-            if (adjunto) enviar_adjunto();
+            if (!adjuntos.empty()) enviar_adjuntos();
             else if (!campo.texto.empty()) enviar_texto();
             else grabar_empezar();
             pedir_dibujo();
@@ -3325,8 +3385,8 @@ bool App::sobre_clickeable(float x, float y) {
         float yy = bottom + 8;
         if ((respondiendo || editando) && y < yy + BARRA_H) return x > x_conv() + W - 56;
         if (respondiendo || editando) yy += BARRA_H;
-        if (adjunto && y < yy + ADJUNTO_H) return x > x_conv() + W - 56 || (x > x_conv() + W - 180 && y > yy + ADJUNTO_H - 40);
-        if (adjunto) yy += ADJUNTO_H;
+        if (!adjuntos.empty() && y < yy + ADJUNTO_H) return true;
+        if (!adjuntos.empty()) yy += ADJUNTO_H;
         if (grab != Grab::Nada) return x < x_conv() + 92 || x > x_conv() + W - 60;
         return x < x_conv() + (es_estado() ? 150 : 82) || x > x_conv() + W - 60;    // emoji, clip, (color, letra), mandar/mic
     }

@@ -318,8 +318,10 @@ struct App {
     float ancho_pendiente = 0;
     unsigned long long ultimo_resize = 0;
     std::map<std::string, std::wstring> borradores;
-    std::map<std::string, std::optional<Adjunto>> borradores_adjunto;
-    std::optional<Adjunto> adjunto;
+    std::map<std::string, std::vector<Adjunto>> borradores_adjunto;
+    std::vector<Adjunto> adjuntos;      // varios: se mandan uno por uno
+    std::map<std::string, bool> borradores_lossless;
+    bool lossless = false;              // el tilde "lossless" del chat actual
     bool visor = false;        // foto (o video) a pantalla completa
     int visor_msg = -1;        // el mensaje del que se abrio (menu contextual en el visor)
     bool visor_video = false;
@@ -666,7 +668,7 @@ struct App {
     bool clickeable_busqueda_chat(float x, float y) const;
     void adjuntar_archivo(const std::wstring& ruta);
     void adjuntar_datos(std::string datos, std::string mime, std::string nombre);
-    void enviar_adjunto();
+    void enviar_adjuntos();
     void pegar();
     void abrir_media(int i);
     void guardar_como(int i);

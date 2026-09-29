@@ -119,7 +119,7 @@ Respuesta mandar_json(const std::wstring& ruta, const std::string& json) {
 
 Respuesta mandar_archivo(const std::wstring& ruta, const std::string& chat, const std::string& nombre,
                          const std::string& mime, const std::string& datos, const std::string& texto,
-                         const std::string& cita, const std::string& tipo, int segundos) {
+                         const std::string& cita, const std::string& tipo, int segundos, bool lossless) {
     const std::string borde = "----kciwapp2-" + std::to_string(GetTickCount64());
     std::string c;
     auto campo = [&](const char* nombre_campo, const std::string& valor) {
@@ -132,6 +132,7 @@ Respuesta mandar_archivo(const std::wstring& ruta, const std::string& chat, cons
     campo("tipo", tipo);
     campo("mime", mime);
     if (segundos > 0) campo("segundos", std::to_string(segundos));
+    if (lossless) campo("lossless", "1");
     c += "--" + borde + "\r\nContent-Disposition: form-data; name=\"archivo\"; filename=\"" + nombre +
          "\"\r\nContent-Type: " + (mime.empty() ? "application/octet-stream" : mime) + "\r\n\r\n";
     c += datos;

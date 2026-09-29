@@ -639,6 +639,25 @@ func enviarArchivo(w http.ResponseWriter, r *http.Request) {
 		}
 		nombre = "nota.ogg"
 	}
+	// Lossless: la foto/video original va dentro de un .zip mandado como
+	// documento, asi WhatsApp no lo recomprime; del otro lado kciwapp lo
+	// reconoce y lo muestra como media. Guardo aparte lo original (tipoVer,
+	// mimeVer, nombreVer, datosVer) para verlo asi tambien de este lado y para
+	// la copia local. Va antes de normalizar el video: no se reencodea nada.
+	lossless := r.FormValue("lossless") == "1" || r.FormValue("lossless") == "true"
+	tipoVer, mimeVer, nombreVer, datosVer := tipo, mimeT, nombre, datos
+	var miniLossless []byte
+	if lossless && (tipo == "imagen" || tipo == "video" || tipo == "gif") {
+		zipDatos, zipNombre, err := empaquetarLossless(datos, mimeT, tipo != "imagen")
+		if err != nil {
+			fallar(w, 500, err)
+			return
+		}
+		// Una miniatura para que el .zip se vea como la foto/video, no como un
+		// documento a ciegas (tanto aca como en WhatsApp comun).
+		miniLossless = miniaturaDeBytes(datos, extLossless(mimeT, tipo != "imagen"))
+		datos, mimeT, nombre, tipo = zipDatos, "application/zip", zipNombre, "documento"
+	}
 	// Un video que no sea H.264/AAC 1280 o menos no se ve en el celular ni
 	// en WhatsApp Web: se reencodea como lo manda el telefono (tarda, pero
 	// recien aca, cuando ya se apreto enviar).
@@ -744,6 +763,9 @@ func enviarArchivo(w http.ResponseWriter, r *http.Request) {
 		if epigrafe != "" {
 			dm.Caption = proto.String(epigrafe)
 		}
+		if len(miniLossless) > 0 {
+			dm.JPEGThumbnail = miniLossless
+		}
 		c.proto = dm
 		c.media.Nombre = nombre
 		msg = &waE2E.Message{DocumentMessage: dm}
@@ -753,14 +775,24 @@ func enviarArchivo(w http.ResponseWriter, r *http.Request) {
 		fallar(w, http.StatusBadGateway, err)
 		return
 	}
-	// Copia local: lo que mandamos ya lo tenemos, no hace falta bajarlo.
+	// Si fue lossless, de este lado igual se ve como la imagen/video original
+	// (el nombre del media queda como el .zip, asi al re-bajarlo se reconoce).
+	if lossless && tipoVer != tipo {
+		c.tipo = tipoVer
+		if c.media != nil {
+			c.media.Mime = mimeVer
+			c.media.Bytes = int64(len(datosVer))
+		}
+	}
+	// Copia local: lo que mandamos ya lo tenemos, no hace falta bajarlo. En
+	// lossless guardo el original (datosVer), no el zip.
 	m := anotarEnviado(chat, resp, c, ctxInfo, "")
 	if m.Media != nil {
-		ruta := rutaPara(m.Media.ID, mimeT, nombre)
+		ruta := rutaPara(m.Media.ID, mimeVer, nombreVer)
 		os.MkdirAll(filepath.Dir(ruta), 0o755)
-		if os.WriteFile(ruta, datos, 0o644) == nil {
+		if os.WriteFile(ruta, datosVer, 0o644) == nil {
 			db.Exec("UPDATE media SET ruta = ? WHERE id = ?", ruta, m.Media.ID)
-			asegurarMiniatura(m.Media.ID, chat, m.ID, tipo, ruta)
+			asegurarMiniatura(m.Media.ID, chat, m.ID, tipoVer, ruta)
 		}
 	}
 	responder(w, m)

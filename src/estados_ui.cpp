@@ -83,7 +83,8 @@ void App::abrir_tab_estados(bool si) {
 void App::cerrar_chat() {
     if (chat_actual.empty()) return;
     borradores[chat_actual] = campo.texto;
-    borradores_adjunto[chat_actual] = adjunto;
+    borradores_adjunto[chat_actual] = adjuntos;
+    borradores_lossless[chat_actual] = lossless;
     recordar_chat();
     chat_actual.clear();
     mensajes.clear();
@@ -98,7 +99,8 @@ void App::cerrar_chat() {
     editando.reset();
     sel_msg = -1;
     campo.poner(L"");
-    adjunto.reset();
+    adjuntos.clear();
+    lossless = false;
     campo.indicio = L"Type a message";
 }
 

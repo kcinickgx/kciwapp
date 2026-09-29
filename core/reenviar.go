@@ -35,14 +35,14 @@ func hReenviar(w http.ResponseWriter, r *http.Request) {
 	var msg *waE2E.Message
 	c := contenido{tipo: m.Tipo, texto: m.Texto}
 	if m.Media != nil {
-		var mimeT, tipo string
+		var mimeT, tipo, nombre string
 		var crudo []byte
-		if err := db.QueryRow("SELECT mime, proto FROM media WHERE id = ?", m.Media.ID).Scan(&mimeT, &crudo); err != nil || len(crudo) == 0 {
+		if err := db.QueryRow("SELECT mime, nombre, proto FROM media WHERE id = ?", m.Media.ID).Scan(&mimeT, &nombre, &crudo); err != nil || len(crudo) == 0 {
 			fallar(w, 404, errors.New("media not found"))
 			return
 		}
 		tipo = m.Tipo
-		dm, err := mensajeDescargable(mimeT, tipo, crudo)
+		dm, err := mensajeDescargable(mimeT, tipo, nombre, crudo)
 		if err != nil {
 			fallar(w, 500, err)
 			return

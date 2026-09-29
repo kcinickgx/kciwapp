@@ -121,8 +121,17 @@ func bajadorPendientes() {
 }
 
 // Reconstruye el sub-mensaje descargable guardado con el media.
-func mensajeDescargable(mime string, tipo string, crudo []byte) (whatsmeow.DownloadableMessage, error) {
+func mensajeDescargable(mime string, tipo string, nombre string, crudo []byte) (whatsmeow.DownloadableMessage, error) {
 	var m whatsmeow.DownloadableMessage
+	// Un lossless llega/se guarda como imagen/video, pero por abajo es un
+	// DocumentMessage (el .zip): hay que reconstruirlo como tal.
+	if ok, _ := esNombreLossless(nombre); ok {
+		m = &waE2E.DocumentMessage{}
+		if err := proto.Unmarshal(crudo, m.(proto.Message)); err != nil {
+			return nil, err
+		}
+		return m, nil
+	}
 	switch tipo {
 	case "imagen":
 		m = &waE2E.ImageMessage{}
@@ -204,7 +213,7 @@ func bajar(id int64, pedirAlTelefono bool) (string, error) {
 	if len(crudo) == 0 {
 		return "", errors.New("sin datos para bajar")
 	}
-	dm, err := mensajeDescargable(mimeT, tipo, crudo)
+	dm, err := mensajeDescargable(mimeT, tipo, nombre, crudo)
 	if err != nil {
 		return "", err
 	}
@@ -230,7 +239,21 @@ func bajar(id int64, pedirAlTelefono bool) (string, error) {
 		log.Printf("media %d: %v", id, err)
 		return "", err
 	}
-	ruta = rutaPara(id, mimeT, nombre)
+	// Lossless: lo bajado es el .zip; saco la media original y guardo eso. La
+	// extension sale del mime real, no del nombre (.zip).
+	nombreRuta := nombre
+	if ok, _ := esNombreLossless(nombre); ok {
+		if orig, mimeReal, bien := desempaquetarLossless(datos); bien {
+			datos = orig
+			if mimeReal != "" {
+				mimeT = mimeReal
+			}
+			nombreRuta = ""
+		} else {
+			log.Printf("media %d: zip lossless no reconocido, lo dejo como esta", id)
+		}
+	}
+	ruta = rutaPara(id, mimeT, nombreRuta)
 	if err := os.MkdirAll(filepath.Dir(ruta), 0o755); err != nil {
 		return "", err
 	}
@@ -293,14 +316,14 @@ func pedirReenvio(chat, msgID string, propio bool, clave []byte) {
 func reintentoMedia(evt *events.MediaRetry) {
 	chat := normalizar(evt.ChatID)
 	var id int64
-	var mimeT, tipo string
+	var mimeT, tipo, nombre string
 	var crudo []byte
-	err := db.QueryRow(`SELECT md.id, md.mime, md.proto, m.tipo FROM media md JOIN mensajes m ON m.chat = md.chat AND m.id_wa = md.mensaje
-		WHERE md.chat = ? AND md.mensaje = ?`, chat, evt.MessageID).Scan(&id, &mimeT, &crudo, &tipo)
+	err := db.QueryRow(`SELECT md.id, md.mime, md.nombre, md.proto, m.tipo FROM media md JOIN mensajes m ON m.chat = md.chat AND m.id_wa = md.mensaje
+		WHERE md.chat = ? AND md.mensaje = ?`, chat, evt.MessageID).Scan(&id, &mimeT, &nombre, &crudo, &tipo)
 	if err != nil {
 		return
 	}
-	dm, err := mensajeDescargable(mimeT, tipo, crudo)
+	dm, err := mensajeDescargable(mimeT, tipo, nombre, crudo)
 	if err != nil {
 		return
 	}

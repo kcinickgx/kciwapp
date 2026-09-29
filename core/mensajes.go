@@ -240,6 +240,16 @@ func clasificar(msg *waE2E.Message) (c contenido) {
 		if c.media.Nombre == "" {
 			c.media.Nombre = d.GetTitle()
 		}
+		// Lossless: un documento img-/vid-<hash>.zip que mando otro kciwapp. Se
+		// muestra como imagen/video; el zip se descomprime al bajarlo. El mime
+		// exacto se sabe recien ahi; aca va un placeholder para que se dibuje.
+		if ok, video := esNombreLossless(c.media.Nombre); ok {
+			if video {
+				c.tipo, c.media.Mime = "video", "video/mp4"
+			} else {
+				c.tipo, c.media.Mime = "imagen", "image/jpeg"
+			}
+		}
 	case msg.GetStickerMessage() != nil:
 		s := msg.GetStickerMessage()
 		c.tipo, c.ctx, c.proto = "figurita", s.GetContextInfo(), s

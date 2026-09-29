@@ -611,7 +611,7 @@ void App::adjuntar_archivo(const std::wstring& ruta) {
     size_t corte = ruta.find_last_of(L"\\/");
     std::wstring nombre = corte == std::wstring::npos ? ruta : ruta.substr(corte + 1);
     adjuntar_datos(std::move(datos), mime_por_extension(ruta), angosto(nombre));
-    adjunto->ruta = ruta;
+    if (!adjuntos.empty()) adjuntos.back().ruta = ruta;
 }
 
 void App::adjuntar_datos(std::string datos, std::string mime, std::string nombre) {
@@ -636,36 +636,48 @@ void App::adjuntar_datos(std::string datos, std::string mime, std::string nombre
     } else {
         a.tipo = "documento";
     }
-    adjunto = std::move(a);
+    if (adjuntos.size() >= 30) {
+        aviso_estado = L"Too many attachments";
+        pedir_dibujo();
+        return;
+    }
+    adjuntos.push_back(std::move(a));
     campo.foco = true;
     pedir_dibujo();
 }
 
-void App::enviar_adjunto() {
-    if (!adjunto || chat_actual.empty()) return;
-    Adjunto a = std::move(*adjunto);
-    adjunto.reset();
+void App::enviar_adjuntos() {
+    if (adjuntos.empty() || chat_actual.empty()) return;
+    std::vector<Adjunto> cola = std::move(adjuntos);
+    adjuntos.clear();
+    bool ll = lossless;
     std::wstring t = campo.texto;
     while (!t.empty() && (t.back() == L' ' || t.back() == L'\n')) t.pop_back();
     campo.poner(L"");
     std::string chat = chat_actual, cita = respondiendo ? respondiendo->id : "";
     respondiendo.reset();
-    aviso_estado = L"Sending " + ancho(a.nombre) + L"...";
+    aviso_estado = L"Sending...";
     pedir_dibujo();
     std::string texto = angosto(t);
-    red::en_fondo([this, chat, a, texto, cita] {
-        Respuesta r = red::mandar_archivo(L"/enviar", chat, a.nombre, a.mime, a.datos, texto, cita, a.tipo, 0);
-        Json j = Json::parsear(r.cuerpo);
-        bool ok = r.ok();
-        if (!ok)
-            red::registrar("enviar archivo " + a.nombre + " (" + a.tipo + ", " + std::to_string(a.datos.size()) + " bytes) -> " +
-                           std::to_string(r.estado) + " " + r.cuerpo.substr(0, 200));
-        red::en_ui([this, j, ok] {
-            aviso_estado.clear();
-            if (!ok) aviso_estado = L"Could not send: " + ancho(j["error"].str("no response"));
-            else agregar_mensaje(Mensaje::de_json(j));
-            pedir_dibujo();
-        });
+    red::en_fondo([this, chat, cola, texto, cita, ll] {
+        for (size_t i = 0; i < cola.size(); i++) {
+            const Adjunto& a = cola[i];
+            // El epigrafe (texto) va solo con el ultimo, como un album.
+            std::string ep = (i + 1 == cola.size()) ? texto : std::string();
+            // El lossless solo tiene sentido para imagen/video.
+            bool aLossless = ll && (a.tipo == "imagen" || a.tipo == "video" || a.tipo == "gif");
+            Respuesta r = red::mandar_archivo(L"/enviar", chat, a.nombre, a.mime, a.datos, ep, cita, a.tipo, 0, aLossless);
+            Json j = Json::parsear(r.cuerpo);
+            bool ok = r.ok();
+            if (!ok)
+                red::registrar("enviar archivo " + a.nombre + " (" + a.tipo + ", " + std::to_string(a.datos.size()) + " bytes) -> " +
+                               std::to_string(r.estado) + " " + r.cuerpo.substr(0, 200));
+            red::en_ui([this, j, ok] {
+                if (!ok) aviso_estado = L"Could not send: " + ancho(j["error"].str("no response"));
+                else { aviso_estado.clear(); agregar_mensaje(Mensaje::de_json(j)); }
+                pedir_dibujo();
+            });
+        }
     });
 }
 
@@ -678,14 +690,17 @@ void App::pegar() {
     }
     if (IsClipboardFormatAvailable(CF_HDROP) && OpenClipboard(nullptr)) {
         HDROP h = (HDROP)GetClipboardData(CF_HDROP);
-        std::wstring ruta;
+        std::vector<std::wstring> rutas;
         if (h) {
-            wchar_t buf[MAX_PATH];
-            if (DragQueryFileW(h, 0, buf, MAX_PATH)) ruta = buf;
+            UINT n = DragQueryFileW(h, 0xFFFFFFFF, nullptr, 0);
+            for (UINT i = 0; i < n; i++) {
+                wchar_t buf[MAX_PATH];
+                if (DragQueryFileW(h, i, buf, MAX_PATH)) rutas.push_back(buf);
+            }
         }
         CloseClipboard();
-        if (!ruta.empty()) {
-            adjuntar_archivo(ruta);
+        if (!rutas.empty()) {
+            for (const auto& r : rutas) adjuntar_archivo(r);
             return;
         }
     }
@@ -694,8 +709,11 @@ void App::pegar() {
 }
 
 void App::soltar_archivos(HDROP h) {
-    wchar_t buf[MAX_PATH];
-    if (DragQueryFileW(h, 0, buf, MAX_PATH)) adjuntar_archivo(buf);
+    UINT n = DragQueryFileW(h, 0xFFFFFFFF, nullptr, 0);
+    for (UINT i = 0; i < n; i++) {
+        wchar_t buf[MAX_PATH];
+        if (DragQueryFileW(h, i, buf, MAX_PATH)) adjuntar_archivo(buf);
+    }
     DragFinish(h);
 }
 
@@ -1108,8 +1126,8 @@ void App::escapar() {
         campo.poner(L"");
     } else if (respondiendo) {
         respondiendo.reset();
-    } else if (adjunto) {
-        adjunto.reset();
+    } else if (!adjuntos.empty()) {
+        adjuntos.clear();
     } else if (buscador.foco) {
         cerrar_buscador();
     } else if (sel_msg >= 0) {
