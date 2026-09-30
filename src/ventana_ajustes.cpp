@@ -20,6 +20,7 @@
 #include "webwa.h"
 #include "tema.h"
 #include "toast.h"
+#include "sonido.h"
 
 namespace {
 
@@ -656,15 +657,30 @@ float seccion_traduccion(Gfx& g, float x, float y, float ancho_contenido) {
 float seccion_notificaciones(Gfx& g, float x, float y, float ancho_contenido) {
     y = titulo_seccion(g, x, y, L"NOTIFICATIONS");
     y += 6;
+    float pw = 42, ph = 22;
+    // Primer tilde: el popup en pantalla.
     hover_si(g, x, y, ancho_contenido, FILA);
-    g.renglon(L"Show notifications", x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
+    g.renglon(L"Show popup", x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
     bool on = ajustes::actual().notificaciones;
-    float pw = 42, ph = 22, px = x + ancho_contenido - pw, py = y + (FILA - ph) / 2.0f;
+    float px = x + ancho_contenido - pw, py = y + (FILA - ph) / 2.0f;
     g.rect_redondo(px, py, pw, ph, ph / 2.0f, Color(on ? ACCENT() : BG_CAMPO()));
     float cx = on ? px + pw - ph / 2.0f : px + ph / 2.0f;
     g.circulo(cx, py + ph / 2.0f, ph / 2.0f - 3, Color(0xffffff));
     agregar_clic(g_clics, x, y, ancho_contenido, FILA,
                  []() { ajustes::cambiar([](Ajustes& a) { a.notificaciones = !a.notificaciones; }); });
+    y += FILA;
+    // Segundo tilde: el sonidito, aparte del popup.
+    hover_si(g, x, y, ancho_contenido, FILA);
+    g.renglon(L"Play sound", x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
+    bool son = ajustes::actual().sonido;
+    float sx = x + ancho_contenido - pw, sy = y + (FILA - ph) / 2.0f;
+    g.rect_redondo(sx, sy, pw, ph, ph / 2.0f, Color(son ? ACCENT() : BG_CAMPO()));
+    float scx = son ? sx + pw - ph / 2.0f : sx + ph / 2.0f;
+    g.circulo(scx, sy + ph / 2.0f, ph / 2.0f - 3, Color(0xffffff));
+    agregar_clic(g_clics, x, y, ancho_contenido, FILA, []() {
+        ajustes::cambiar([](Ajustes& a) { a.sonido = !a.sonido; });
+        if (ajustes::actual().sonido) sonido::notificacion();  // preview al prenderlo
+    });
     y += FILA;
     if (ajustes::actual().notificaciones) {
         // Donde salen los avisos.

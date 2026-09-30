@@ -139,6 +139,7 @@ void cargar(const std::wstring& carpeta_exe) {
     a.letra_lista = (float)j["letra_lista"].num(15);
     a.letra_chat = (float)j["letra_chat"].num(14.5);
     a.notificaciones = j["notificaciones"].bul(true);
+    a.sonido = j["sonido"].bul(true);
     a.llamadas_web = j["llamadas_web"].bul(false);
     a.mensajes_por_chat = (int)j["mensajes_por_chat"].num(200);
     a.monitor_avisos = (int)j["monitor_avisos"].num(-1);
@@ -193,6 +194,10 @@ void guardar() {
     b.tipo = Json::Booleano;
     b.b = g_ajustes.notificaciones;
     j.objeto["notificaciones"] = b;
+    Json bs;
+    bs.tipo = Json::Booleano;
+    bs.b = g_ajustes.sonido;
+    j.objeto["sonido"] = bs;
     Json bl;
     bl.tipo = Json::Booleano;
     bl.b = g_ajustes.llamadas_web;

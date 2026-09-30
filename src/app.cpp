@@ -10,6 +10,7 @@
 
 #include "aviso.h"
 #include "toast.h"
+#include "sonido.h"
 #include "webwa.h"
 #include "cache.h"
 #include "red.h"
@@ -1002,6 +1003,7 @@ bool App::aplicar_evento(const Json& e) {
                 bool con_foto = (c && c->tiene_foto) || (contactos.count(m.chat) && contactos[m.chat].tiene_foto);
                 toast::mostrar(titulo, texto, m.chat, m.id, con_foto ? L"/foto/" + ancho(m.chat) : L"");
             }
+            if (ajustes::actual().sonido) sonido::notificacion();
         }
         if (hay && !m.propio && !callado && m.chat != chat_actual)
             for (auto& c : chats)

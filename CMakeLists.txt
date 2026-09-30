@@ -38,12 +38,13 @@ add_executable(kciwapp2 WIN32
     src/actualizar_ui.cpp
     src/info_msg_ui.cpp
     src/toast.cpp
+    src/sonido.cpp
     src/app.rc
 )
 target_include_directories(kciwapp2 PRIVATE third_party/webview2/include ${CMAKE_BINARY_DIR})
 target_compile_definitions(kciwapp2 PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_options(kciwapp2 PRIVATE /W3 /utf-8 /EHsc /permissive-)
-target_link_libraries(kciwapp2 PRIVATE d3d11 d2d1 dwrite dxgi windowscodecs winhttp ws2_32 dwmapi shell32 ole32 uxtheme comctl32 shlwapi comdlg32 mmdevapi avrt bcrypt)
+target_link_libraries(kciwapp2 PRIVATE d3d11 d2d1 dwrite dxgi windowscodecs winhttp ws2_32 dwmapi shell32 ole32 uxtheme comctl32 shlwapi comdlg32 mmdevapi avrt bcrypt winmm)
 
 # El instalador: un exe chico y autonomo (CRT estatica) que baja todo de
 # kcinick.gxzone.com/kciwapp. publicar.py lo sube como kciwapp-setup.exe.
