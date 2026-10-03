@@ -110,15 +110,21 @@ void Campo::dibujar(Gfx& g, float x, float y, float w, float h, unsigned long lo
     float cursor_rel = cy - (y + RELLENO_Y);
     if (m.height <= interior) desplazamiento = 0;
     else {
+        // Si el cursor se movio (tipear, flechas, click) el scroll lo sigue.
+        // Si no cambio, se respeta el scroll puesto a mano (rueda, Re/Av Pag),
+        // asi se puede mirar arriba sin que salte de vuelta al cursor.
         // cursor_rel ya es la posicion del cursor dentro del texto (0 = la
-        // primera linea), sin el scroll. Si se fue abajo de lo visible, bajo
-        // el scroll; si se fue arriba, lo subo (esto ultimo faltaba: al ir con
-        // la flecha arriba el principio quedaba oculto y no se podia editar).
-        if (cursor_rel + ch > desplazamiento + interior) desplazamiento = cursor_rel + ch - interior;
-        if (cursor_rel < desplazamiento) desplazamiento = cursor_rel;
+        // primera linea), sin el scroll.
+        if (cursor != cursor_scroll) {
+            if (cursor_rel + ch > desplazamiento + interior) desplazamiento = cursor_rel + ch - interior;
+            if (cursor_rel < desplazamiento) desplazamiento = cursor_rel;
+            cursor_scroll = cursor;
+        }
         desplazamiento = std::min(desplazamiento, m.height - interior);
         desplazamiento = std::max(desplazamiento, 0.0f);
     }
+    cont_alto = m.height;
+    vista_alto = interior;
     float tx = x + RELLENO_X, ty = y + RELLENO_Y - desplazamiento;
 
     g.recortar(x, y, w, h);
@@ -166,6 +172,21 @@ void Campo::mover(size_t a, bool shift) {
     if (!shift) ancla = cursor;
     ultimo_movimiento = GetTickCount64();
 }
+
+// Mueve el scroll a mano (rueda, Re/Av Pag) dentro del rango. Como no cambia
+// el cursor, dibujar() no lo pisa: el scroll se queda donde lo dejaste.
+void Campo::desplazar(float dy) {
+    if (cont_alto <= vista_alto) {
+        desplazamiento = 0;
+        return;
+    }
+    desplazamiento += dy;
+    if (desplazamiento < 0) desplazamiento = 0;
+    float maxi = cont_alto - vista_alto;
+    if (desplazamiento > maxi) desplazamiento = maxi;
+}
+
+void Campo::rueda(float dy) { desplazar(dy); }
 
 size_t Campo::linea_arriba_abajo(Gfx& g, int direccion) {
     IDWriteTextLayout* l = armar(g);
@@ -220,6 +241,14 @@ bool Campo::tecla(Gfx& g, WPARAM vk, bool shift, bool ctrl) {
             return true;
         case VK_UP: mover(linea_arriba_abajo(g, -1), shift); return true;
         case VK_DOWN: mover(linea_arriba_abajo(g, 1), shift); return true;
+        case VK_PRIOR:  // Re Pag: solo si el texto pasa del alto; si no, que lo use la conversacion
+            if (cont_alto <= vista_alto) return false;
+            desplazar(-(vista_alto - tamano * 1.5f));
+            return true;
+        case VK_NEXT:  // Av Pag
+            if (cont_alto <= vista_alto) return false;
+            desplazar(vista_alto - tamano * 1.5f);
+            return true;
         case VK_HOME:
             if (ctrl) mover(0, shift);
             else {

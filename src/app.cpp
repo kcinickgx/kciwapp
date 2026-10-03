@@ -3087,7 +3087,8 @@ void App::rueda(float x, float y, float delta) {
     SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lineas, 0);
     float px = -delta / 120.0f * lineas * 40.0f;
     if (rueda_info_mensaje(x, y, delta) || rueda_modal_reenvio(x, y, delta) || rueda_emojis(x, y, delta) || rueda_info(x, y, delta)) return;
-    if (x < ancho_lista) lista.rodar(px);
+    if (campo.tiene(x, y)) campo.rueda(px);  // el input, cuando el texto pasa del alto
+    else if (x < ancho_lista) lista.rodar(px);
     else if (tab_estados) return;
     else if (cargando_todo) return;
     else if (panel_resultados_chat() && y > alto_cabecera() && y < g.alto - alto_pie) scroll_res_chat.rodar(px);

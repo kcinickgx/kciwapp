@@ -38,6 +38,7 @@ struct Campo {
     bool tecla(Gfx& g, WPARAM vk, bool shift, bool ctrl);
     bool caracter(wchar_t c);
     bool click(Gfx& g, float x, float y, bool shift);
+    void rueda(float dy);  // scroll con la rueda del mouse (dy en pixeles)
     void arrastrar(Gfx& g, float x, float y);
     bool arrastrando = false;
 
@@ -55,10 +56,13 @@ struct Campo {
     float layout_ancho = 0;
     float ox = 0, oy = 0;  // donde se dibujo por ultima vez
     float desplazamiento = 0;  // scroll vertical interno cuando pasa de alto_max
+    float cont_alto = 0, vista_alto = 0;  // alto del texto y del area visible (ultimo dibujo)
+    size_t cursor_scroll = (size_t)-1;    // cursor de la ultima vez que el scroll lo siguio
     unsigned long long ultimo_movimiento = 0;
 
     IDWriteTextLayout* armar(Gfx& g);
     size_t indice_en(Gfx& g, float x, float y);
     void mover(size_t a, bool shift);
+    void desplazar(float dy);  // mueve el scroll a mano, dentro del rango
     size_t linea_arriba_abajo(Gfx& g, int direccion);
 };
