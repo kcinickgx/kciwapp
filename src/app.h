@@ -619,6 +619,7 @@ struct App {
     void menu_campo(float x, float y);
     // Menu del boton derecho sobre un chat de la lista (silenciar, etc.).
     void menu_chat(const std::string& jid, float x, float y);
+    void menu_silenciar(const std::string& jid, float x, float y);  // submenu con los 3 mutes
     void silenciar_chat(const std::string& jid, long long hasta);
     void archivar_chat(const std::string& jid, bool archivar);
     bool mostrar_archivados = false;    // la lista muestra la seccion Archived
