@@ -17,7 +17,9 @@ import (
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waCommon"
 	"go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/proto/waSyncAction"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
 )
@@ -49,6 +51,8 @@ func servirHTTP() {
 	mux.HandleFunc("POST /borrar", conToken(hBorrar))
 	mux.HandleFunc("POST /leido", conToken(hLeido))
 	mux.HandleFunc("POST /silenciar", conToken(hSilenciar))
+	mux.HandleFunc("POST /archivar", conToken(hArchivar))
+	mux.HandleFunc("POST /ajuste_archivar", conToken(hAjusteArchivar))
 	mux.HandleFunc("POST /escribiendo", conToken(hEscribiendo))
 	mux.HandleFunc("POST /presencia", conToken(hPresencia))
 	mux.HandleFunc("POST /boton", conToken(hBoton))
@@ -109,6 +113,9 @@ func hEstado(w http.ResponseWriter, r *http.Request) {
 	// Cambia con cada importacion masiva: el cliente tira su cache y recarga.
 	est["importacion"] = valor("importacion")
 	est["version"] = VERSION
+	// "Mantener chats archivados": por defecto si (como WhatsApp). En crudo se
+	// guarda al reves (desarchivar al recibir), que es lo que manda el telefono.
+	est["mantener_archivados"] = valor("desarchivar_al_recibir") != "1"
 	responder(w, est)
 }
 
@@ -922,6 +929,78 @@ func hSilenciar(w http.ResponseWriter, r *http.Request) {
 	}
 	db.Exec("UPDATE chats SET silenciado = ? WHERE jid = ?", hasta, p.Chat)
 	evento("chat", p.Chat, chatDe(p.Chat))
+	responder(w, map[string]any{"ok": true})
+}
+
+// POST /archivar {chat, archivar}: archiva o desarchiva el chat. Se manda al
+// telefono como app state (regular_low), igual que el mute.
+func hArchivar(w http.ResponseWriter, r *http.Request) {
+	var p struct {
+		Chat     string `json:"chat"`
+		Archivar bool   `json:"archivar"`
+	}
+	if err := leerJSON(r, &p); err != nil {
+		fallar(w, 400, err)
+		return
+	}
+	j, ok := jidDe(p.Chat)
+	if !ok {
+		fallar(w, 400, errors.New("chat required"))
+		return
+	}
+	// El patch de archivar lleva cual era el ultimo mensaje (lo usa WhatsApp
+	// para el desarchivado automatico): se lo paso si lo tengo.
+	var idWa string
+	var ts int64
+	var propio bool
+	db.QueryRow("SELECT id_wa, ts, propio FROM mensajes WHERE chat = ? ORDER BY ts DESC LIMIT 1", p.Chat).Scan(&idWa, &ts, &propio)
+	var clave *waCommon.MessageKey
+	cuando := time.Time{}
+	if idWa != "" {
+		clave = &waCommon.MessageKey{RemoteJID: proto.String(j.String()), FromMe: proto.Bool(propio), ID: proto.String(idWa)}
+		cuando = time.UnixMilli(ts)
+	}
+	if err := cli.SendAppState(ctx, appstate.BuildArchive(j, p.Archivar, cuando, clave)); err != nil {
+		fallar(w, http.StatusBadGateway, err)
+		return
+	}
+	arch := 0
+	if p.Archivar {
+		arch = 1
+	}
+	db.Exec("UPDATE chats SET archivado = ? WHERE jid = ?", arch, p.Chat)
+	evento("chat", p.Chat, chatDe(p.Chat))
+	responder(w, map[string]any{"ok": true})
+}
+
+// POST /ajuste_archivar {mantener}: el ajuste global "mantener chats
+// archivados". mantener=true => NO se desarchivan solos al llegar un mensaje
+// (es el default de WhatsApp). En crudo la setting es al reves (unarchive).
+func hAjusteArchivar(w http.ResponseWriter, r *http.Request) {
+	var p struct {
+		Mantener bool `json:"mantener"`
+	}
+	if err := leerJSON(r, &p); err != nil {
+		fallar(w, 400, err)
+		return
+	}
+	desarch := !p.Mantener
+	patch := appstate.PatchInfo{
+		Type: appstate.WAPatchRegularLow,
+		Mutations: []appstate.MutationInfo{{
+			Index:   []string{appstate.IndexSettingUnarchiveChats},
+			Version: 1,
+			Value: &waSyncAction.SyncActionValue{
+				UnarchiveChatsSetting: &waSyncAction.UnarchiveChatsSetting{UnarchiveChats: proto.Bool(desarch)},
+			},
+		}},
+	}
+	if err := cli.SendAppState(ctx, patch); err != nil {
+		// No es fatal: el valor local igual sirve para mostrar el toggle.
+		log.Printf("ajuste mantener-archivados: no se pudo sincronizar: %v", err)
+	}
+	guardarValor("desarchivar_al_recibir", boolATexto(desarch))
+	evento("ajustes", "", map[string]any{"mantener_archivados": p.Mantener})
 	responder(w, map[string]any{"ok": true})
 }
 

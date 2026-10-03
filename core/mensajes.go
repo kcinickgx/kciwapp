@@ -167,6 +167,26 @@ func manejarEvento(e any) {
 		chat := normalizar(v.ChatJID)
 		db.Exec("UPDATE mensajes SET borrado = 1 WHERE chat = ? AND id_wa = ?", chat, v.MessageID)
 		evento("borrado", chat, map[string]any{"id": v.MessageID})
+	case *events.Archive:
+		// Archivaron o desarchivaron desde el telefono. Como con el mute,
+		// leo el estado ya consolidado del store (no el evento suelto).
+		chat := normalizar(v.JID)
+		arch := 0
+		if cli.Store.ChatSettings != nil {
+			if st, err := cli.Store.ChatSettings.GetChatSettings(ctx, v.JID); err == nil && st.Archived {
+				arch = 1
+			}
+		}
+		db.Exec("UPDATE chats SET archivado = ? WHERE jid = ?", arch, chat)
+		log.Printf("archivado desde el telefono: %s = %d%s", chat, arch, siDesdeSync(v.FromFullSync))
+		evento("chat", chat, chatDe(chat))
+	case *events.UnarchiveChatsSetting:
+		// El ajuste "mantener chats archivados" (en crudo es al reves:
+		// unarchive=true => se desarchivan solos al llegar un mensaje).
+		unarch := v.Action.GetUnarchiveChats()
+		guardarValor("desarchivar_al_recibir", boolATexto(unarch))
+		log.Printf("ajuste mantener-archivados desde el telefono: desarchivar=%v%s", unarch, siDesdeSync(v.FromFullSync))
+		evento("ajustes", "", map[string]any{"mantener_archivados": !unarch})
 	case *events.AppStateSyncComplete:
 		if v.Recovery {
 			log.Printf("recuperacion de %s aplicada (v%d)", v.Name, v.Version)
@@ -591,6 +611,13 @@ func siDesdeSync(b bool) string {
 		return " (sincronizando)"
 	}
 	return ""
+}
+
+func boolATexto(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }
 
 // Saca un chat de la base entera (mensajes, acuses, miembros) y avisa.

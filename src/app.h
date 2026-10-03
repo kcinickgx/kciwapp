@@ -199,7 +199,7 @@ struct Adjunto {
 
 // Que se muestra en cada renglon de la lista de la izquierda.
 struct ItemLista {
-    enum Tipo { ChatItem, Titulo, Resultado } tipo;
+    enum Tipo { ChatItem, Titulo, Resultado, Archivados } tipo;
     int idx;  // chat o resultado
     std::wstring titulo;
 };
@@ -620,6 +620,8 @@ struct App {
     // Menu del boton derecho sobre un chat de la lista (silenciar, etc.).
     void menu_chat(const std::string& jid, float x, float y);
     void silenciar_chat(const std::string& jid, long long hasta);
+    void archivar_chat(const std::string& jid, bool archivar);
+    bool mostrar_archivados = false;    // la lista muestra la seccion Archived
     // Acciones (acciones.cpp)
     void menu_contextual(int i);
     void responder(int i);

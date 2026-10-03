@@ -297,7 +297,7 @@ void App::menu_contextual(int i) {
 void App::menu_chat(const std::string& jid, float x, float y) {
     const Chat* c = chat_de(jid);
     if (!c) return;
-    enum { M_8H = 1, M_SEMANA, M_SIEMPRE, M_SONAR };
+    enum { M_8H = 1, M_SEMANA, M_SIEMPRE, M_SONAR, M_ARCHIVAR, M_DESARCHIVAR };
     std::vector<ItemMenu> items;
     if (c->esta_silenciado()) {
         items.push_back({L"Unmute notifications", M_SONAR, L"\uE767"});
@@ -306,12 +306,18 @@ void App::menu_chat(const std::string& jid, float x, float y) {
         items.push_back({L"Mute for a week", M_SEMANA, L"\uE7ED"});
         items.push_back({L"Mute always", M_SIEMPRE, L"\uE7ED"});
     }
+    if (c->archivado)
+        items.push_back({L"Unarchive", M_DESARCHIVAR, L"\uE7B8"});
+    else
+        items.push_back({L"Archive", M_ARCHIVAR, L"\uE7B8"});
     abrir_menu(std::move(items), x, y, [this, jid](int id) {
         switch (id) {
             case M_8H: silenciar_chat(jid, ahora_ms() + 8LL * 3600 * 1000); break;
             case M_SEMANA: silenciar_chat(jid, ahora_ms() + 7LL * 24 * 3600 * 1000); break;
             case M_SIEMPRE: silenciar_chat(jid, -1); break;
             case M_SONAR: silenciar_chat(jid, 0); break;
+            case M_ARCHIVAR: archivar_chat(jid, true); break;
+            case M_DESARCHIVAR: archivar_chat(jid, false); break;
         }
     });
 }
@@ -324,6 +330,17 @@ void App::silenciar_chat(const std::string& jid, long long hasta) {
     red::en_fondo([cuerpo] {
         Respuesta r = red::mandar_json(L"/silenciar", cuerpo);
         red::registrar("silenciar " + cuerpo + " -> " + std::to_string(r.estado) + " " + r.cuerpo.substr(0, 120));
+    });
+}
+
+void App::archivar_chat(const std::string& jid, bool archivar) {
+    for (auto& c : chats)
+        if (c.jid == jid) c.archivado = archivar;
+    pedir_dibujo();
+    std::string cuerpo = "{\"chat\":" + json_texto(jid) + ",\"archivar\":" + (archivar ? "true" : "false") + "}";
+    red::en_fondo([cuerpo] {
+        Respuesta r = red::mandar_json(L"/archivar", cuerpo);
+        red::registrar("archivar " + cuerpo + " -> " + std::to_string(r.estado) + " " + r.cuerpo.substr(0, 120));
     });
 }
 

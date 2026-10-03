@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "app.h"
+#include "red.h"
 #include "gfx.h"
 #include "grabador.h"
 #include "webwa.h"
@@ -628,6 +629,25 @@ float seccion_chat(Gfx& g, float x, float y, float ancho_contenido) {
     }
     y += FILA;
     g.renglon(L"\"All\" can take a while on big chats; it applies when you open a chat.", x, y, 12, Color(TXT_DIM()),
+              DWRITE_FONT_WEIGHT_NORMAL, ancho_contenido);
+    y += 26;
+    // Mantener chats archivados (como WhatsApp). Es un ajuste de la cuenta: se
+    // sincroniza con el telefono.
+    hover_si(g, x, y, ancho_contenido, FILA);
+    g.renglon(L"Keep chats archived", x, y + (FILA - 16) / 2.0f, 14, Color(TXT()));
+    bool ka = ajustes::actual().mantener_archivados;
+    float pw = 42, ph = 22, px = x + ancho_contenido - pw, py = y + (FILA - ph) / 2.0f;
+    g.rect_redondo(px, py, pw, ph, ph / 2.0f, Color(ka ? ACCENT() : BG_CAMPO()));
+    float cx = ka ? px + pw - ph / 2.0f : px + ph / 2.0f;
+    g.circulo(cx, py + ph / 2.0f, ph / 2.0f - 3, Color(0xffffff));
+    agregar_clic(g_clics, x, y, ancho_contenido, FILA, []() {
+        bool nuevo = !ajustes::actual().mantener_archivados;
+        ajustes::cambiar([nuevo](Ajustes& a) { a.mantener_archivados = nuevo; });
+        std::string cuerpo = std::string("{\"mantener\":") + (nuevo ? "true" : "false") + "}";
+        red::en_fondo([cuerpo]() { red::mandar_json(L"/ajuste_archivar", cuerpo); });
+    });
+    y += FILA;
+    g.renglon(L"When on, archived chats stay archived even when new messages arrive.", x, y, 12, Color(TXT_DIM()),
               DWRITE_FONT_WEIGHT_NORMAL, ancho_contenido);
     return y + 22;
 }

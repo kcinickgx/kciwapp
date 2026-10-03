@@ -30,6 +30,7 @@ struct Ajustes {
     float letra_lista = 15.0f, letra_chat = 14.5f;
     bool notificaciones = true;       // el popup en pantalla
     bool sonido = true;               // el sonidito de aviso (aparte del popup)
+    bool mantener_archivados = true;  // "keep chats archived" (espejo del ajuste del telefono)
     bool llamadas_web = false;        // WhatsApp Web escondido para llamadas
     std::wstring entrada, salida;     // ids WASAPI ("" = el del sistema)
     int mensajes_por_chat = 200;      // cuantos se cargan al abrir un chat (0 = todos)

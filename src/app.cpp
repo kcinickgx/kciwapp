@@ -453,6 +453,9 @@ void App::cargar_chats() {
             mi_jid = je["jid"].str();
             conectado = je["conectado"].bul();
             version_core = ancho(je["version"].str());
+            bool ma = je["mantener_archivados"].bul(true);
+            if (ajustes::actual().mantener_archivados != ma)
+                ajustes::cambiar([ma](Ajustes& a) { a.mantener_archivados = ma; });
             // El nombre de la cuenta en cuentas.json: el telefono.
             if (!mi_jid.empty()) cuentas::poner_nombre(cuentas::activa(), formatear_telefono(mi_jid));
             if (!escuchando) {
@@ -1123,6 +1126,11 @@ bool App::aplicar_evento(const Json& e) {
         }
         pedir_dibujo();
         return true;
+    } else if (tipo == "ajustes") {
+        bool ma = d["mantener_archivados"].bul(ajustes::actual().mantener_archivados);
+        if (ajustes::actual().mantener_archivados != ma)
+            ajustes::cambiar([ma](Ajustes& a) { a.mantener_archivados = ma; });
+        pedir_dibujo();
     } else if (tipo == "chat" || tipo == "chats" || tipo == "contactos" || tipo == "contacto") {
         return true;
     } else if (tipo == "leido") {
@@ -1771,8 +1779,22 @@ void App::armar_items() {
     std::wstring q = plano(buscador.texto);
     while (!q.empty() && q.back() == L' ') q.pop_back();
     if (q.empty()) {
-        for (size_t i = 0; i < chats.size(); i++)
-            if (chats[i].jid != "status@broadcast") items.push_back({ItemLista::ChatItem, (int)i, L""});
+        int n_arch = 0;
+        for (const Chat& c : chats)
+            if (c.archivado && c.jid != "status@broadcast") n_arch++;
+        if (mostrar_archivados) {
+            // Dentro de "Archived": una fila para volver y solo los archivados.
+            items.push_back({ItemLista::Archivados, 0, L"Archived"});
+            for (size_t i = 0; i < chats.size(); i++)
+                if (chats[i].archivado && chats[i].jid != "status@broadcast")
+                    items.push_back({ItemLista::ChatItem, (int)i, L""});
+        } else {
+            if (n_arch > 0)
+                items.push_back({ItemLista::Archivados, 0, L"Archived (" + std::to_wstring(n_arch) + L")"});
+            for (size_t i = 0; i < chats.size(); i++)
+                if (!chats[i].archivado && chats[i].jid != "status@broadcast")
+                    items.push_back({ItemLista::ChatItem, (int)i, L""});
+        }
         return;
     }
     items.push_back({ItemLista::Titulo, 0, L"Contacts"});
@@ -1860,6 +1882,18 @@ void App::dibujar_lista() {
         if (y > g.alto) break;
         if (it.tipo == ItemLista::Titulo) {
             g.renglon(it.titulo, 16, y + 10, 13, Color(ACCENT()), DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            y += h;
+            continue;
+        }
+        if (it.tipo == ItemLista::Archivados) {
+            if ((int)k == chat_bajo_mouse) g.rect(0, y, W, FILA_H, Color(BG_HOVER()));
+            float r = (FILA_H - 20) / 2, cx = 16 + r, cy = y + FILA_H / 2;
+            // Volver (flecha) si estoy adentro; si no, el iconito de archivo.
+            g.renglon_fuente(L"Segoe MDL2 Assets", mostrar_archivados ? L"" : L"",
+                             cx - 11, cy - 11, 20, Color(ACCENT()));
+            g.renglon(it.titulo, 16 + 2 * r + 14, y + (FILA_H - letra_lista) / 2, letra_lista, Color(TXT()),
+                      DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            g.linea(16, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE()));
             y += h;
             continue;
         }
@@ -2872,6 +2906,10 @@ void App::raton_abajo(float x, float y, bool shift) {
             else if (it.tipo == ItemLista::Resultado) {
                 const Mensaje& m = resultados[it.idx];
                 ir_a_mensaje(m.chat, m.id, m.ts);
+            } else if (it.tipo == ItemLista::Archivados) {
+                mostrar_archivados = !mostrar_archivados;
+                lista.pos = 0;
+                pedir_dibujo();
             }
         }
         return;
