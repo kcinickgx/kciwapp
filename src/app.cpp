@@ -1804,10 +1804,16 @@ void App::armar_items() {
     for (size_t i = 0; i < resultados.size(); i++) items.push_back({ItemLista::Resultado, (int)i, L""});
 }
 
+float App::alto_item(const ItemLista& it) const {
+    if (it.tipo == ItemLista::Titulo) return TITULO_H;
+    if (it.tipo == ItemLista::Archivados) return std::round(fila_h() * 0.55f);
+    return fila_h();
+}
+
 int App::item_en(float y) {
     float yy = (float)(top_lista() - lista.pos);
     for (size_t i = 0; i < items.size(); i++) {
-        float h = items[i].tipo == ItemLista::Titulo ? TITULO_H : fila_h();
+        float h = alto_item(items[i]);
         if (y >= yy && y < yy + h) return (int)i;
         yy += h;
     }
@@ -1865,7 +1871,7 @@ void App::dibujar_lista() {
     armar_items();
     float H = g.alto - top;
     float total = 0;
-    for (auto& it : items) total += it.tipo == ItemLista::Titulo ? TITULO_H : fila_h();
+    for (auto& it : items) total += alto_item(it);
     lista.max = std::max(0.0, (double)total - H);
     lista.limitar();
     if (!resultados.empty() && !buscando && !busqueda_completa && lista.pos > lista.max - H) buscar_mas();
@@ -1874,7 +1880,7 @@ void App::dibujar_lista() {
     for (size_t k = 0; k < items.size(); k++) {
         const ItemLista& it = items[k];
         float FILA_H = fila_h();
-        float h = it.tipo == ItemLista::Titulo ? TITULO_H : FILA_H;
+        float h = alto_item(it);
         if (y + h < top) {
             y += h;
             continue;
@@ -1886,14 +1892,14 @@ void App::dibujar_lista() {
             continue;
         }
         if (it.tipo == ItemLista::Archivados) {
-            if ((int)k == chat_bajo_mouse) g.rect(0, y, W, FILA_H, Color(BG_HOVER()));
-            float r = (FILA_H - 20) / 2, cx = 16 + r, cy = y + FILA_H / 2;
+            if ((int)k == chat_bajo_mouse) g.rect(0, y, W, h, Color(BG_HOVER()));
+            float cy = y + h / 2;
             // Volver (flecha) si estoy adentro; si no, el iconito de archivo.
             g.renglon_fuente(L"Segoe MDL2 Assets", mostrar_archivados ? L"" : L"",
-                             cx - 11, cy - 11, 20, Color(ACCENT()));
-            g.renglon(it.titulo, 16 + 2 * r + 14, y + (FILA_H - letra_lista) / 2, letra_lista, Color(TXT()),
+                             18, cy - 8, 16, Color(ACCENT()));
+            g.renglon(it.titulo, 46, cy - letra_lista / 2 - 1, letra_lista, Color(TXT()),
                       DWRITE_FONT_WEIGHT_SEMI_BOLD);
-            g.linea(16, y + FILA_H - 0.5f, W, y + FILA_H - 0.5f, Color(BORDE()));
+            g.linea(16, y + h - 0.5f, W, y + h - 0.5f, Color(BORDE()));
             y += h;
             continue;
         }

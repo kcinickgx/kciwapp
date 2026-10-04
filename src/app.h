@@ -729,6 +729,9 @@ struct App {
     float top_lista() const { return tab_estados ? 60.0f : 104.0f; }
     // Alto de una fila de la lista: acompana al tamano de letra.
     float fila_h() const { return std::round(letra_lista * 3.2f + 20.0f); }
+    // Alto de cada renglon de la lista segun su tipo (la fila "Archived" es
+    // mas baja que un chat, no parece un contacto mas).
+    float alto_item(const ItemLista& it) const;
     float alto_pie = 0;
 
     void dibujar_lista();
