@@ -514,7 +514,7 @@ void App::cargar_chats() {
             ordenar_chats();
             pedir_dibujo();
             if (!chat_inicial.empty()) {
-                if (chat_de(chat_inicial)) abrir_chat(chat_inicial);
+                abrir_por_jid(chat_inicial);
                 chat_inicial.clear();
             }
             if (recarga_pendiente) {
@@ -541,6 +541,23 @@ std::wstring App::nombre_de(const std::string& jid) {
     if (it != contactos.end()) return it->second.nombre;
     if (const Chat* c = chat_de(jid)) return c->nombre;
     return formatear_telefono(jid);
+}
+
+// Abre un chat que puede no estar en la lista (viene de un link whatsapp://).
+void App::abrir_por_jid(const std::string& jid) {
+    if (jid.empty()) return;
+    if (!chat_de(jid)) {
+        Chat nuevo;
+        nuevo.jid = jid;
+        nuevo.nombre = formatear_telefono(jid);
+        chats.insert(chats.begin(), nuevo);
+    }
+    abrir_chat(jid);
+    if (hwnd) {
+        if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+        SetForegroundWindow(hwnd);
+    }
+    pedir_dibujo();
 }
 
 void App::abrir_chat(const std::string& jid) {

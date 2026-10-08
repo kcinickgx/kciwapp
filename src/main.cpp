@@ -35,18 +35,64 @@ std::wstring carpeta_datos() {
 // Argumentos: --cuenta TOKEN abre esa cuenta directo (al cambiar de cuenta
 // desde el menu o al actualizar) y --esperar PID espera a que la instancia
 // anterior cierre antes de pelear por el mutex.
+// Convierte un link de WhatsApp al jid del chat. Soporta el numero
+// (whatsapp://send?phone=NNN, wa.me/NNN, api.whatsapp.com/send?phone=NNN).
+// Devuelve "" si no hay numero (p.ej. un invite de grupo, que no abrimos).
+std::string link_wa_a_jid(const std::wstring& url) {
+    size_t desde = std::wstring::npos;
+    size_t p = url.find(L"phone=");
+    if (p != std::wstring::npos) desde = p + 6;
+    else {
+        size_t m = url.find(L"wa.me/");
+        if (m != std::wstring::npos) desde = m + 6;
+    }
+    if (desde == std::wstring::npos) return "";
+    std::wstring dig;
+    for (size_t i = desde; i < url.size() && iswdigit(url[i]); i++) dig += url[i];
+    if (dig.size() < 7) return "";
+    return angosto(dig) + "@s.whatsapp.net";
+}
+
+bool es_link_wa(const std::wstring& a) {
+    return a.rfind(L"whatsapp:", 0) == 0 || a.find(L"wa.me/") != std::wstring::npos ||
+           a.find(L"whatsapp.com") != std::wstring::npos;
+}
+
 void leer_argumentos(std::string& cuenta, DWORD& esperar) {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) return;
     for (int i = 1; i < argc; i++) {
         if (wcscmp(argv[i], L"--demo") == 0) modo_demo = true;
+        else if (es_link_wa(argv[i])) {
+            std::string jid = link_wa_a_jid(argv[i]);
+            if (!jid.empty()) chat_inicial = jid;
+        }
         else if (i + 1 >= argc) break;
         else if (wcscmp(argv[i], L"--chat") == 0) chat_inicial = angosto(argv[++i]);
         else if (wcscmp(argv[i], L"--cuenta") == 0) cuenta = angosto(argv[++i]);
         else if (wcscmp(argv[i], L"--esperar") == 0) esperar = (DWORD)_wtoi(argv[++i]);
     }
     LocalFree(argv);
+}
+
+// Registra kciwapp como la app del protocolo whatsapp:// (en HKCU, sin admin).
+// Asi al clickear un link de WhatsApp en el navegador lo toma kciwapp. Se
+// reescribe en cada arranque para que la ruta quede al dia tras actualizar.
+void registrar_protocolo_whatsapp() {
+    wchar_t exe[MAX_PATH];
+    if (!GetModuleFileNameW(nullptr, exe, MAX_PATH)) return;
+    std::wstring cmd = L"\"" + std::wstring(exe) + L"\" \"%1\"";
+    auto poner = [](const wchar_t* sub, const wchar_t* nombre, const std::wstring& val) {
+        HKEY k;
+        if (RegCreateKeyExW(HKEY_CURRENT_USER, sub, 0, nullptr, 0, KEY_WRITE, nullptr, &k, nullptr) == ERROR_SUCCESS) {
+            RegSetValueExW(k, nombre, 0, REG_SZ, (const BYTE*)val.c_str(), (DWORD)((val.size() + 1) * sizeof(wchar_t)));
+            RegCloseKey(k);
+        }
+    };
+    poner(L"Software\\Classes\\whatsapp", nullptr, L"URL:WhatsApp Protocol");
+    poner(L"Software\\Classes\\whatsapp", L"URL Protocol", L"");
+    poner(L"Software\\Classes\\whatsapp\\shell\\open\\command", nullptr, cmd);
 }
 
 float escala(HWND h) { return GetDpiForWindow(h) / 96.0f; }
@@ -166,6 +212,14 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DROPFILES:
             if (app) app->soltar_archivos((HDROP)wp);
             return 0;
+        case WM_COPYDATA: {
+            // Otra instancia nos pasa un chat a abrir (link whatsapp:// clickeado
+            // con la app ya abierta).
+            auto* cds = (COPYDATASTRUCT*)lp;
+            if (app && cds && cds->dwData == 0x57415401 && cds->lpData && cds->cbData > 0)
+                app->abrir_por_jid(std::string((const char*)cds->lpData, cds->cbData - 1));
+            return TRUE;
+        }
         case WM_LBUTTONUP:
             if (app) {
                 float e = escala(h);
@@ -326,6 +380,14 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
             bool misma = QueryFullProcessImageNameW(ph, 0, ruta, &n) && _wcsnicmp(ruta, carpeta_exe().c_str(), carpeta_exe().size()) == 0;
             CloseHandle(ph);
             if (misma) {
+                // Si venimos de un link, le paso el chat a la instancia viva.
+                if (!chat_inicial.empty()) {
+                    COPYDATASTRUCT cds{};
+                    cds.dwData = 0x57415401;
+                    cds.cbData = (DWORD)(chat_inicial.size() + 1);
+                    cds.lpData = (void*)chat_inicial.c_str();
+                    SendMessageW(otra, WM_COPYDATA, 0, (LPARAM)&cds);
+                }
                 if (IsIconic(otra)) ShowWindow(otra, SW_RESTORE);
                 SetForegroundWindow(otra);
                 break;
@@ -333,6 +395,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         }
         return 0;
     }
+
+    registrar_protocolo_whatsapp();
 
     cuentas::cargar(carpeta_exe(), cuenta_arg);
     actualizar::limpiar(carpeta_exe());

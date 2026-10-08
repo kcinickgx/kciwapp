@@ -598,6 +598,7 @@ struct App {
     // Datos
     void cargar_chats();
     void abrir_chat(const std::string& jid);
+    void abrir_por_jid(const std::string& jid);  // link whatsapp://: crea el chat si no esta y lo abre
     void cargar_mas_viejos();
     void enviar_texto();
     void escuchar_eventos();
