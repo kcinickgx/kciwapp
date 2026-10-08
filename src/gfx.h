@@ -60,6 +60,12 @@ struct Gfx {
 
     bool iniciar(HWND h);
     void redimensionar();
+    // Cambia cada vez que se crea (o se recrea) el dispositivo, y es unico
+    // entre todas las ventanas: lo que se subio con otro numero (bitmaps,
+    // pinceles puestos en layouts) es de una placa que ya no existe.
+    unsigned generacion = 0;
+    // Se perdio la placa (TDR, driver nuevo): el proximo frame arma todo de nuevo.
+    bool perdido = false;
     // Mientras se arrastra el borde no se espera al monitor: cada WM_SIZE
     // dibuja, y con vsync cada uno costaba un cuadro entero.
     void esperar_monitor(bool si) { vsync = si; }
@@ -124,4 +130,11 @@ struct Gfx {
     std::mutex formatos_mu;
     std::vector<ComPtr<ID2D1Layer>> capas;
     int capas_usadas = 0;
+    // Los pinceles de links de placas anteriores: los hilos de fondo pueden
+    // estar leyendo pincel_enlace justo cuando se reemplaza, asi que el viejo
+    // no se libera nunca (uno por reinicio del driver).
+    std::vector<ComPtr<ID2D1SolidColorBrush>> pinceles_viejos;
+    bool crear_dispositivo(bool permitir_warp);
+    void soltar_dispositivo();
+    void recuperar();
 };

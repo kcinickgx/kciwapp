@@ -55,6 +55,10 @@ float g_mouse_x = -1, g_mouse_y = -1;
 std::map<std::string, ComPtr<ID2D1Bitmap1>> g_fotos;
 std::map<std::string, Pixeles> g_fotos_pendientes;
 std::set<std::string> g_fotos_pedidas;
+// De donde salio cada foto, para volver a pedirla si el driver se reinicia
+// (las subidas a la placa vieja no sirven), y con que generacion se subieron.
+std::map<std::string, std::wstring> g_fotos_rutas;
+unsigned g_fotos_gen = 0;
 
 struct Monitor {
     HMONITOR h;
@@ -110,7 +114,9 @@ void ubicar() {
 }
 
 void pedir_foto(const std::string& clave, const std::wstring& ruta) {
-    if (clave.empty() || g_fotos.count(clave) || g_fotos_pedidas.count(clave)) return;
+    if (clave.empty()) return;
+    g_fotos_rutas[clave] = ruta;
+    if (g_fotos.count(clave) || g_fotos_pedidas.count(clave)) return;
     g_fotos_pedidas.insert(clave);
     red::en_fondo([clave, ruta] {
         Respuesta r = red::obtener(ruta, 20000);
@@ -126,11 +132,21 @@ void pedir_foto(const std::string& clave, const std::wstring& ruta) {
 
 void dibujar() {
     if (!g_gfx_lista) return;
-    // Fotos que llegaron: se suben con este contexto.
-    for (auto& [k, p] : g_fotos_pendientes) g_fotos[k] = g_gfx.subir(p);
-    g_fotos_pendientes.clear();
     Gfx& g = g_gfx;
     g.empezar_frame();
+    if (g_fotos_gen != g.generacion) {
+        // El driver se reinicio: las fotos de la placa vieja se vuelven a pedir.
+        g_fotos_gen = g.generacion;
+        g_fotos.clear();
+        g_fotos_pedidas.clear();
+        for (auto& av : g_avisos) {
+            auto r = g_fotos_rutas.find(av.clave_foto);
+            if (r != g_fotos_rutas.end()) pedir_foto(r->first, r->second);
+        }
+    }
+    // Fotos que llegaron: se suben con este contexto.
+    for (auto& [k, p] : g_fotos_pendientes) g_fotos[k] = g.subir(p);
+    g_fotos_pendientes.clear();
     g.ctx->Clear(Color(BG_APP()).d2d());
     float y = MARGEN;
     for (auto& av : g_avisos) {
@@ -278,6 +294,7 @@ void crear() {
     int esquina = 2 /*DWMWCP_ROUND*/;
     DwmSetWindowAttribute(g_hwnd, 33 /*DWMWA_WINDOW_CORNER_PREFERENCE*/, &esquina, sizeof esquina);
     g_gfx_lista = g_gfx.iniciar(g_hwnd);
+    g_fotos_gen = g_gfx.generacion;
 }
 
 }  // namespace

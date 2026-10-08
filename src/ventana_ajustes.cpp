@@ -734,10 +734,11 @@ float seccion_notificaciones(Gfx& g, float x, float y, float ancho_contenido) {
 }
 
 // El QR de WhatsApp Web, decodificado una vez por cada QR distinto (cambia
-// cada tanto) y por cada contexto D2D (se recrea con el tema).
+// cada tanto) y por cada generacion del Gfx (se recrea con el tema y cuando
+// se reinicia el driver).
 std::string g_qr_datos;
 ComPtr<ID2D1Bitmap1> g_qr_bmp;
-ID2D1DeviceContext* g_qr_ctx = nullptr;
+unsigned g_qr_gen = 0;
 
 float seccion_llamadas(Gfx& g, float x, float y, float ancho_contenido) {
     y = titulo_seccion(g, x, y, L"CALLS");
@@ -765,9 +766,9 @@ float seccion_llamadas(Gfx& g, float x, float y, float ancho_contenido) {
     if (webwa::activo() && !webwa::logueado()) {
         std::string qr = webwa::qr_png();
         if (!qr.empty()) {
-            if (qr != g_qr_datos || g_qr_ctx != g.ctx.Get()) {
+            if (qr != g_qr_datos || g_qr_gen != g.generacion) {
                 g_qr_datos = qr;
-                g_qr_ctx = g.ctx.Get();
+                g_qr_gen = g.generacion;
                 Pixeles p = g.decodificar(qr, false);
                 g_qr_bmp = p.vacio() ? nullptr : g.subir(p);
             }

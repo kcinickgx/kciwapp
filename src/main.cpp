@@ -333,10 +333,17 @@ LRESULT CALLBACK ventana(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 }  // namespace
 
 static LONG WINAPI caida(EXCEPTION_POINTERS* e) {
-    char buf[200];
-    HMODULE base = GetModuleHandleW(nullptr);
-    snprintf(buf, sizeof buf, "CRASH codigo=%08lx direccion=+%llx", e->ExceptionRecord->ExceptionCode,
-             (unsigned long long)((char*)e->ExceptionRecord->ExceptionAddress - (char*)base));
+    // El modulo donde paso (exe o DLL) y el offset dentro de el: contra la
+    // base del exe, un crash en d2d1.dll daba un numero sin sentido.
+    char buf[400], modulo[MAX_PATH] = "?";
+    char* dir = (char*)e->ExceptionRecord->ExceptionAddress;
+    HMODULE base = nullptr;
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, dir, &base) &&
+        GetModuleFileNameA(base, modulo, MAX_PATH)) {
+        if (const char* barra = strrchr(modulo, '\\')) memmove(modulo, barra + 1, strlen(barra));
+    }
+    snprintf(buf, sizeof buf, "CRASH codigo=%08lx direccion=%s+%llx", e->ExceptionRecord->ExceptionCode, modulo,
+             (unsigned long long)(dir - (char*)base));
     red::registrar(buf);
     return EXCEPTION_EXECUTE_HANDLER;
 }

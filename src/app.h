@@ -576,6 +576,11 @@ struct App {
     ComPtr<ID2D1Bitmap1> fondo_bmp;
     ComPtr<ID2D1BitmapBrush> fondo_pincel;
     std::wstring fondo_cargado;
+    void cargar_fondo();
+    // La generacion del Gfx con la que se subio todo; si cambia, el driver se
+    // reinicio y lo que estaba en la placa vieja se suelta (soltar_gpu).
+    unsigned generacion_gpu = 0;
+    void soltar_gpu();
 
     void iniciar(HWND h);
     void dibujar();

@@ -4,24 +4,69 @@
 
 #include <cmath>
 
+// Lo que dice que la placa ya no esta: TDR, driver reinstalado o reiniciado.
+static bool es_perdida(HRESULT hr) {
+    return hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DRIVER_INTERNAL_ERROR ||
+           hr == D2DERR_RECREATE_TARGET;
+}
+
+static unsigned g_generaciones = 0;
+
 bool Gfx::iniciar(HWND h) {
     hwnd = h;
     dpi = (float)GetDpiForWindow(h);
 
+    // Lo que no depende de la placa: se crea una sola vez.
+    D2D1_FACTORY_OPTIONS opciones = {};
+    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1), &opciones, &fabrica);
+    if (FAILED(hr)) return false;
+    hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory3), &dwrite);
+    if (FAILED(hr)) return false;
+    hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));
+    if (FAILED(hr)) return false;
+    return crear_dispositivo(true);
+}
+
+// Todo lo que vive en la placa: D3D, el swap chain de la ventana y el
+// contexto D2D. Sirve para el arranque y para volver de un reinicio del driver.
+bool Gfx::crear_dispositivo(bool permitir_warp) {
     UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     D3D_FEATURE_LEVEL niveles[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
                                    D3D_FEATURE_LEVEL_10_0};
+    ComPtr<ID3D11Device> nuevo;
     ComPtr<ID3D11DeviceContext> d3dctx;
+    bool por_hardware = true;
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, niveles, 4, D3D11_SDK_VERSION,
-                                   &d3d, nullptr, &d3dctx);
+                                   &nuevo, nullptr, &d3dctx);
     if (FAILED(hr)) {
-        acelerado = false;
-        hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, niveles, 4, D3D11_SDK_VERSION, &d3d,
+        // Volviendo de un reset la placa puede tardar: se reintenta, no se
+        // cae a WARP para siempre.
+        if (!permitir_warp) return false;
+        por_hardware = false;
+        hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, niveles, 4, D3D11_SDK_VERSION, &nuevo,
                                nullptr, &d3dctx);
         if (FAILED(hr)) return false;
     }
     ComPtr<IDXGIDevice1> dxgi;
-    d3d.As(&dxgi);
+    nuevo.As(&dxgi);
+    ComPtr<ID2D1Device> nuevo_d2d;
+    if (FAILED(fabrica->CreateDevice(dxgi.Get(), &nuevo_d2d))) return false;
+    ComPtr<ID2D1DeviceContext> nuevo_ctx;
+    if (FAILED(nuevo_d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &nuevo_ctx))) return false;
+    ComPtr<ID2D1SolidColorBrush> nuevo_enlace;
+    nuevo_ctx->CreateSolidColorBrush(Color(0x53bdeb).d2d(), &nuevo_enlace);
+
+    // Recien ahora se suelta lo viejo: la ventana admite un solo swap chain.
+    soltar_dispositivo();
+    d3d = nuevo;
+    dispositivo = nuevo_d2d;
+    ctx = nuevo_ctx;
+    ctx->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+    if (pincel_enlace) pinceles_viejos.push_back(pincel_enlace);
+    pincel_enlace = nuevo_enlace;
+    generacion = ++g_generaciones;
+
+    acelerado = por_hardware;
     ComPtr<IDXGIAdapter> adaptador;
     dxgi->GetAdapter(&adaptador);
     ComPtr<IDXGIFactory2> fabrica_dxgi;
@@ -44,32 +89,51 @@ bool Gfx::iniciar(HWND h) {
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
     ComPtr<IDXGISwapChain1> swap1;
     hr = fabrica_dxgi->CreateSwapChainForHwnd(d3d.Get(), hwnd, &sd, nullptr, nullptr, &swap1);
-    if (FAILED(hr)) return false;
+    if (FAILED(hr)) return false;  // el contexto ya es el nuevo: el swap se reintenta en el proximo frame
     swap1.As(&swap);
     swap->SetMaximumFrameLatency(1);
     espera_frame = swap->GetFrameLatencyWaitableObject();
     fabrica_dxgi->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
-
-    D2D1_FACTORY_OPTIONS opciones = {};
-    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1), &opciones, &fabrica);
-    if (FAILED(hr)) return false;
-    hr = fabrica->CreateDevice(dxgi.Get(), &dispositivo);
-    if (FAILED(hr)) return false;
-    hr = dispositivo->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &ctx);
-    if (FAILED(hr)) return false;
-    ctx->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
-
-    hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory3), &dwrite);
-    if (FAILED(hr)) return false;
-    hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));
-    if (FAILED(hr)) return false;
-
+    perdido = false;
     redimensionar();
-    ctx->CreateSolidColorBrush(Color(0x53bdeb).d2d(), &pincel_enlace);
     return true;
 }
 
+void Gfx::soltar_dispositivo() {
+    if (ctx) ctx->SetTarget(nullptr);
+    destino.Reset();
+    pinceles.clear();
+    capas.clear();
+    capas_usadas = 0;
+    if (espera_frame) {
+        CloseHandle(espera_frame);
+        espera_frame = nullptr;
+    }
+    swap.Reset();
+    ctx.Reset();
+    dispositivo.Reset();
+    if (d3d) {
+        // Que la destruccion diferida del swap chain se haga ya: si no, crear
+        // el nuevo para la misma ventana puede fallar.
+        ComPtr<ID3D11DeviceContext> inmediato;
+        d3d->GetImmediateContext(&inmediato);
+        inmediato->ClearState();
+        inmediato->Flush();
+    }
+    d3d.Reset();
+}
+
+// La placa se perdio: se arma todo de nuevo. Si el driver todavia no volvio,
+// se reintenta en el proximo frame sin quemar CPU.
+void Gfx::recuperar() {
+    if (crear_dispositivo(false)) return;
+    perdido = true;
+    Sleep(50);
+    InvalidateRect(hwnd, nullptr, FALSE);
+}
+
 void Gfx::redimensionar() {
+    if (!swap) return;
     RECT r;
     GetClientRect(hwnd, &r);
     UINT px_ancho = r.right - r.left, px_alto = r.bottom - r.top;
@@ -79,18 +143,28 @@ void Gfx::redimensionar() {
     alto = px_alto * 96.0f / dpi;
     ctx->SetTarget(nullptr);
     destino.Reset();
-    swap->ResizeBuffers(0, px_ancho, px_alto, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+    // Con la placa muerta esto falla y GetBuffer no da superficie: sin estos
+    // chequeos, CreateBitmapFromDxgiSurface(nullptr) tiraba el programa.
+    HRESULT hr = swap->ResizeBuffers(0, px_ancho, px_alto, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+    if (FAILED(hr)) {
+        if (es_perdida(hr)) {
+            perdido = true;
+            InvalidateRect(hwnd, nullptr, FALSE);
+        }
+        return;
+    }
     ComPtr<IDXGISurface> superficie;
-    swap->GetBuffer(0, IID_PPV_ARGS(&superficie));
+    if (FAILED(swap->GetBuffer(0, IID_PPV_ARGS(&superficie))) || !superficie) return;
     D2D1_BITMAP_PROPERTIES1 bp = D2D1::BitmapProperties1(
         D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), dpi, dpi);
-    ctx->CreateBitmapFromDxgiSurface(superficie.Get(), &bp, &destino);
+    if (FAILED(ctx->CreateBitmapFromDxgiSurface(superficie.Get(), &bp, &destino))) return;
     ctx->SetTarget(destino.Get());
     ctx->SetDpi(dpi, dpi);
 }
 
 void Gfx::empezar_frame() {
+    if (perdido) recuperar();
     if (!destino) redimensionar();
     ctx->BeginDraw();
     ctx->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -100,18 +174,25 @@ void Gfx::empezar_frame() {
 
 void Gfx::terminar_frame() {
     HRESULT hr = ctx->EndDraw();
-    if (hr == D2DERR_RECREATE_TARGET) {
-        destino.Reset();
+    if (es_perdida(hr)) {
+        perdido = true;
+        InvalidateRect(hwnd, nullptr, FALSE);
         return;
     }
+    if (!swap || !destino) return;
     DXGI_PRESENT_PARAMETERS pp = {};
-    swap->Present1(vsync ? 1 : 0, 0, &pp);
+    hr = swap->Present1(vsync ? 1 : 0, 0, &pp);
+    if (es_perdida(hr)) {
+        perdido = true;
+        InvalidateRect(hwnd, nullptr, FALSE);
+    }
 }
 
 ID2D1SolidColorBrush* Gfx::pincel(Color c) {
     auto& p = pinceles[c.clave()];
     if (!p) ctx->CreateSolidColorBrush(c.d2d(), &p);
-    return p.Get();
+    // Nunca null (D2D se cae con un pincel null): si no se pudo crear, el de los links.
+    return p ? p.Get() : pincel_enlace.Get();
 }
 
 // La tabla de reemplazo de fuentes: primero la nuestra (los bloques de

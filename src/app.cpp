@@ -323,6 +323,7 @@ ID2D1Bitmap1* Imagen::cuadro_actual(Gfx& g, unsigned long long ahora) {
 void App::iniciar(HWND h) {
     hwnd = h;
     g.iniciar(h);
+    generacion_gpu = g.generacion;
     cargar_estados_pendientes();
     campo.indicio = L"Type a message";
     campo.tamano = letra_chat + 0.5f;
@@ -1754,6 +1755,7 @@ void App::dibujar() {
     necesita_dibujar = false;
 
     g.empezar_frame();
+    if (g.generacion != generacion_gpu) soltar_gpu();
     g.ctx->Clear(Color(BG_APP()).d2d());
     aplicar_ajustes();
     if (config_pendiente || selector_pendiente || actualizando || sin_sesion) {
@@ -3349,37 +3351,73 @@ void App::aplicar_ajustes() {
     }
     if (fondo_cargado != a.fondo) {
         fondo_cargado = a.fondo;
-        fondo_bmp.Reset();
-        fondo_pincel.Reset();
-        std::wstring ruta;
-        if (a.fondo == L"whatsapp") ruta = carpeta_exe() + L"\\fondo-wa.webp";
-        else if (!a.fondo.empty()) ruta = ajustes::carpeta_fondos() + L"\\" + a.fondo;
-        if (!ruta.empty()) {
-            std::string datos;
-            HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-            if (h != INVALID_HANDLE_VALUE) {
-                LARGE_INTEGER tam;
-                GetFileSizeEx(h, &tam);
-                datos.resize((size_t)tam.QuadPart);
-                DWORD leido = 0;
-                ReadFile(h, datos.data(), (DWORD)datos.size(), &leido, nullptr);
-                CloseHandle(h);
-            }
-            Pixeles p = g.decodificar(datos, false);
-            if (!p.vacio()) {
-                fondo_bmp = g.subir(p);
-                if (a.fondo == L"whatsapp" && fondo_bmp) {
-                    // Los garabatos se repiten como mosaico.
-                    D2D1_BITMAP_BRUSH_PROPERTIES bp = D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP);
-                    D2D1_BRUSH_PROPERTIES bp2 = D2D1::BrushProperties();
-                    ComPtr<ID2D1BitmapBrush> pincel;
-                    g.ctx->CreateBitmapBrush(fondo_bmp.Get(), &bp, &bp2, &pincel);
-                    fondo_pincel = pincel;
-                }
-            }
-        }
+        cargar_fondo();
     }
     pedir_dibujo();
+}
+
+void App::cargar_fondo() {
+    fondo_bmp.Reset();
+    fondo_pincel.Reset();
+    std::wstring ruta;
+    if (fondo_cargado == L"whatsapp") ruta = carpeta_exe() + L"\\fondo-wa.webp";
+    else if (!fondo_cargado.empty()) ruta = ajustes::carpeta_fondos() + L"\\" + fondo_cargado;
+    if (ruta.empty()) return;
+    std::string datos;
+    HANDLE h = CreateFileW(ruta.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h != INVALID_HANDLE_VALUE) {
+        LARGE_INTEGER tam;
+        GetFileSizeEx(h, &tam);
+        datos.resize((size_t)tam.QuadPart);
+        DWORD leido = 0;
+        ReadFile(h, datos.data(), (DWORD)datos.size(), &leido, nullptr);
+        CloseHandle(h);
+    }
+    Pixeles p = g.decodificar(datos, false);
+    if (p.vacio()) return;
+    fondo_bmp = g.subir(p);
+    if (fondo_cargado == L"whatsapp" && fondo_bmp) {
+        // Los garabatos se repiten como mosaico.
+        D2D1_BITMAP_BRUSH_PROPERTIES bp = D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP);
+        D2D1_BRUSH_PROPERTIES bp2 = D2D1::BrushProperties();
+        ComPtr<ID2D1BitmapBrush> pincel;
+        g.ctx->CreateBitmapBrush(fondo_bmp.Get(), &bp, &bp2, &pincel);
+        fondo_pincel = pincel;
+    }
+}
+
+// El driver se reinicio (TDR, driver nuevo) y el Gfx armo una placa nueva: lo
+// que estaba subido a la vieja no sirve y dibujarlo hace fallar el frame.
+void App::soltar_gpu() {
+    generacion_gpu = g.generacion;
+    red::registrar("placa recuperada (" + angosto(g.placa) + "): se sueltan las imagenes y se rearman los links");
+    for (auto it = imagenes.begin(); it != imagenes.end();) {
+        Imagen& im = it->second;
+        im.cuadros.clear();  // las animaciones tienen los pixeles: se vuelven a subir solas
+        if (im.anim.cuadros.empty() && !im.fallo) it = imagenes.erase(it);  // se vuelve a pedir, primero al disco
+        else ++it;
+    }
+    for (auto& a : adjuntos) {
+        // Tambien las que no se pudieron subir porque la placa ya estaba muerta.
+        if (a.mime.rfind("image/", 0) != 0) continue;
+        a.vista.Reset();
+        Pixeles p = g.decodificar(a.datos, false);
+        if (!p.vacio()) a.vista = g.subir(p);
+    }
+    qr_bmp.Reset();
+    qr_datos.clear();  // el proximo sondeo lo vuelve a decodificar
+    cargar_fondo();
+    // Los links van pintados con el pincel de la placa vieja, metido en el
+    // layout: se sueltan y se rearman al verse, como los lejanos.
+    for (auto& v : vistas) {
+        if (v.enlaces.empty() || v.liviana) continue;
+        v.texto.Reset();
+        v.nombre.Reset();
+        v.cita.Reset();
+        v.liviana = true;
+    }
+    // Lo que se estaba armando en fondo tambien llevaba el pincel viejo.
+    if (layout_pendiente > 0) lanzar_armado();
 }
 
 // El fondo de la conversacion: color liso, garabatos en mosaico o una foto.

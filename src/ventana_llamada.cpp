@@ -26,7 +26,7 @@ float g_mx = -1, g_my = -1;
 ComPtr<ID2D1Bitmap1> g_foto;
 Pixeles g_foto_pendiente;
 bool g_foto_pedida = false;
-ID2D1DeviceContext* g_foto_ctx = nullptr;
+unsigned g_foto_gen = 0;  // la generacion del Gfx con que se subio la foto
 
 constexpr float BOTON_W = 96, BOTON_H = 34;
 
@@ -42,12 +42,13 @@ void botones(float& mx, float& ex, float& by) {
 
 void dibujar() {
     if (!g_gfx_lista) return;
-    if (!g_foto_pendiente.vacio() && (!g_foto || g_foto_ctx != g_gfx.ctx.Get())) {
-        g_foto = g_gfx.subir(g_foto_pendiente);
-        g_foto_ctx = g_gfx.ctx.Get();
-    }
     Gfx& g = g_gfx;
     g.empezar_frame();
+    // Despues de empezar_frame: si el driver se reinicio, ahi cambia la generacion.
+    if (!g_foto_pendiente.vacio() && (!g_foto || g_foto_gen != g.generacion)) {
+        g_foto = g.subir(g_foto_pendiente);
+        g_foto_gen = g.generacion;
+    }
     g.ctx->Clear(Color(BG_APP()).d2d());
     float W = g.ancho, H = g.alto;
     float r = 56, cx = W / 2, cy = H * 0.36f;
