@@ -128,15 +128,22 @@ void App::dibujar_info() {
         foto = &imagen("foto:g:" + info_jid, L"/foto_grande/" + ancho(info_jid), false);
         if (!foto->bmp) foto = &imagen("foto:" + info_jid, L"/foto/" + ancho(info_jid), false);
     }
+    float lado = FOTO_R * 2, fx = cx - FOTO_R, fy = cy - FOTO_R;
     if (foto && foto->bmp) {
-        g.bitmap_circular(foto->bmp.Get(), cx, cy, FOTO_R);
+        // Cuadrada, cubriendo el recuadro (recorta para no deformar).
+        g.recortar_redondo(fx, fy, lado, lado, 6);
+        D2D1_SIZE_F t = foto->bmp->GetSize();
+        float esc = std::max(lado / t.width, lado / t.height);
+        float w = t.width * esc, h = t.height * esc;
+        g.bitmap(foto->bmp.Get(), cx - w / 2, cy - h / 2, w, h);
+        g.destapar_redondo();
     } else {
-        g.circulo(cx, cy, FOTO_R, Color(0x6b7c85));
+        g.rect_redondo(fx, fy, lado, lado, 6, Color(0x6b7c85));
         std::wstring nombre = nombre_de(info_jid);
         std::wstring inicial = nombre.empty() ? L"?" : nombre.substr(0, 1);
-        float t = FOTO_R * 0.7f;  // la inicial escala con el circulo
-        float iw = g.medir(inicial, t);
-        g.renglon(inicial, cx - iw / 2, cy - t * 0.68f, t, Color(0xdfe5e7));
+        float ts = FOTO_R * 0.7f;  // la inicial escala con el recuadro
+        float iw = g.medir(inicial, ts);
+        g.renglon(inicial, cx - iw / 2, cy - ts * 0.68f, ts, Color(0xdfe5e7));
     }
 
     // Nombre.
