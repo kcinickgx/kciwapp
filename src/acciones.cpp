@@ -213,6 +213,12 @@ void App::raton_derecho(float x, float y) {
         if (visor_msg >= 0 && visor_msg < (int)mensajes.size() && mensajes[visor_msg].media) menu_contextual(visor_msg);
         return;
     }
+    if (info_abierto && info_foto_lado > 0 && x >= info_foto_x && x <= info_foto_x + info_foto_lado &&
+        y >= info_foto_y && y <= info_foto_y + info_foto_lado) {
+        // Boton derecho sobre la foto de la ficha: Save as.
+        menu_foto_perfil(info_jid, x, y);
+        return;
+    }
     if (x < ancho_lista) {
         // Sobre un chat de la lista: su menu.
         if (visor || modal_reenvio || tab_estados || y <= top_lista()) {
@@ -331,6 +337,42 @@ void App::menu_silenciar(const std::string& jid, float x, float y) {
             case M_SEMANA: silenciar_chat(jid, ahora_ms() + 7LL * 24 * 3600 * 1000); break;
             case M_SIEMPRE: silenciar_chat(jid, -1); break;
         }
+    });
+}
+
+void App::menu_foto_perfil(const std::string& jid, float x, float y) {
+    enum { M_GUARDAR = 1 };
+    std::vector<ItemMenu> items = {{L"Save as...", M_GUARDAR, L""}};
+    abrir_menu(std::move(items), x, y, [this, jid](int id) {
+        if (id == M_GUARDAR) guardar_foto_perfil(jid);
+    });
+}
+
+void App::guardar_foto_perfil(const std::string& jid) {
+    std::wstring nom = nombre_de(jid);
+    for (auto& c : nom)
+        if (wcschr(L"\\/:*?\"<>|", c)) c = L'_';
+    if (nom.empty()) nom = L"foto";
+    nom += L".jpg";
+    wchar_t buf[MAX_PATH];
+    wcsncpy_s(buf, nom.c_str(), _TRUNCATE);
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize = sizeof ofn;
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFile = buf;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrFilter = L"JPEG\0*.jpg\0All files\0*.*\0";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    if (!GetSaveFileNameW(&ofn)) return;
+    std::wstring destino = buf;
+    // La foto full se baja del core (ya cacheada, responde al toque).
+    std::wstring url = L"/foto_grande/" + ancho(jid);
+    red::en_fondo([this, url, destino] {
+        Respuesta r = red::obtener(url, 120000);
+        if (r.ok() && !r.cuerpo.empty())
+            escribir_archivo(destino, r.cuerpo);
+        else
+            red::en_ui([this] { aviso_estado = L"Could not save the photo"; pedir_dibujo(); });
     });
 }
 

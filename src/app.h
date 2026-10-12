@@ -626,6 +626,9 @@ struct App {
     // Menu del boton derecho sobre un chat de la lista (silenciar, etc.).
     void menu_chat(const std::string& jid, float x, float y);
     void menu_silenciar(const std::string& jid, float x, float y);  // submenu con los 3 mutes
+    void menu_foto_perfil(const std::string& jid, float x, float y);  // boton derecho en la foto de la ficha
+    void guardar_foto_perfil(const std::string& jid);                 // "Save as..." de la foto full
+    float info_foto_x = 0, info_foto_y = 0, info_foto_lado = 0;        // recuadro de la foto (coords ventana)
     void silenciar_chat(const std::string& jid, long long hasta);
     void archivar_chat(const std::string& jid, bool archivar);
     bool mostrar_archivados = false;    // la lista muestra la seccion Archived

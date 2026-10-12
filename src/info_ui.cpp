@@ -129,6 +129,9 @@ void App::dibujar_info() {
         if (!foto->bmp) foto = &imagen("foto:" + info_jid, L"/foto/" + ancho(info_jid), false);
     }
     float lado = FOTO_R * 2, fx = cx - FOTO_R, fy = cy - FOTO_R;
+    info_foto_x = fx;
+    info_foto_y = fy;
+    info_foto_lado = (tiene_foto && foto && foto->bmp) ? lado : 0;  // 0 = sin foto que guardar
     if (foto && foto->bmp) {
         // Cuadrada, cubriendo el recuadro (recorta para no deformar).
         g.recortar_redondo(fx, fy, lado, lado, 6);
