@@ -121,7 +121,13 @@ void App::dibujar_info() {
     float cx = x + W / 2, cy = base + y_foto_c();
     const Chat* c = chat_de(info_jid);
     bool tiene_foto = (c && c->tiene_foto) || (contactos.count(info_jid) && contactos[info_jid].tiene_foto);
-    Imagen* foto = tiene_foto ? &imagen("foto:" + info_jid, L"/foto/" + ancho(info_jid), false) : nullptr;
+    // La foto en grande (no el thumbnail de la lista); mientras llega, se
+    // muestra el preview que ya esta cacheado.
+    Imagen* foto = nullptr;
+    if (tiene_foto) {
+        foto = &imagen("foto:g:" + info_jid, L"/foto_grande/" + ancho(info_jid), false);
+        if (!foto->bmp) foto = &imagen("foto:" + info_jid, L"/foto/" + ancho(info_jid), false);
+    }
     if (foto && foto->bmp) {
         g.bitmap_circular(foto->bmp.Get(), cx, cy, FOTO_R);
     } else {

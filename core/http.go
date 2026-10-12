@@ -45,6 +45,7 @@ func servirHTTP() {
 	mux.HandleFunc("GET /media/{id}", conToken(hMedia))
 	mux.HandleFunc("GET /miniatura/{id}", conToken(hMiniatura))
 	mux.HandleFunc("GET /foto/{jid}", conToken(hFoto))
+	mux.HandleFunc("GET /foto_grande/{jid}", conToken(hFotoGrande))
 	mux.HandleFunc("POST /enviar", conToken(hEnviar))
 	mux.HandleFunc("POST /reaccion", conToken(hReaccion))
 	mux.HandleFunc("POST /editar", conToken(hEditar))
@@ -442,6 +443,42 @@ func hFoto(w http.ResponseWriter, r *http.Request) {
 	if ruta == "" {
 		http.NotFound(w, r)
 		return
+	}
+	http.ServeFile(w, r, ruta)
+}
+
+// La foto de perfil en grande (no el thumbnail de la lista): se baja a demanda
+// (cuando se abre la ficha del contacto) con Preview=false y se cachea aparte.
+func hFotoGrande(w http.ResponseWriter, r *http.Request) {
+	jidTexto := r.PathValue("jid")
+	j, ok := jidDe(jidTexto)
+	if !ok || j.Server == types.BroadcastServer || j.User == "0" {
+		http.NotFound(w, r)
+		return
+	}
+	ruta := filepath.Join(cfg.Media, "fotos", j.User+"_full.jpg")
+	if _, err := os.Stat(ruta); err != nil {
+		info, err := cli.GetProfilePictureInfo(ctx, j, &whatsmeow.GetProfilePictureParams{Preview: false})
+		if err != nil || info == nil || info.URL == "" {
+			http.NotFound(w, r)
+			return
+		}
+		resp, err := http.Get(info.URL)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer resp.Body.Close()
+		datos, err := io.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != 200 || len(datos) == 0 {
+			http.NotFound(w, r)
+			return
+		}
+		os.MkdirAll(filepath.Dir(ruta), 0o755)
+		if os.WriteFile(ruta, datos, 0o644) != nil {
+			http.NotFound(w, r)
+			return
+		}
 	}
 	http.ServeFile(w, r, ruta)
 }
