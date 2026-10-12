@@ -670,7 +670,13 @@ func enviarArchivo(w http.ResponseWriter, r *http.Request) {
 		mimeT = "image/webp"
 		nombre = "sticker.webp"
 	}
-	if tipo == "nota" && !strings.HasPrefix(mimeT, "audio/ogg") {
+	// WhatsApp solo reproduce audios en ogg/opus, mp3, m4a/aac o amr. Lo que no
+	// (un .wav, .flac, etc.) hay que convertirlo o no se ve en el celular. Las
+	// notas siempre van a opus; los audios "archivo" solo si hace falta.
+	audioOK := strings.HasPrefix(mimeT, "audio/ogg") || strings.HasPrefix(mimeT, "audio/mpeg") ||
+		strings.HasPrefix(mimeT, "audio/mp4") || strings.HasPrefix(mimeT, "audio/aac") ||
+		strings.HasPrefix(mimeT, "audio/amr")
+	if (tipo == "nota" || tipo == "audio") && !audioOK {
 		convertido, seg, err := aOggOpus(datos)
 		if err != nil {
 			fallar(w, 500, err)
@@ -681,7 +687,10 @@ func enviarArchivo(w http.ResponseWriter, r *http.Request) {
 		if seg > 0 {
 			segundos = seg
 		}
-		nombre = "nota.ogg"
+		nombre = "audio.ogg"
+		if tipo == "nota" {
+			nombre = "nota.ogg"
+		}
 	}
 	// Lossless: la foto/video original va dentro de un .zip mandado como
 	// documento, asi WhatsApp no lo recomprime; del otro lado kciwapp lo
