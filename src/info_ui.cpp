@@ -9,7 +9,7 @@
 namespace {
 
 const float BARRA_H = 60.0f;
-const float FOTO_R = 70.0f;
+const float FOTO_R = 120.0f;  // avatar grande en la ficha (se ve la foto full)
 const float MINI_R = 20.0f;
 const float FILA_MIEMBRO_H = 56.0f;
 const float PAD_TOP = 28.0f;
@@ -134,8 +134,9 @@ void App::dibujar_info() {
         g.circulo(cx, cy, FOTO_R, Color(0x6b7c85));
         std::wstring nombre = nombre_de(info_jid);
         std::wstring inicial = nombre.empty() ? L"?" : nombre.substr(0, 1);
-        float iw = g.medir(inicial, 48);
-        g.renglon(inicial, cx - iw / 2, cy - 32, 48, Color(0xdfe5e7));
+        float t = FOTO_R * 0.7f;  // la inicial escala con el circulo
+        float iw = g.medir(inicial, t);
+        g.renglon(inicial, cx - iw / 2, cy - t * 0.68f, t, Color(0xdfe5e7));
     }
 
     // Nombre.
