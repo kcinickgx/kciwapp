@@ -1714,8 +1714,10 @@ Imagen& App::imagen(const std::string& clave, const std::wstring& ruta, bool ani
             bool guardable = clave.rfind("foto:", 0) != 0;
             std::wstring local = ruta_local_de(clave);
             std::string datos = guardable ? leer_bytes(local) : std::string();
+            int cod = -1;
             if (datos.empty()) {
                 Respuesta r = red::obtener(ruta, 120000);
+                cod = r.estado;
                 if (r.ok()) {
                     datos = r.cuerpo;
                     if (guardable && !datos.empty()) escribir_bytes(local, datos);
@@ -1723,6 +1725,9 @@ Imagen& App::imagen(const std::string& clave, const std::wstring& ruta, bool ani
             }
             Pixeles p;
             if (!datos.empty()) p = g.decodificar(datos, animado);
+            if (clave.rfind("foto:g:", 0) == 0)
+                red::registrar("fotog " + angosto(ruta) + " http=" + std::to_string(cod) + " bytes=" + std::to_string(datos.size()) +
+                               " decod=" + (p.vacio() ? std::string("VACIO") : std::to_string(p.ancho) + "x" + std::to_string(p.alto)));
             red::en_ui([this, clave, p] {
                 Imagen& x = imagenes[clave];
                 if (p.vacio()) {
