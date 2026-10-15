@@ -1199,7 +1199,9 @@ void App::escapar() {
         respondiendo.reset();
     } else if (!adjuntos.empty()) {
         adjuntos.clear();
-    } else if (buscador.foco) {
+    } else if (buscador.foco || !buscador.texto.empty()) {
+        // Con foco en el input, Escape igual cierra el buscador de contactos
+        // si quedo con texto (al abrir un chat desde los resultados).
         cerrar_buscador();
     } else if (sel_msg >= 0) {
         sel_msg = -1;
