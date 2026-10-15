@@ -729,6 +729,21 @@ void cambiar_tipo(const std::string& chat, const std::string& id, const std::str
     st.correr();
 }
 
+void actualizar_media(const std::string& chat, const std::string& id, int estado, bool miniatura) {
+    std::lock_guard<std::mutex> l(g_mu);
+    if (!g_db) return;
+    // La miniatura solo se prende (cuando el server la genero); nunca se apaga.
+    const char* sql = miniatura
+        ? "UPDATE mensajes SET media_json=json_set(media_json,'$.estado',?,'$.miniatura',json('true')) WHERE chat=? AND id=? AND media_json IS NOT NULL;"
+        : "UPDATE mensajes SET media_json=json_set(media_json,'$.estado',?) WHERE chat=? AND id=? AND media_json IS NOT NULL;";
+    Stmt st(sql);
+    if (!st.ok) return;
+    st.bind_int(1, estado);
+    st.bind_texto(2, chat);
+    st.bind_texto(3, id);
+    st.correr();
+}
+
 void marcar_borrado(const std::string& chat, const std::string& id) {
     std::lock_guard<std::mutex> l(g_mu);
     if (!g_db) return;

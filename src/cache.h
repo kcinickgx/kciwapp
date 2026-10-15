@@ -40,6 +40,9 @@ void borrar_chat(const std::string& chat, bool solo_mensajes = false);
 void marcar_borrado(const std::string& chat, const std::string& id);
 // El server cambio el tipo del mensaje (video "foto con musica" -> imagen).
 void cambiar_tipo(const std::string& chat, const std::string& id, const std::string& tipo, const std::string& mime);
+// Persiste el estado del media y, si miniatura, el flag (asi tras reiniciar el
+// video muestra su miniatura y no queda negro).
+void actualizar_media(const std::string& chat, const std::string& id, int estado, bool miniatura);
 void editar_texto(const std::string& chat, const std::string& id, const std::wstring& texto);
 // El estado solo sube (nunca pisa un estado mas alto con uno mas bajo).
 void poner_estado(const std::string& chat, const std::string& id, int estado);

@@ -1085,6 +1085,9 @@ bool App::aplicar_evento(const Json& e) {
         long long id = d["id"].entero();
         int estado = (int)d["estado"].entero();
         bool mini = d["miniatura"].bul();
+        // Persistir en cache el estado/miniatura (aunque el chat no este abierto),
+        // si no tras reiniciar el video queda negro (no sabe que hay miniatura).
+        cache::actualizar_media(chat, d["mensaje"].str(), estado, mini);
         // El server puede cambiarle el tipo (un video "foto con musica" pasa a imagen).
         std::string tipo_nuevo = d["tipo"].str();
         if (!tipo_nuevo.empty()) cache::cambiar_tipo(chat, d["mensaje"].str(), tipo_nuevo, d["mime"].str());
@@ -2648,7 +2651,10 @@ void App::dibujar_mensaje(size_t i, float y) {
                 b = im.cuadro_actual(g, ahora);
                 if (!im.anim.cuadros.empty()) necesita_dibujar = true;
             }
-            if (!b && m.media->miniatura) {
+            // Para un video siempre se intenta la miniatura (el server pudo
+            // generarla aunque la cache no lo supiera); para fotos, solo si el
+            // flag dice que hay.
+            if (!b && (m.media->miniatura || es_video)) {
                 Imagen& mini = imagen(clave_mini, L"/miniatura/" + std::to_wstring(m.media->id), false);
                 b = mini.bmp.Get();
             }
