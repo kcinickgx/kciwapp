@@ -7,7 +7,44 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
+
+func esAlnum(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }
+
+// contienePalabra: si `palabra` aparece en `texto` delimitada por algo que no
+// sea letra ni numero (o el borde). Para la busqueda "exacta" entre comillas.
+func contienePalabra(texto, palabra string) bool {
+	t := strings.ToLower(texto)
+	p := strings.ToLower(palabra)
+	if p == "" {
+		return false
+	}
+	desde := 0
+	for {
+		i := strings.Index(t[desde:], p)
+		if i < 0 {
+			return false
+		}
+		i += desde
+		okAntes := i == 0
+		if !okAntes {
+			r, _ := utf8.DecodeLastRuneInString(t[:i])
+			okAntes = !esAlnum(r)
+		}
+		fin := i + len(p)
+		okDespues := fin >= len(t)
+		if !okDespues {
+			r, _ := utf8.DecodeRuneInString(t[fin:])
+			okDespues = !esAlnum(r)
+		}
+		if okAntes && okDespues {
+			return true
+		}
+		desde = i + 1
+	}
+}
 
 // GET /buscar?q=texto&chat=<opcional>&limite=50: mensajes cuyo texto
 // contiene `q`. La collation utf8mb4_unicode_ci ya ignora acentos y
@@ -28,7 +65,24 @@ func hBuscar(w http.ResponseWriter, r *http.Request) {
 		responder(w, []*Mensaje{})
 		return
 	}
-	patron := "%" + strings.NewReplacer("%", "\\%", "_", "\\_").Replace(q) + "%"
+	// Entre comillas ("palabra") = palabra exacta: se traen los candidatos por
+	// LIKE y se filtra en Go que la palabra este delimitada (no "kilo" por "ilo").
+	exacta := false
+	palabra := q
+	if len(q) >= 2 && q[0] == '"' && q[len(q)-1] == '"' {
+		exacta = true
+		palabra = strings.TrimSpace(q[1 : len(q)-1])
+		if palabra == "" {
+			responder(w, []*Mensaje{})
+			return
+		}
+	}
+	patron := "%" + strings.NewReplacer("%", "\\%", "_", "\\_").Replace(palabra) + "%"
+	// En modo exacto traemos muchos candidatos y cortamos en Go al llegar a `limite`.
+	limSQL := limite
+	if exacta {
+		limSQL = 100000
+	}
 	var filas interface {
 		Next() bool
 		Scan(...any) error
@@ -36,9 +90,9 @@ func hBuscar(w http.ResponseWriter, r *http.Request) {
 	}
 	var err error
 	if chat != "" {
-		filas, err = db.Query("SELECT "+columnasMensaje+" "+desdeMensajes+" WHERE m.chat = ? AND m.texto LIKE ? AND m.borrado = 0 AND m.ts < ? ORDER BY m.ts DESC LIMIT ?", chat, patron, antes, limite)
+		filas, err = db.Query("SELECT "+columnasMensaje+" "+desdeMensajes+" WHERE m.chat = ? AND m.texto LIKE ? AND m.borrado = 0 AND m.ts < ? ORDER BY m.ts DESC LIMIT ?", chat, patron, antes, limSQL)
 	} else {
-		filas, err = db.Query("SELECT "+columnasMensaje+" "+desdeMensajes+" WHERE m.texto LIKE ? AND m.borrado = 0 AND m.ts < ? ORDER BY m.ts DESC LIMIT ?", patron, antes, limite)
+		filas, err = db.Query("SELECT "+columnasMensaje+" "+desdeMensajes+" WHERE m.texto LIKE ? AND m.borrado = 0 AND m.ts < ? ORDER BY m.ts DESC LIMIT ?", patron, antes, limSQL)
 	}
 	if err != nil {
 		fallar(w, 500, err)
@@ -46,8 +100,16 @@ func hBuscar(w http.ResponseWriter, r *http.Request) {
 	}
 	lista := []*Mensaje{}
 	for filas.Next() {
-		if m, err := leerMensaje(filas); err == nil {
-			lista = append(lista, m)
+		m, err := leerMensaje(filas)
+		if err != nil {
+			continue
+		}
+		if exacta && !contienePalabra(m.Texto, palabra) {
+			continue
+		}
+		lista = append(lista, m)
+		if len(lista) >= limite {
+			break
 		}
 	}
 	filas.Close()
