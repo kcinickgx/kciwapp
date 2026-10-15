@@ -1208,6 +1208,15 @@ void App::escapar() {
 }
 
 void App::doble_click(float x, float y) {
+    // Doble click en un campo de texto: selecciona la palabra.
+    Campo* campos[] = {&buscador, &campo, &emoji_buscador, &buscador_reenvio, &buscador_chat};
+    for (Campo* c : campos) {
+        if (c->foco && c->tiene(x, y)) {
+            c->seleccionar_palabra(g, x, y);
+            pedir_dibujo();
+            return;
+        }
+    }
     if (x < ancho_lista || visor) return;
     float ym = 0;
     int i = mensaje_en(y, &ym);

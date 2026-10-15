@@ -38,6 +38,7 @@ struct Campo {
     bool tecla(Gfx& g, WPARAM vk, bool shift, bool ctrl);
     bool caracter(wchar_t c);
     bool click(Gfx& g, float x, float y, bool shift);
+    void seleccionar_palabra(Gfx& g, float x, float y);  // doble click: selecciona la palabra
     void rueda(float dy);  // scroll con la rueda del mouse (dy en pixeles)
     void arrastrar(Gfx& g, float x, float y);
     bool arrastrando = false;

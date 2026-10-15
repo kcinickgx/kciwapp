@@ -1,6 +1,7 @@
 #include "campo.h"
 
 #include <algorithm>
+#include <cwctype>
 
 namespace {
 const float RELLENO_X = 12.0f;
@@ -333,6 +334,17 @@ bool Campo::click(Gfx& g, float x, float y, bool shift) {
     mover(indice_en(g, x, y), shift);
     arrastrando = true;
     return true;
+}
+
+void Campo::seleccionar_palabra(Gfx& g, float x, float y) {
+    size_t i = indice_en(g, x, y);
+    size_t a = i, b = i;
+    while (a > 0 && !iswspace(texto[a - 1])) a--;
+    while (b < texto.size() && !iswspace(texto[b])) b++;
+    ancla = a;
+    cursor = b;
+    arrastrando = false;
+    ultimo_movimiento = GetTickCount64();
 }
 
 void Campo::arrastrar(Gfx& g, float x, float y) {
