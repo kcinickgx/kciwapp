@@ -773,6 +773,7 @@ struct App {
     void bajar_al_final(bool ya);
     bool al_final() const;
     Imagen& imagen(const std::string& clave, const std::wstring& ruta, bool animado);
+    void reintentar_imagenes();  // al (re)conectar: las que fallaron se vuelven a pedir
     std::wstring nombre_de(const std::string& jid);
     const Chat* chat_de(const std::string& jid) const;
     void ordenar_chats();

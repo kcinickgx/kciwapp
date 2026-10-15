@@ -452,7 +452,9 @@ void App::cargar_chats() {
         red::en_ui([this, je, jc, j] {
             cargando_chats = false;
             mi_jid = je["jid"].str();
+            bool antes_con = conectado;
             conectado = je["conectado"].bul();
+            if (conectado && !antes_con) reintentar_imagenes();
             version_core = ancho(je["version"].str());
             bool ma = je["mantener_archivados"].bul(true);
             if (ajustes::actual().mantener_archivados != ma)
@@ -1187,7 +1189,9 @@ bool App::aplicar_evento(const Json& e) {
         }
         pedir_dibujo();
     } else if (tipo == "sesion") {
+        bool antes = conectado;
         conectado = d["conectado"].bul();
+        if (conectado && !antes) reintentar_imagenes();
         aviso_estado = conectado ? L"" : L"Server not connected to WhatsApp";
     }
     return false;
@@ -1702,6 +1706,17 @@ static void escribir_bytes(const std::wstring& ruta, const std::string& datos) {
     while (total < datos.size() && WriteFile(h, datos.data() + total, (DWORD)std::min<size_t>(1 << 20, datos.size() - total), &escrito, nullptr))
         total += escrito;
     CloseHandle(h);
+}
+
+void App::reintentar_imagenes() {
+    bool alguna = false;
+    for (auto& par : imagenes)
+        if (par.second.fallo) {
+            par.second.fallo = false;
+            par.second.pedida = false;
+            alguna = true;
+        }
+    if (alguna) pedir_dibujo();
 }
 
 Imagen& App::imagen(const std::string& clave, const std::wstring& ruta, bool animado) {
@@ -3394,7 +3409,9 @@ void App::soltar_gpu() {
     for (auto it = imagenes.begin(); it != imagenes.end();) {
         Imagen& im = it->second;
         im.cuadros.clear();  // las animaciones tienen los pixeles: se vuelven a subir solas
-        if (im.anim.cuadros.empty() && !im.fallo) it = imagenes.erase(it);  // se vuelve a pedir, primero al disco
+        // Se vuelve a pedir (primero al disco). Las que fallaron tambien: el
+        // fallo pudo ser un hipo de red y no tiene que quedar negro para siempre.
+        if (im.anim.cuadros.empty()) it = imagenes.erase(it);
         else ++it;
     }
     for (auto& a : adjuntos) {
