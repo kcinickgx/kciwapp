@@ -89,7 +89,7 @@ var esquema = []string{
 		estado    TINYINT NOT NULL DEFAULT 0,
 		intentos  INT NOT NULL DEFAULT 0,
 		miniatura MEDIUMBLOB NULL,
-		proto     BLOB NULL,
+		proto     MEDIUMBLOB NULL,
 		onda      BLOB NULL,
 		INDEX (chat, mensaje),
 		INDEX (estado)
@@ -118,6 +118,9 @@ var esquema = []string{
 // Columnas agregadas despues: si ya estan, el ALTER falla y no importa.
 var migraciones = []string{
 	`ALTER TABLE chats ADD COLUMN silenciado BIGINT NOT NULL DEFAULT 0`,
+	// El proto lleva la miniatura adentro: la de un video oscuro con ruido pasa
+	// los 64 KB de BLOB, y ese video quedaba sin media. En SQLite falla y no importa.
+	`ALTER TABLE media MODIFY proto MEDIUMBLOB NULL`,
 }
 
 func crearTablas() {

@@ -551,6 +551,8 @@ func anotarEnviado(chat string, resp whatsmeow.SendResponse, c contenido, ctxInf
 				c.media.Onda = append(c.media.Onda, int(b))
 			}
 			m.Media = c.media
+		} else {
+			log.Printf("media enviada %s: %v", m.ID, err)
 		}
 	}
 	insertarMensaje(m, false, "")
