@@ -25,6 +25,14 @@ std::wstring mm_ss(double s) {
     int t = (int)s;
     return std::to_wstring(t / 60) + L":" + (t % 60 < 10 ? L"0" : L"") + std::to_wstring(t % 60);
 }
+
+// El mpv es el mismo del visor de video, y el volumen y el mute de mpv son
+// globales: si antes se abrio un video, quedaban el slider del video (en
+// curva cubica: 36 = -26 dB) o el mute. Los audios suenan siempre enteros.
+void volumen_de_audio(Reproductor& r) {
+    r.volumen(100);
+    r.silencio(false);
+}
 }  // namespace
 
 // Click en una tarjeta de audio: si es la que suena, pausa/sigue; si no,
@@ -56,6 +64,7 @@ void App::reproducir_audio(int i) {
             reproduciendo_id = copia.id;
             reproductor.abrir(ruta);
             reproductor.velocidad(velocidad_audio);
+            volumen_de_audio(reproductor);
             reproductor.reproducir();
             pedir_dibujo();
         });
@@ -121,6 +130,7 @@ void App::grabar_escuchar() {
         reproduciendo_id.clear();
         grab_escuchando = true;
         reproductor.abrir(grab_ruta);
+        volumen_de_audio(reproductor);
         reproductor.reproducir();
     }
     pedir_dibujo();
