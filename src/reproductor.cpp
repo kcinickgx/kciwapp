@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
 
 namespace {
 
@@ -143,6 +144,20 @@ void Reproductor::abrir(const std::wstring& ruta_archivo, HWND ventana_video) {
     } else {
         set_prop(mpv, "vid", "no");
     }
+
+    // Las notas de voz de WhatsApp traen frames Opus DTX (silencio) que el
+    // decoder nativo de ffmpeg (el que usa libmpv por defecto) decodifica como
+    // un "beep" robotico; libopus (el de referencia, como el telefono) los
+    // decodifica bien. Forzamos libopus para opus/ogg; para lo demas (la nota
+    // .wav recien grabada, su .wav de transcripcion) dejamos el decoder
+    // automatico, porque libopus no decodifica otros formatos. No toca la
+    // velocidad (speed/scaletempo va aparte).
+    auto termina_en = [&](const wchar_t* ext, size_t n) {
+        return ruta_archivo.size() >= n &&
+               _wcsicmp(ruta_archivo.c_str() + ruta_archivo.size() - n, ext) == 0;
+    };
+    bool es_opus = termina_en(L".ogg", 4) || termina_en(L".opus", 5);
+    set_opt(mpv, "ad", es_opus ? "libopus" : "");
 
     std::string ruta_u8 = a_utf8(ruta_archivo);
     const char* args[] = {"loadfile", ruta_u8.c_str(), nullptr};
