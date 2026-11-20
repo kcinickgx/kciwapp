@@ -382,7 +382,14 @@ func hMedia(w http.ResponseWriter, r *http.Request) {
 		// Para transcribir: WAV 16 kHz mono, generado una vez al lado del original.
 		wav := ruta + ".16k.wav"
 		if _, err := os.Stat(wav); err != nil {
-			cmd := exec.Command("ffmpeg", "-y", "-loglevel", "error", "-i", ruta, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav)
+			// Opus (notas de voz) con libopus, no el decoder nativo: los frames
+			// DTX de silencio salen como un beep y ensuciarian la transcripcion.
+			args := []string{"-y", "-loglevel", "error"}
+			if strings.Contains(mimeT, "opus") || strings.HasPrefix(mimeT, "audio/ogg") {
+				args = append(args, "-c:a", "libopus")
+			}
+			args = append(args, "-i", ruta, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav)
+			cmd := exec.Command("ffmpeg", args...)
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fallar(w, 500, fmt.Errorf("ffmpeg: %v %s", err, out))
 				return

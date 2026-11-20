@@ -22,7 +22,15 @@ func ondaDe(datos []byte) []byte {
 	if err := os.WriteFile(entrada, datos, 0o600); err != nil {
 		return nil
 	}
-	cmd := exec.Command("ffmpeg", "-loglevel", "error", "-i", entrada, "-ac", "1", "-ar", "8000", "-f", "s16le", "-")
+	// Las notas de voz de WhatsApp traen frames Opus DTX (silencio) que el
+	// decoder nativo de ffmpeg decodifica mal (beep); libopus los decodifica
+	// bien. Solo para opus; otros audios usan el decoder automatico.
+	args := []string{"-loglevel", "error"}
+	if bytes.Contains(datos[:min(len(datos), 400)], []byte("OpusHead")) {
+		args = append(args, "-c:a", "libopus")
+	}
+	args = append(args, "-i", entrada, "-ac", "1", "-ar", "8000", "-f", "s16le", "-")
+	cmd := exec.Command("ffmpeg", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
